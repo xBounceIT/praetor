@@ -237,8 +237,8 @@ const migrateLegacyApiKeysIfNeeded = async (
     if (!isLegacyPlaintext(value)) return sql`${column}`;
     // Compare a one-way fingerprint rather than binding the legacy plaintext into the UPDATE;
     // this keeps query-parameter diagnostics from becoming a second secret-exposure path.
-    const fingerprint = crypto.createHash('md5').update(value, 'utf8').digest('hex');
-    return sql`CASE WHEN md5(${column}) = ${fingerprint} AND length(${column}) = ${value.length} THEN ${encrypt(value)} ELSE ${column} END`;
+    const fingerprint = crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+    return sql`CASE WHEN encode(sha256(convert_to(${column}, 'UTF8')), 'hex') = ${fingerprint} AND length(${column}) = ${value.length} THEN ${encrypt(value)} ELSE ${column} END`;
   };
 
   try {
