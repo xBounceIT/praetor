@@ -36,6 +36,7 @@ describe('deployment password configuration', () => {
 
   test.each([
     '.env.example',
+    'server/.env.example',
     'deploy/.env.customer.example',
   ])('%s does not publish an accepted demo user password', (path) => {
     const source = readRepositoryFile(path);
