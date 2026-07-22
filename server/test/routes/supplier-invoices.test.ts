@@ -15,6 +15,7 @@ import {
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
@@ -37,6 +38,7 @@ const maxSequenceForYearMock = mock();
 const createMock = mock();
 const insertItemsMock = mock();
 const findExistingMock = mock();
+const lockExistingByIdMock = mock();
 const findIdConflictMock = mock();
 const updateMock = mock();
 const renameMock = mock();
@@ -79,6 +81,7 @@ beforeAll(async () => {
     create: createMock,
     insertItems: insertItemsMock,
     findExisting: findExistingMock,
+    lockExistingById: lockExistingByIdMock,
     findIdConflict: findIdConflictMock,
     update: updateMock,
     rename: renameMock,
@@ -194,6 +197,7 @@ const allMocks = [
   createMock,
   insertItemsMock,
   findExistingMock,
+  lockExistingByIdMock,
   findIdConflictMock,
   updateMock,
   renameMock,
@@ -221,6 +225,10 @@ beforeEach(async () => {
   allocateDocumentCodeMock.mockResolvedValue('SINV-2025-0001');
   lockOrderExistingByIdMock.mockResolvedValue(null);
   findOrderItemsMock.mockResolvedValue([]);
+  lockExistingByIdMock.mockResolvedValue({
+    ...existingInvoiceForUpdate(),
+    supplierName: 'Acme Supply',
+  });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/supplier-invoices');
 });
@@ -919,6 +927,136 @@ describe('PUT /api/supplier-invoices/:id', () => {
     expect(body.error).toBe('Non-draft invoices are read-only');
   });
 
+  test('409 when the invoice becomes non-draft before the transactional update', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, supplierName: 'Renamed' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { supplierName: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+    expect(lockExistingByIdMock).toHaveBeenCalledWith('SINV-2025-0001', TX_SENTINEL);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the status changes before a conflicting transactional status update', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'cancelled' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'cancelled' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+    expect(lockExistingByIdMock).toHaveBeenCalledWith('SINV-2025-0001', TX_SENTINEL);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 when a concurrent status update already applied the requested status', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'sent' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'sent' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('SINV-2025-0001', {}, TX_SENTINEL);
+  });
+
+  test('409 when the invoice becomes non-draft before a transactional rename', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    renameMock.mockResolvedValue({ ...SAMPLE_INVOICE, id: 'SINV-2025-0002' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { id: 'SINV-2025-0002' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+    expect(lockExistingByIdMock).toHaveBeenCalledWith('SINV-2025-0001', TX_SENTINEL);
+    expect(renameMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows a non-draft status update that resends the unchanged invoice id', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ status: 'sent' }));
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'sent' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { id: 'SINV-2025-0001', status: 'sent' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(renameMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith('SINV-2025-0001', {}, TX_SENTINEL);
+  });
+
+  test('audits a status transition from the transactionally locked status', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ status: 'sent' }));
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'cancelled' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'cancelled' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'supplier_invoice.updated',
+        details: expect.objectContaining({ fromValue: 'sent', toValue: 'cancelled' }),
+      }),
+    );
+  });
+
   test('409 id conflict on rename', async () => {
     findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     findIdConflictMock.mockResolvedValue(true);
@@ -1002,6 +1140,10 @@ describe('PUT /api/supplier-invoices/:id', () => {
 
   test('400 total cannot be lowered below existing amountPaid', async () => {
     findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ amountPaid: 80 }));
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ amountPaid: 80 }),
+      supplierName: 'Acme Supply',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1034,6 +1176,10 @@ describe('PUT /api/supplier-invoices/:id', () => {
 
   test('400 paid status rejects existing amountPaid above total', async () => {
     findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ amountPaid: 101 }));
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ amountPaid: 101 }),
+      supplierName: 'Acme Supply',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1112,7 +1258,7 @@ describe('DELETE /api/supplier-invoices/:id', () => {
     });
 
     expect(res.statusCode).toBe(204);
-    expect(deleteByIdMock).toHaveBeenCalledWith('SINV-2025-0001');
+    expect(deleteByIdMock).toHaveBeenCalledWith('SINV-2025-0001', TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'supplier_invoice.deleted',
@@ -1150,6 +1296,31 @@ describe('DELETE /api/supplier-invoices/:id', () => {
     expect(JSON.parse(res.body)).toEqual({
       error: 'Only draft invoices can be deleted',
     });
+    expect(deleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the invoice becomes non-draft before the transactional delete', async () => {
+    findStatusAndSupplierNameMock.mockResolvedValue({
+      status: 'draft',
+      supplierName: 'Acme Supply',
+    });
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    deleteByIdMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Only draft invoices can be deleted',
+    });
+    expect(lockExistingByIdMock).toHaveBeenCalledWith('SINV-2025-0001', TX_SENTINEL);
     expect(deleteByIdMock).not.toHaveBeenCalled();
   });
 
