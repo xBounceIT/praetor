@@ -1,4 +1,9 @@
-import type { DiscountType, DurationUnit, SupplierUnitType } from '../types';
+import type {
+  DiscountType,
+  DurationUnit,
+  PricingSemanticsVersion,
+  SupplierUnitType,
+} from '../types';
 
 const CURRENCY_DECIMAL_PLACES = 2;
 
@@ -22,6 +27,7 @@ export const MIN_MOL_PERCENTAGE = -999.99;
 export const NUMBER_LOCALE = 'it-IT';
 
 const MONTHS_PER_YEAR = 12;
+const LEGACY_PRICING_SEMANTICS_VERSION = 1;
 
 const shiftDecimal = (value: number, decimalPlaces: number): number => {
   const [coefficient, exponent = '0'] = value.toString().split('e');
@@ -104,16 +110,6 @@ export const formatDecimal = (value: number | null | undefined, decimals = 2): s
     maximumFractionDigits: decimals,
   });
 
-export const convertUnitPrice = (
-  price: number,
-  fromType: SupplierUnitType,
-  toType: SupplierUnitType,
-): number => {
-  if (fromType === toType) return price;
-  const hourly = fromType === 'days' ? price / 8 : price;
-  return toType === 'days' ? hourly * 8 : hourly;
-};
-
 export const calcProductSalePrice = (cost: number, molPercentage: number): number => {
   // Guard against ≥100% MOL (would produce ≤0 or negative denominator)
   if (molPercentage >= 100) return cost;
@@ -145,13 +141,12 @@ export interface PricingItem {
   unitOfMeasure?: 'unit' | 'hours';
   quantity?: number;
   productMolPercentage?: number | null;
-  // Number of months the line runs (issue #757). Multiplies cost and revenue alongside
-  // quantity. Absent/invalid → 1, so items that never set it (offers, orders, invoices)
-  // keep their existing totals.
+  // Canonical whole months retained for API/data compatibility.
   durationMonths?: number;
-  // Display unit for the duration value: 'months' (default) or 'years'. Pricing always uses
-  // `durationMonths`; this only affects how the value is rendered/entered in the UI.
+  // Pricing uses the numeric duration value rendered in this unit.
   durationUnit?: DurationUnit;
+  /** Version 1 preserves totals saved before unit labels stopped converting prices. */
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export const getEffectiveCost = (item: PricingItem): number => {
@@ -159,18 +154,34 @@ export const getEffectiveCost = (item: PricingItem): number => {
   return Number(item.productCost ?? 0);
 };
 
-// The line's cost expressed in its OWN unit. Product costs are stored on the canonical hourly
-// basis and convert into the line unit; supplier-sourced costs mirror the supplier item — whose
-// unit the line copies on pick/refresh — so they are ALREADY in the line's unit, exactly as the
-// server snapshot, the #779 forward sync and the staleness compare assume (#812 round 19).
-// Converting them from 'hours' multiplied a days-priced sourced cost by 8 in totals/margins.
-export const getEffectiveUnitCost = (
-  item: PricingItem,
-  defaultUnitType: SupplierUnitType = 'hours',
+// Quantity units are labels and never reprice a line. Product and supplier-sourced costs therefore
+// keep the exact numeric value entered or copied, regardless of whether the line uses hours, days,
+// or units.
+export const getEffectiveUnitCost = (item: PricingItem): number => {
+  const cost = getEffectiveCost(item);
+  return !item.supplierQuoteItemId &&
+    item.unitType === 'days' &&
+    item.pricingSemanticsVersion === LEGACY_PRICING_SEMANTICS_VERSION
+    ? cost * 8
+    : cost;
+};
+
+// Repricing a catalog product must use the same effective cost as totals and MOL. In particular,
+// historical day-priced rows keep their stored hourly product cost multiplied by 8.
+export const calcProductSalePriceForItem = (
+  item: Pick<PricingItem, 'unitType' | 'pricingSemanticsVersion'>,
+  productCost: number,
+  molPercentage: number,
 ): number =>
-  item.supplierQuoteItemId
-    ? getEffectiveCost(item)
-    : convertUnitPrice(getEffectiveCost(item), 'hours', item.unitType || defaultUnitType);
+  calcProductSalePrice(
+    getEffectiveUnitCost({
+      ...item,
+      productCost,
+      supplierQuoteItemId: null,
+      supplierQuoteUnitPrice: null,
+    }),
+    molPercentage,
+  );
 
 export const getEffectiveMol = (item: PricingItem): number => {
   return item.productMolPercentage ? Number(item.productMolPercentage) : 0;
@@ -184,6 +195,18 @@ export const getEffectiveDurationMonths = (item: PricingItem): number => {
   // non-positive values fall back to a single month.
   const months = Number(item.durationMonths ?? 1);
   return Number.isFinite(months) && months > 0 ? months : 1;
+};
+
+// Economic multiplier represented by the value shown in the selected duration unit. Storage stays
+// in canonical whole months for API/data compatibility, but a stored 12 months labelled as one
+// year multiplies by 1, while 12 months labelled as months multiplies by 12.
+export const getEffectiveDurationMultiplier = (item: PricingItem): number => {
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  if (durationUnit === 'na') return 1;
+  const storedMonths = Number(item.durationMonths);
+  if (!Number.isFinite(storedMonths) || storedMonths <= 0) return 1;
+  if (item.pricingSemanticsVersion === LEGACY_PRICING_SEMANTICS_VERSION) return storedMonths;
+  return durationUnit === 'years' ? storedMonths / MONTHS_PER_YEAR : storedMonths;
 };
 
 // Supplier documents persist the gross/list unit price plus an inclusive 0-100 line discount.
@@ -214,7 +237,7 @@ export const getDiscountedLineTotal = (item: PricingItem): number =>
     Number(item.discount) || 0,
     item.legacyDiscountRounding,
   ) *
-  getEffectiveDurationMonths(item);
+  getEffectiveDurationMultiplier(item);
 
 export const getDiscountedDocumentTotal = (items: PricingItem[]): number =>
   roundCurrency(items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0));
@@ -239,8 +262,7 @@ export const getDurationDisplayValue = (item: PricingItem): number => {
 };
 
 // Unlike getDurationDisplayValue, this helper preserves an unfilled duration so editable fields
-// can show their text placeholder. Pricing still uses getEffectiveDurationMonths and therefore
-// keeps the legacy neutral ×1 multiplier for blank values.
+// can show their text placeholder. Pricing keeps the neutral ×1 multiplier for blank values.
 export const getDurationInputValue = (item: PricingItem): number | undefined => {
   if (item.durationMonths === undefined || item.durationMonths === null) return undefined;
   const months = Number(item.durationMonths);
@@ -281,7 +303,10 @@ export interface ItemPricingContext {
   unitCost: number;
   molPercentage: number;
   quantity: number;
+  /** Canonical stored months retained for API/data compatibility. */
   durationMonths: number;
+  /** Numeric duration value shown to the user and applied to pricing. */
+  durationMultiplier: number;
   lineCost: number;
   discountPercentage: number;
   revenueMultiplier: number;
@@ -291,20 +316,18 @@ export interface ItemPricingContext {
   lineMargin: number;
 }
 
-export const getItemPricingContext = (
-  item: PricingItem,
-  defaultUnitType: SupplierUnitType = 'hours',
-): ItemPricingContext => {
+export const getItemPricingContext = (item: PricingItem): ItemPricingContext => {
   const baseCost = getEffectiveCost(item);
-  const unitCost = getEffectiveUnitCost(item, defaultUnitType);
+  const unitCost = getEffectiveUnitCost(item);
   const molPercentage = getEffectiveMol(item);
   const quantity = Number(item.quantity || 0);
   const durationMonths = getEffectiveDurationMonths(item);
-  const lineCost = unitCost * quantity * durationMonths;
+  const durationMultiplier = getEffectiveDurationMultiplier(item);
+  const lineCost = unitCost * quantity * durationMultiplier;
   const discountPercentage = clampPercentage(Number(item.discount || 0));
-  const revenueMultiplier = quantity * durationMonths * (1 - discountPercentage / 100);
+  const revenueMultiplier = quantity * durationMultiplier * (1 - discountPercentage / 100);
   const unitPrice = Number(item.unitPrice || 0);
-  const grossRevenue = unitPrice * quantity * durationMonths;
+  const grossRevenue = unitPrice * quantity * durationMultiplier;
   const netRevenue =
     getDiscountedUnitPriceForCalculation(
       unitPrice,
@@ -312,7 +335,7 @@ export const getItemPricingContext = (
       item.legacyDiscountRounding,
     ) *
     quantity *
-    durationMonths;
+    durationMultiplier;
   const lineDiscount = grossRevenue - netRevenue;
   const lineMargin = netRevenue - lineCost;
   return {
@@ -321,6 +344,7 @@ export const getItemPricingContext = (
     molPercentage,
     quantity,
     durationMonths,
+    durationMultiplier,
     lineCost,
     discountPercentage,
     revenueMultiplier,
@@ -373,7 +397,6 @@ export const getDocumentDiscountAmount = (
 export const calculatePricingTotals = (
   items: PricingItem[],
   globalDiscount: number,
-  defaultUnitType: SupplierUnitType = 'hours',
   discountType: DiscountType = 'percentage',
 ): PricingTotals => {
   let grossSubtotal = 0;
@@ -381,7 +404,7 @@ export const calculatePricingTotals = (
   let totalCost = 0;
 
   items.forEach((item) => {
-    const line = getItemPricingContext(item, defaultUnitType);
+    const line = getItemPricingContext(item);
     grossSubtotal += line.grossRevenue;
     subtotal += line.netRevenue;
     totalCost += line.lineCost;

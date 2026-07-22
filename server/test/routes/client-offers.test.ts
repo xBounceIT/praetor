@@ -320,6 +320,7 @@ const storedOfferItem = (over: Record<string, unknown> = {}) => ({
   discount: 0,
   durationMonths: 1,
   durationUnit: 'months' as const,
+  pricingSemanticsVersion: 2 as const,
   ...over,
 });
 
@@ -744,7 +745,9 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
   test('200 accepting an offer auto-creates the linked draft client order', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
-    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem({ discount: 12.5 })]);
+    coFindItemsForOfferMock.mockResolvedValue([
+      storedOfferItem({ discount: 12.5, pricingSemanticsVersion: 1 }),
+    ]);
 
     const res = await putOffer({ status: 'accepted' });
 
@@ -784,6 +787,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
       discount: 12.5,
       durationMonths: 1,
       durationUnit: 'months',
+      pricingSemanticsVersion: 1,
     });
   });
 
@@ -873,6 +877,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
         note: null,
         durationMonths: 1,
         durationUnit: 'months',
+        pricingSemanticsVersion: 1,
       },
     ]);
 
@@ -896,7 +901,14 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     );
     expect(clientOrderBulkInsertSupplierOrderItemsMock).toHaveBeenCalledWith(
       'SORD-2999-0001',
-      [expect.objectContaining({ unitPrice: 62.5, discount: 20, unitType: 'days' })],
+      [
+        expect.objectContaining({
+          unitPrice: 62.5,
+          discount: 20,
+          unitType: 'days',
+          pricingSemanticsVersion: 1,
+        }),
+      ],
       expect.anything(),
     );
     expect(clientOrderLinkSaleItemsToSupplierOrderAndItemsMock).toHaveBeenCalledWith(
@@ -1083,6 +1095,7 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
         productId: null,
         unitPrice: 50,
         netCost: 50,
+        pricingSemanticsVersion: 2,
       },
     ],
   ]);
@@ -1166,6 +1179,21 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
   test('PUT: a FRESH link stores server-resolved supplier values and never pushes', async () => {
     setupDraftOffer();
     coFindItemsForOfferMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Snapshot Co',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+            pricingSemanticsVersion: 1,
+          },
+        ],
+      ]),
+    );
 
     const res = await putOffer({ items: [lineItem(5, 80)] });
     expect(res.statusCode).toBe(200);
@@ -1175,7 +1203,92 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(inserted[0].supplierQuoteId).toBe('sq-9');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
     expect(inserted[0].productMolPercentage).toBe(50);
+    expect(inserted[0].pricingSemanticsVersion).toBe(1);
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT: preserves each persisted row id so mixed pricing semantics survive an edit', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([
+      {
+        ...EXISTING_OFFER_ITEM,
+        id: 'coi-legacy',
+        pricingSemanticsVersion: 1,
+        unitType: 'days',
+        productCost: 100,
+        unitPrice: 1600,
+      },
+      {
+        ...EXISTING_OFFER_ITEM,
+        id: 'coi-current',
+        pricingSemanticsVersion: 2,
+        unitType: 'days',
+        productCost: 100,
+        unitPrice: 1600,
+      },
+    ]);
+
+    const res = await putOffer({
+      items: [
+        lineItem(2, null, {
+          id: 'coi-legacy',
+          unitType: 'days',
+          productCost: 100,
+          unitPrice: 1600,
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+        lineItem(2, null, {
+          id: 'coi-current',
+          unitType: 'days',
+          productCost: 100,
+          unitPrice: 1600,
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+      ],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted.map((item) => [item.id, item.pricingSemanticsVersion])).toEqual([
+      ['coi-legacy', 1],
+      ['coi-current', 2],
+    ]);
+    expect(inserted.map((item) => item.productMolPercentage)).toEqual([50, 93.75]);
+  });
+
+  test('PUT: generates a fresh id for a duplicate persisted row id', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([
+      { ...EXISTING_OFFER_ITEM, id: 'coi-legacy', pricingSemanticsVersion: 1 },
+      { ...EXISTING_OFFER_ITEM, id: 'oi-1', pricingSemanticsVersion: 2 },
+    ]);
+
+    const res = await putOffer({
+      items: [
+        lineItem(2, null, {
+          id: 'oi-1',
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+        lineItem(2, null, {
+          id: 'oi-1',
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+      ],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].id).toBe('oi-1');
+    expect(inserted[1].id).not.toBe('oi-1');
+    expect(inserted.map((item) => item.pricingSemanticsVersion)).toEqual([2, 1]);
   });
 
   test('PUT: 400 when a NEW link does not resolve to a live supplier item', async () => {
@@ -1263,6 +1376,52 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(inserted[0].supplierQuoteId).toBe('sq-9');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('POST: preserves each source quote marker in a mixed offer', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { id: 'quote-item-legacy', pricingSemanticsVersion: 1, supplierQuoteItemId: null },
+      { id: 'quote-item-current', pricingSemanticsVersion: 2, supplierQuoteItemId: null },
+    ]);
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockResolvedValue(updatedOffer());
+    coInsertItemsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [
+          lineItem(1, null, {
+            id: 'quote-item-legacy',
+            supplierQuoteId: null,
+            supplierQuoteItemId: null,
+            supplierQuoteSupplierName: null,
+          }),
+          lineItem(1, null, {
+            id: 'quote-item-current',
+            supplierQuoteId: null,
+            supplierQuoteItemId: null,
+            supplierQuoteSupplierName: null,
+          }),
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(
+      (coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
   });
 
   test('POST: an accepted legacy single candidate can still create its first offer', async () => {

@@ -297,7 +297,7 @@ describe('rename', () => {
 });
 
 describe('insertItems', () => {
-  test('binds 17 fields per row in column order, with numericForDb on numerics', async () => {
+  test('binds 18 fields per row in column order, with current pricing semantics', async () => {
     exec.enqueue({ rows: [itemRow()] });
     await clientOffersRepo.insertItems(
       'co-1',
@@ -330,7 +330,7 @@ describe('insertItems', () => {
     // Drizzle emits columns in schema declaration order (createdAt is skipped - has
     // CURRENT_TIMESTAMP default and isn't passed), so unitType lands between note and the
     // supplier_quote_* group, and duration_months / duration_unit trail as the last bound
-    // values.
+    // values, followed by the explicit pricing-semantics marker.
     expect(exec.calls[0].params).toEqual([
       'coi-1',
       'co-1',
@@ -349,6 +349,7 @@ describe('insertItems', () => {
       null,
       12,
       'months',
+      2,
     ]);
   });
 });
@@ -402,7 +403,7 @@ describe('replaceItems', () => {
     expect(exec.calls[0].sql).toContain('delete from "customer_offer_items"');
     expect(exec.calls[1].sql).toContain('insert into "customer_offer_items"');
     expect(exec.calls[1].params[0]).toBe('a');
-    expect(exec.calls[1].params[17]).toBe('b'); // 17 fields per row, second row starts at index 17
+    expect(exec.calls[1].params[18]).toBe('b'); // 18 fields per row, second row starts at index 18
     expect(result.map((i) => i.id)).toEqual(['a', 'b']);
   });
 

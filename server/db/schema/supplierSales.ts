@@ -10,6 +10,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { PricingSemanticsVersion } from '../../utils/pricing-semantics.ts';
 import type { UnitType } from '../../utils/unit-type.ts';
 import { products } from './products.ts';
 import { supplierQuotes } from './supplierQuotes.ts';
@@ -73,13 +74,14 @@ export const supplierSaleItems = pgTable(
     legacyDiscountRounding: boolean('legacy_discount_rounding').notNull().default(true),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-    // Number of months the line runs (issue #776). Multiplies the line total alongside `quantity`;
-    // carried over from the originating supplier quote so the order total matches the quote.
-    // Defaults to 1 (one-off), which keeps legacy orders' totals identical.
+    // Canonical whole months carried from the originating quote for API/data compatibility.
     durationMonths: integer('duration_months').notNull().default(1),
-    // Display unit for `durationMonths` (issue #776): 'months' (default), 'years', or 'na'. 'na'
-    // (N/A) marks a line where duration does not apply and never multiplies (issue #775).
+    // Unit shown beside the duration: pricing uses that displayed value and 'na' is neutral.
     durationUnit: text('duration_unit').notNull().default('months'),
+    pricingSemanticsVersion: integer('pricing_semantics_version')
+      .$type<PricingSemanticsVersion>()
+      .notNull()
+      .default(1),
   },
   (table) => [
     index('idx_supplier_sale_items_sale_id').on(table.saleId),
@@ -88,6 +90,10 @@ export const supplierSaleItems = pgTable(
     check(
       'chk_supplier_sale_items_duration_unit',
       sql`${table.durationUnit} IN ('months', 'years', 'na')`,
+    ),
+    check(
+      'chk_supplier_sale_items_pricing_semantics_version',
+      sql`${table.pricingSemanticsVersion} IN (1, 2)`,
     ),
   ],
 );

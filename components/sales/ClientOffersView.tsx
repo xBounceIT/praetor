@@ -41,13 +41,13 @@ import {
 import {
   calcProductSalePrice,
   calculatePricingTotals,
-  convertUnitPrice,
   durationValueToMonths,
   EMPTY_PRICING_TOTALS,
   formatDecimal,
   formatMolPercentage,
   formatNumber,
   getDurationInputValue,
+  getEffectiveUnitCost,
   getItemPricingContext,
   isPositiveFiniteNumber,
   MAX_MOL_PERCENTAGE,
@@ -75,6 +75,7 @@ import {
 import { effectiveQuoteStatus } from '../../utils/quoteStatus';
 import {
   buildSupplierQuoteItemIndex,
+  getDocumentPricingSemanticsVersion,
   isSupplierLineLocked,
   isSupplierLineStale,
   pickedSupplierLineFields,
@@ -438,11 +439,9 @@ const useClientOffersController = ({
       if (!item) return prev;
       const oldType = item.unitType || 'hours';
       if (oldType === newType) return prev;
-      const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
       items[index] = {
         ...items[index],
         unitType: newType,
-        unitPrice: adjustedPrice,
       };
       return { ...prev, items };
     });
@@ -639,10 +638,7 @@ const useClientOffersController = ({
   const offerPricingMap = useMemo(() => {
     const map = new Map<string, PricingTotals>();
     for (const offer of offers) {
-      map.set(
-        offer.id,
-        calculatePricingTotals(offer.items, offer.discount, 'hours', offer.discountType),
-      );
+      map.set(offer.id, calculatePricingTotals(offer.items, offer.discount, offer.discountType));
     }
     return map;
   }, [offers]);
@@ -1138,6 +1134,10 @@ const useClientOffersController = ({
       unitType: 'hours',
       unitPrice: Number.NaN,
       productMolPercentage: null,
+      pricingSemanticsVersion:
+        editingOffer || formData.linkedQuoteId
+          ? getDocumentPricingSemanticsVersion(formData.items)
+          : undefined,
       supplierQuoteId: null,
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
@@ -1242,7 +1242,7 @@ const useClientOffersController = ({
   };
 
   // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
-  // months; 'years' multiplies by 12. An empty input stays empty while pricing uses neutral ×1.
+  // canonical months; pricing separately uses the numeric value shown in the selected unit.
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
@@ -1263,8 +1263,8 @@ const useClientOffersController = ({
       const items = [...(prev.items || [])];
       const item = items[index];
       if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return prev;
-      // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
-      // (issue #775). Months/years instead keeps the displayed number under the new unit.
+      // 'N/A' marks the line as duration-less and applies neutral ×1 pricing. Months/years preserve
+      // the displayed number under the new unit while updating its canonical stored months.
       const durationValue = getDurationInputValue(item);
       const durationMonths =
         newUnit === 'na' || durationValue === undefined
@@ -1363,7 +1363,6 @@ const useClientOffersController = ({
     return calculatePricingTotals(
       formData.items || [],
       discountValue,
-      'hours',
       formData.discountType || 'percentage',
     );
   }, [formData.discount, formData.discountType, formData.items]);
@@ -1916,7 +1915,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       id: 'duration',
       header: t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' }),
       minWidth: 174,
-      accessorFn: (item) => getItemPricingContext(item).durationMonths,
+      accessorFn: (item) => getItemPricingContext(item).durationMultiplier,
       align: 'right',
       cell: ({ row }) => {
         const index = getIndex(row);
@@ -2126,9 +2125,7 @@ const getClientOfferLineContext = (
   const cost =
     rawCost === undefined || rawCost === null || !Number.isFinite(Number(rawCost))
       ? undefined
-      : item.supplierQuoteItemId
-        ? Number(rawCost)
-        : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
+      : getEffectiveUnitCost(item);
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
   const revenue = unitPrice === undefined ? undefined : lineSalePrice;

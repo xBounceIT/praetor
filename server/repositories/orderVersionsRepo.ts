@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { type OrderVersionSnapshot, orderVersions } from '../db/schema/orderVersions.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { normalizeHistoricalPricingSemanticsItems } from '../utils/pricing-semantics.ts';
 import type { ClientOrder, ClientOrderItem } from './clientsOrdersRepo.ts';
 
 export type { OrderVersionSnapshot } from '../db/schema/orderVersions.ts';
@@ -33,7 +34,10 @@ const mapRow = (row: OrderVersionRowSelect): OrderVersionRow => ({
 
 const mapVersion = (row: typeof orderVersions.$inferSelect): OrderVersion => ({
   ...mapRow(row),
-  snapshot: row.snapshot,
+  snapshot: {
+    ...row.snapshot,
+    items: normalizeHistoricalPricingSemanticsItems(row.snapshot.items),
+  },
 });
 
 // Record `linkedQuoteId` / `linkedOfferId` on the snapshot. These are real columns on `sales`,

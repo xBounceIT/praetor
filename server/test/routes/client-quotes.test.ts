@@ -817,15 +817,55 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  test('409 expired quote rejects content edits (only the expiration date is editable)', async () => {
-    // The expired-frozen rule must cover CONTENT, not just status: a PUT touching notes/items/etc.
-    // (no status field) on an effectively-expired quote is rejected (issue #779).
+  test('409 expired SENT quote content edits are blocked as non-draft (lock outranks expired)', async () => {
+    // Mirrors offers: for a SENT quote the non-draft lock outranks the expired one, so content
+    // edits get the accurate non-draft message rather than "Expired".
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+
+    const res = await putStatus({ notes: 'edited while expired' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Non-draft');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 expired DRAFT quote rejects content edits (only the expiration date is editable)', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft', expirationDate: '2000-01-01' }));
 
     const res = await putStatus({ notes: 'edited while expired' });
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('Expired');
     expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 non-draft content edits stay blocked (sent quotes are read-only like offers)', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+
+    const res = await putStatus({ notes: 'edited while sent' });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Non-draft');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 reverts a valid sent quote to draft', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
+
+    const res = await putStatus({ status: 'draft' });
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalledWith(
+      'q-1',
+      expect.objectContaining({ status: 'draft' }),
+      expect.anything(),
+    );
+  });
+
+  test('200 a sent quote can renew its expiration date (date carved out of the lock)', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent', expirationDate: '2999-12-31' }));
+
+    const res = await putStatus({ expirationDate: '2999-12-31' });
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalledTimes(1);
   });
 
   test('200 tolerates a no-op resend (no status change, no items) with a stale sourced expiration', async () => {
@@ -929,6 +969,20 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
 
     const res = await deleteQuote('q-1');
     expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Only draft quotes can be deleted');
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the quote is sent (non-draft quotes cannot be deleted)', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'sent',
+      clientName: 'Client',
+      expirationDate: '2999-12-31',
+    });
+
+    const res = await deleteQuote('q-1');
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Only draft quotes can be deleted');
     expect(cqDeleteByIdMock).not.toHaveBeenCalled();
   });
 
@@ -978,6 +1032,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
     unitType: 'hours' as const,
     durationMonths: 12,
     durationUnit: 'months' as const,
+    pricingSemanticsVersion: 2 as const,
   });
 
   test('requires permission to create the generated offer', async () => {
@@ -995,9 +1050,13 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
     expect(coCreateMock).not.toHaveBeenCalled();
   });
 
-  test('promotes exactly the selected active candidate and archives its siblings atomically', async () => {
+  test('promotes exactly the selected active candidate and preserves its pricing contract', async () => {
     const winningCandidate = candidate();
-    const winningItem = { ...item(), productMolPercentage: 5 };
+    const winningItem = {
+      ...item(),
+      productMolPercentage: 5,
+      pricingSemanticsVersion: 1 as const,
+    };
     cqFindByIdMock
       .mockResolvedValueOnce(updatedQuote({ status: 'sent' }))
       .mockResolvedValueOnce(updatedQuote({ status: 'offer', linkedOfferId: 'OFF-2999-0001' }));
@@ -1035,6 +1094,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
       unitPrice: 100,
       productMolPercentage: 50,
       durationMonths: 12,
+      pricingSemanticsVersion: 1,
     });
     expect(qcMarkPromotedMock).toHaveBeenCalledWith('q-1', 'qc-a', expect.anything());
     expect(cqUpdateMock).toHaveBeenCalledWith(
@@ -1298,6 +1358,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     supplierQuoteSupplierName: 'Acme',
     supplierQuoteUnitPrice: 50,
     unitType: 'hours',
+    pricingSemanticsVersion: 2,
   };
   const SUPPLIER_ITEM = {
     id: 'sqi-9',
@@ -1312,6 +1373,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     unitType: 'hours',
     durationMonths: 1,
     durationUnit: 'months',
+    pricingSemanticsVersion: 2,
   };
   const lineItem = (quantity: number, cost: number, over: Record<string, unknown> = {}) => ({
     id: 'qi-1',
@@ -1431,7 +1493,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(replaced[0].productMolPercentage).toBe(50);
   });
 
-  test('converts an hourly product cost before deriving a day-line MOL', async () => {
+  test('does not convert product cost before deriving a current day-line MOL', async () => {
     setupDraftQuote();
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
       {
@@ -1445,6 +1507,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
         supplierQuoteSupplierName: null,
         supplierQuoteUnitPrice: null,
         unitType: 'days',
+        pricingSemanticsVersion: 2,
       },
     ]);
 
@@ -1471,7 +1534,64 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(res.statusCode).toBe(200);
     const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(replaced[0].unitPrice).toBe(10);
-    expect(replaced[0].productMolPercentage).toBe(-700);
+    expect(replaced[0].productMolPercentage).toBe(0);
+  });
+
+  test('makes a new day line inherit the historical document pricing contract', async () => {
+    setupDraftQuote();
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-legacy',
+        productId: 'p-1',
+        productCost: 10,
+        productMolPercentage: null,
+        supplierQuoteId: null,
+        supplierQuoteItemId: null,
+        supplierQuoteSupplierName: null,
+        supplierQuoteUnitPrice: null,
+        unitType: 'days',
+        pricingSemanticsVersion: 1,
+      },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Acme',
+            productId: null,
+            netCost: 10,
+            sourceable: true,
+          },
+        ],
+      ]),
+    );
+
+    const res = await putStatus({
+      items: [
+        {
+          id: 'qi-new',
+          productId: null,
+          productName: 'Consulting day',
+          supplierQuoteItemId: 'sqi-9',
+          quantity: 1,
+          unitPrice: 100,
+          productCost: 10,
+          productMolPercentage: 0,
+          supplierQuoteUnitPrice: 10,
+          discount: 0,
+          unitType: 'days',
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(replaced[0].pricingSemanticsVersion).toBe(1);
+    expect(replaced[0].productMolPercentage).toBe(90);
   });
 
   test('derives MOL from an edited sale price on a retained supplier-sourced line', async () => {
@@ -1707,7 +1827,7 @@ describe('client quote candidate-family create and update', () => {
       },
     });
 
-  const setupCreate = (netCost = 50) => {
+  const setupCreate = (netCost = 50, pricingSemanticsVersion = 2) => {
     sqGetQuoteItemSnapshotsMock.mockResolvedValue(
       new Map([
         [
@@ -1718,6 +1838,7 @@ describe('client quote candidate-family create and update', () => {
             productId: null,
             unitPrice: netCost,
             netCost,
+            pricingSemanticsVersion,
             sourceable: true,
           },
         ],
@@ -2105,6 +2226,39 @@ describe('client quote candidate-family create and update', () => {
     expect(JSON.parse(res.body).error).toContain('only be added or removed while');
     expect(qcInsertMock).not.toHaveBeenCalled();
     expect(qcUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 non-draft candidate-family content edits stay blocked (sent quotes are read-only)', async () => {
+    setupCreate();
+    const existingCandidate = activeCandidate();
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
+    qcListForQuoteMock.mockResolvedValue([existingCandidate]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+            notes: 'edited while sent',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Non-draft');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 
   test('rejects a line id that belongs to a different candidate', async () => {
@@ -2530,9 +2684,9 @@ describe('client quote candidate-family create and update', () => {
   test('keeps a retained candidate supplier snapshot isolated when the source is no longer pickable', async () => {
     setupCreate();
     const existingCandidate = activeCandidate();
-    const quote = updatedQuote({ id: 'q-1', status: 'sent' });
-    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
-    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
+    const quote = updatedQuote({ id: 'q-1', status: 'draft' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
     cqUpdateMock.mockResolvedValue(quote);
     cqFindByIdMock.mockResolvedValue(quote);
     qcListForQuoteMock.mockResolvedValue([existingCandidate]);
@@ -2575,7 +2729,7 @@ describe('client quote candidate-family create and update', () => {
       payload: {
         clientId: 'c1',
         clientName: 'Client',
-        status: 'sent',
+        status: 'draft',
         candidates: [
           {
             id: 'qc-local',
@@ -2597,9 +2751,9 @@ describe('client quote candidate-family create and update', () => {
   test('keeps genuine supplier-linked edits local until a candidate is promoted', async () => {
     setupCreate();
     const existingCandidate = activeCandidate();
-    const quote = updatedQuote({ id: 'q-1', status: 'sent' });
-    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
-    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
+    const quote = updatedQuote({ id: 'q-1', status: 'draft' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
     cqUpdateMock.mockResolvedValue(quote);
     cqFindByIdMock.mockResolvedValue(quote);
     qcListForQuoteMock.mockResolvedValue([existingCandidate]);
@@ -2627,7 +2781,7 @@ describe('client quote candidate-family create and update', () => {
       payload: {
         clientId: 'c1',
         clientName: 'Client',
-        status: 'sent',
+        status: 'draft',
         candidates: [
           {
             id: 'qc-local',
@@ -2914,6 +3068,16 @@ describe('client quote candidate-family create and update', () => {
     const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(inserted[0].productMolPercentage).toBe(50);
     expect(inserted[0].unitPrice).toBe(100);
+  });
+
+  test('a new quote inherits legacy pricing from a sourced supplier line', async () => {
+    setupCreate(50, 1);
+
+    const res = await postQuote([freshLine({ durationMonths: 12, durationUnit: 'years' })]);
+
+    expect(res.statusCode).toBe(201);
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].pricingSemanticsVersion).toBe(1);
   });
 
   test('replaces a stale submitted MOL with the value derived from cost and sale price', async () => {

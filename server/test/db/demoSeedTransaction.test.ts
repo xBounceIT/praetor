@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { PoolClient } from 'pg';
 import * as realBootstrapAdmin from '../../db/bootstrapAdmin.ts';
-import { DEMO_EXPECTED_COUNTS } from '../../db/demoSeedManifest.ts';
+import { DEMO_EXPECTED_COUNTS, DEMO_PRICING_SEMANTICS_VERSION } from '../../db/demoSeedManifest.ts';
 import * as realDbIndex from '../../db/index.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 
@@ -140,5 +140,25 @@ describe('demo seed transaction finalization', () => {
     expect(events).not.toContain('rollback');
     expect(result.verificationCountsByTable).toEqual(DEMO_EXPECTED_COUNTS);
     expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('verifies every commercial item table uses the current pricing contract', async () => {
+    await demoSeed.runDemoSeedRefresh({ source: 'manual' });
+
+    const pricingVerificationTables = sqlCalls
+      .filter((sql) =>
+        sql.includes(`pricing_semantics_version = ${DEMO_PRICING_SEMANTICS_VERSION}`),
+      )
+      .map((sql) => sql.match(/^SELECT COUNT\(\*\)::int AS count FROM ([a-z_]+) /)?.[1]);
+
+    expect(pricingVerificationTables).toEqual([
+      'quote_items',
+      'customer_offer_items',
+      'sale_items',
+      'invoice_items',
+      'supplier_quote_items',
+      'supplier_sale_items',
+      'supplier_invoice_items',
+    ]);
   });
 });

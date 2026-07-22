@@ -8,7 +8,6 @@ import type {
   View,
 } from '../../types';
 import { roundCurrency, roundToDecimalPlaces } from '../../utils/numbers';
-import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
 const toSupplierOrderLinePricing = (
@@ -146,7 +145,9 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
           const pricing = toSupplierOrderLinePricing(item);
           return {
             ...item,
-            id: makeTempId(),
+            // The API generates the order-item id; keep the quote-item id in the request so the
+            // server can retain each source line's pricing semantics.
+            id: item.id,
             orderId: '',
             // Keep the gross/discount chain when it reproduces the quote cost. An explicit synced
             // override is flattened so the order preserves the authoritative net total.

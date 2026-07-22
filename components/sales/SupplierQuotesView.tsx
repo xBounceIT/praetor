@@ -41,11 +41,10 @@ import {
   isTemporaryLineItem,
 } from '../../utils/lineItemIndex';
 import {
-  convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
   getDurationInputValue,
-  getEffectiveDurationMonths,
+  getEffectiveDurationMultiplier,
   isPositiveFiniteNumber,
   normalizeDurationForSubmit,
   normalizeDurationUnit,
@@ -56,6 +55,7 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions, includeSelectedOption } from '../../utils/options';
 import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
+import { getDocumentPricingSemanticsVersion } from '../../utils/supplierLineSync';
 import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -147,7 +147,9 @@ const getUnroundedNetUnitCost = (item: SupplierQuoteItem): number => {
 };
 
 const calculateLineTotal = (item: SupplierQuoteItem): number =>
-  (Number(item.quantity) || 0) * getUnroundedNetUnitCost(item) * getEffectiveDurationMonths(item);
+  (Number(item.quantity) || 0) *
+  getUnroundedNetUnitCost(item) *
+  getEffectiveDurationMultiplier(item);
 
 const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
   let grossListTotal = 0;
@@ -156,10 +158,10 @@ const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
     // Legacy fallback: rows/snapshots that predate list price use the net unit price as the
     // list price (no discount), so gross == net and no discount surfaces for them.
     const listPrice = item.listPrice ?? item.unitPrice ?? 0;
-    // Duration multiplies quantity for every line; "N/D" is normalized to 1 (issue #775).
-    const durationMonths = getEffectiveDurationMonths(item);
+    // Duration multiplies by the numeric value shown in the selected unit.
+    const durationMultiplier = getEffectiveDurationMultiplier(item);
     const quantity = Number(item.quantity) || 0;
-    grossListTotal += quantity * (Number(listPrice) || 0) * durationMonths;
+    grossListTotal += quantity * (Number(listPrice) || 0) * durationMultiplier;
     netTotal += calculateLineTotal(item);
   });
   const subtotal = roundCurrency(grossListTotal);
@@ -748,10 +750,13 @@ const useSupplierQuotesController = ({
         unitPrice: 0,
         unitType: 'unit' as const,
         durationUnit: 'months' as const,
+        pricingSemanticsVersion: editingQuote
+          ? getDocumentPricingSemanticsVersion(formData.items)
+          : undefined,
         note: '',
       },
     });
-  }, [editingQuote?.id, isReadOnly]);
+  }, [editingQuote, formData.items, isReadOnly]);
 
   const removeItem = useCallback(
     (index: number) => {
@@ -767,10 +772,9 @@ const useSupplierQuotesController = ({
     if (!item) return;
     const oldType = item.unitType || 'unit';
     if (oldType === newType) return;
-    // Convert the list price (the base of the pricing chain), then re-derive Costo unitario.
+    // Unit changes preserve the list price; re-derive the discounted unit cost unchanged.
     const baseListPrice = item.listPrice ?? item.unitPrice ?? 0;
-    const adjustedListPrice = convertUnitPrice(baseListPrice, oldType, newType);
-    const pricing = deriveLinePricing(adjustedListPrice, item.discountPercent ?? 0);
+    const pricing = deriveLinePricing(baseListPrice, item.discountPercent ?? 0);
     dispatch({
       type: 'setItem',
       index,
@@ -800,8 +804,8 @@ const useSupplierQuotesController = ({
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    // Switching to 'na' (N/A) drops the multiplier to a single month — the value input is disabled
-    // and the line never multiplies (issue #775). Other units convert the displayed value to months.
+    // Switching to 'na' (N/A) applies the neutral ×1 multiplier and disables the value input.
+    // Other units preserve the displayed number while updating its canonical stored months.
     const durationValue = getDurationInputValue(item);
     const durationMonths =
       newUnit === 'na' || durationValue === undefined
@@ -1811,7 +1815,7 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
       id: 'duration',
       header: controller.t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' }),
       minWidth: 174,
-      accessorFn: (item) => getEffectiveDurationMonths(item),
+      accessorFn: (item) => getEffectiveDurationMultiplier(item),
       align: 'right',
       cell: ({ row }) => (
         <SupplierQuoteDurationInput
@@ -1825,7 +1829,9 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
       id: 'total',
       header: controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
       accessorFn: (item) =>
-        Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item),
+        Number(item.quantity || 0) *
+        Number(item.unitPrice || 0) *
+        getEffectiveDurationMultiplier(item),
       align: 'right',
       cell: ({ row }) => (
         <SupplierQuoteLineTotalValue
@@ -2029,7 +2035,7 @@ const SupplierQuoteDurationInput: React.FC<{
         {label}
         <FieldTooltip
           description={context.controller.t('sales:fieldInfo.duration', {
-            defaultValue: 'Number of months the service runs',
+            defaultValue: 'Displayed duration value used as the pricing multiplier',
           })}
           status={context.controller.readOnlyStatus}
           statusLabel={context.controller.statusLabel}

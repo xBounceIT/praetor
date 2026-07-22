@@ -24,9 +24,8 @@ const ClientsInvoicesView = (await import('../../../components/accounting/Client
 
 const clients: Client[] = [{ id: 'client-1', name: 'Helios Energy Services' }];
 
-// Two invoices with the same canonical duration (24 months) but different display units.
-// The years invoice must show the duration as `2` while computing the same taxable line total
-// (24 months) as the months invoice — proving `durationUnit` is display-only (issue #757).
+// Two invoices with the same canonical duration (24 months) but different units. The months line
+// prices with multiplier 24, while the years line displays and prices with multiplier 2.
 const buildInvoice = (id: string, durationUnit: 'months' | 'years'): Invoice => ({
   id,
   clientId: 'client-1',
@@ -44,7 +43,7 @@ const buildInvoice = (id: string, durationUnit: 'months' | 'years'): Invoice => 
       id: 'item-1',
       invoiceId: id,
       description: 'Consulting',
-      // Duration applies only to non-unit lines, so this fixture is hours-based to exercise it.
+      // Keep the fixture hours-based while exercising the duration multiplier.
       unitOfMeasure: 'hours',
       // Quantity 3 (not 2) so the duration display value (2 for years) is unambiguous in the inputs.
       quantity: 3,
@@ -86,25 +85,23 @@ describe('<ClientsInvoicesView /> duration unit (issue #757)', () => {
     document.body.style.overflow = '';
   });
 
-  // Taxable line total = quantity 3 × unitPrice 100 × durationMonths 24 × (1 - 0 discount) = 7200.00.
-  // With taxRate 0 the rendered line total equals the taxable amount, regardless of display unit.
-  const TAXABLE_LINE_TOTAL = '7.200,00 EUR';
+  const MONTHS_TAXABLE_LINE_TOTAL = '7.200,00 EUR';
+  const YEARS_TAXABLE_LINE_TOTAL = '600,00 EUR';
 
   test('a months item shows the duration as 24 (the raw months) and folds 24 months into the taxable line total', async () => {
     const dialog = await openEditModal(buildInvoice('INV-MONTHS', 'months'));
 
     expect(hasInputWithValue(dialog, '24')).toBe(true);
-    expect(within(dialog).getAllByText(TAXABLE_LINE_TOTAL).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(MONTHS_TAXABLE_LINE_TOTAL).length).toBeGreaterThan(0);
   });
 
-  test('a years item shows the duration as 2 (24 months / 12) yet computes the same 24-month taxable line total', async () => {
+  test('a years item shows and prices with the displayed value 2', async () => {
     const dialog = await openEditModal(buildInvoice('INV-YEARS', 'years'));
 
     // Display unit is years, so the input shows 2 instead of the canonical 24 months...
     expect(hasInputWithValue(dialog, '2')).toBe(true);
     expect(hasInputWithValue(dialog, '24')).toBe(false);
-    // ...but pricing still multiplies by durationMonths (24), so the taxable total is unchanged.
-    expect(within(dialog).getAllByText(TAXABLE_LINE_TOTAL).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(YEARS_TAXABLE_LINE_TOTAL).length).toBeGreaterThan(0);
   });
 
   test('normalizes a blank years duration to the canonical month unit before saving', async () => {
@@ -292,9 +289,8 @@ describe('ClientsInvoicesView modal styling', () => {
       // The input shows the display value in the chosen unit, with a months/years selector.
       'getDurationInputValue(item)',
       '<DurationUnitSelector',
-      // The taxable amount (and therefore subtotal/tax/total) multiplies by the line duration
-      // via the shared clamp helper, which always works in canonical months.
-      'getEffectiveDurationMonths(item)',
+      // The taxable amount uses the numeric value displayed in the selected duration unit.
+      'getEffectiveDurationMultiplier(item)',
     ]);
     // The old months-only parser is gone now that the unit is selectable.
     expectSourceOmitsAll(source, ['parseDurationMonthsInput']);
@@ -456,6 +452,47 @@ describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
 });
 
 describe('<ClientsInvoicesView /> new line identity', () => {
+  test('uses the historical pricing contract for a line added to a legacy invoice', async () => {
+    const onUpdateInvoice = mock((_id: string, _data: Partial<Invoice>) => {});
+    const invoice = buildInvoice('INV-LEGACY-ADD', 'months');
+    invoice.items = invoice.items.map((item) => ({ ...item, pricingSemanticsVersion: 1 as const }));
+    render(
+      <ClientsInvoicesView
+        invoices={[invoice]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={onUpdateInvoice}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByText('accounting:clientsInvoices.addItem'));
+
+    const descriptions = within(dialog).getAllByPlaceholderText(
+      'accounting:clientsInvoices.descriptionPlaceholder',
+    );
+    const addedDescription = descriptions.at(-1);
+    if (!addedDescription) throw new Error('Added invoice line is missing its description input');
+    fireEvent.change(addedDescription, { target: { value: 'Added legacy line' } });
+    const blankDecimalInputs = within(dialog)
+      .getAllByPlaceholderText('0,00')
+      .filter((input) => input instanceof HTMLInputElement && input.value === '');
+    const [quantityInput, unitPriceInput] = blankDecimalInputs;
+    if (!quantityInput || !unitPriceInput) throw new Error('Added invoice line is missing inputs');
+    fireEvent.change(quantityInput, { target: { value: '1' } });
+    fireEvent.change(unitPriceInput, { target: { value: '10' } });
+    fireEvent.submit(
+      within(dialog).getByText('common:buttons.save').closest('form') as HTMLFormElement,
+    );
+
+    expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
+    const submittedItems = onUpdateInvoice.mock.calls[0]?.[1].items;
+    expect(submittedItems?.at(-1)).toEqual(expect.objectContaining({ pricingSemanticsVersion: 1 }));
+  });
+
   test('shows placeholders instead of numeric defaults on a new invoice line', async () => {
     render(
       <ClientsInvoicesView

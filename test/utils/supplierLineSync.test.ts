@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { SupplierQuote } from '../../types';
+import { getEffectiveDurationMultiplier } from '../../utils/numbers';
 import {
   buildSupplierQuoteItemIndex,
+  getDocumentPricingSemanticsVersion,
   isSupplierLineLocked,
   isSupplierLineStale,
   pickedSupplierLineFields,
@@ -42,6 +44,18 @@ describe('buildSupplierQuoteItemIndex', () => {
     expect(index.get('sqi-1')?.quote.id).toBe('SQ-1');
     expect(index.get('sqi-1')?.item.unitPrice).toBe(80);
     expect(index.get('missing')).toBeUndefined();
+  });
+});
+
+describe('getDocumentPricingSemanticsVersion', () => {
+  test('returns the oldest stored line contract and leaves an empty document unset', () => {
+    expect(
+      getDocumentPricingSemanticsVersion([
+        { pricingSemanticsVersion: 2 },
+        { pricingSemanticsVersion: 1 },
+      ]),
+    ).toBe(1);
+    expect(getDocumentPricingSemanticsVersion([])).toBeUndefined();
   });
 });
 
@@ -155,17 +169,15 @@ describe('refreshedSupplierLineFields', () => {
     expect(fields.supplierQuoteBaseUnitPrice).toBe(fields.supplierQuoteUnitPrice);
   });
 
-  test("converts the refreshed cost into the line's unit before deriving MOL", () => {
+  test('preserves the refreshed cost across unit labels before deriving MOL', () => {
     const fields = refreshedSupplierLineFields(
       { unitPrice: 800, productMolPercentage: null, unitType: 'days' },
       supplierItem(),
     );
-    expect(fields.productMolPercentage).toBe(20);
+    expect(fields.productMolPercentage).toBe(90);
   });
 
-  test('a days-priced source refreshed into a days line is NOT re-multiplied (#812)', () => {
-    // The supplier item is already priced per day; treating it as hourly would ×8 it even though
-    // the line is also in days. Units match → no conversion.
+  test('a days-priced source refreshed into a days line keeps its numeric cost', () => {
     const fields = refreshedSupplierLineFields(
       { unitPrice: 100, productMolPercentage: null, unitType: 'days' },
       supplierItem({ unitType: 'days', unitPrice: 80 }),
@@ -173,24 +185,48 @@ describe('refreshedSupplierLineFields', () => {
     expect(fields.productMolPercentage).toBe(20);
   });
 
-  test('converts FROM the source unit when units differ (days source → hours line = ÷8)', () => {
+  test('keeps the source price when source and line units differ', () => {
     const fields = refreshedSupplierLineFields(
       { unitPrice: 20, productMolPercentage: null, unitType: 'hours' },
       supplierItem({ unitType: 'days', unitPrice: 80 }),
     );
-    expect(fields.productMolPercentage).toBe(50);
+    expect(fields.productMolPercentage).toBe(-300);
   });
 });
 
 describe('pickedSupplierLineFields', () => {
-  test('inherits the supplier duration value and display unit on initial selection', () => {
+  test('inherits the supplier duration and pricing contract on initial selection', () => {
     const fields = pickedSupplierLineFields(
       { productMolPercentage: 20, unitType: 'hours' },
-      supplierItem({ durationMonths: 24, durationUnit: 'years' }),
+      supplierItem({
+        durationMonths: 24,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      }),
     );
 
     expect(fields.durationMonths).toBe(24);
     expect(fields.durationUnit).toBe('years');
+    expect(fields.pricingSemanticsVersion).toBe(1);
+    expect(getEffectiveDurationMultiplier(fields)).toBe(24);
     expect(fields.unitPrice).toBe(100);
+  });
+
+  test('keeps a destination document contract when picking a legacy supplier line', () => {
+    const fields = pickedSupplierLineFields(
+      {
+        productMolPercentage: 20,
+        unitType: 'hours',
+        pricingSemanticsVersion: 2,
+      },
+      supplierItem({
+        durationMonths: 12,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      }),
+    );
+
+    expect(fields.pricingSemanticsVersion).toBe(2);
+    expect(getEffectiveDurationMultiplier(fields)).toBe(1);
   });
 });

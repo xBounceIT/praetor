@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { PricingSemanticsVersion } from '../../utils/pricing-semantics.ts';
 import { products } from './products.ts';
 import { supplierSales } from './supplierSales.ts';
 import { suppliers } from './suppliers.ts';
@@ -73,15 +74,15 @@ export const supplierInvoiceItems = pgTable(
     // Current writers always persist false explicitly for newly authored precise lines; the
     // legacy-safe database default can return to false after old app instances are retired.
     legacyDiscountRounding: boolean('legacy_discount_rounding').notNull().default(true),
-    // Months the line's service runs (issue #776); multiplies the line total alongside `quantity`,
-    // carried over from the supplier order so the invoice total matches. Default 1 keeps legacy
-    // invoices' totals identical to the pre-duration behavior.
+    // Canonical duration in months, carried over from the supplier order for API/data compatibility.
     durationMonths: integer('duration_months').notNull().default(1),
-    // Display unit for `durationMonths`: 'months' (default), 'years', or 'na'. 'na' (N/A) marks a
-    // line where duration does not apply and never multiplies (issue #775). Pricing always uses
-    // `durationMonths`; this only controls how the value is shown/entered.
+    // Display unit for `durationMonths`: pricing uses its displayed numeric value; 'na' is neutral.
     durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    pricingSemanticsVersion: integer('pricing_semantics_version')
+      .$type<PricingSemanticsVersion>()
+      .notNull()
+      .default(1),
   },
   (table) => [
     index('idx_supplier_invoice_items_invoice_id').on(table.invoiceId),
@@ -89,6 +90,10 @@ export const supplierInvoiceItems = pgTable(
     check(
       'chk_supplier_invoice_items_duration_unit',
       sql`${table.durationUnit} IN ('months', 'years', 'na')`,
+    ),
+    check(
+      'chk_supplier_invoice_items_pricing_semantics_version',
+      sql`${table.pricingSemanticsVersion} IN (1, 2)`,
     ),
   ],
 );

@@ -12,7 +12,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realDrizzle from '../../db/drizzle.ts';
 
-type ItemRow = { id: string };
+type ItemRow = { id: string; pricingSemanticsVersion?: 1 | 2 };
 type TableKey =
   | 'customerOfferItems'
   | 'quoteItems'
@@ -70,12 +70,15 @@ const fakeDb = {
   },
   delete(table: object) {
     return {
-      where: async (_filter: unknown) => {
-        const key = tableToKey.get(table);
-        if (!key) throw new Error('replaceItems test: unknown delete target');
-        live()[key].length = 0;
-        return { rowCount: 0 };
-      },
+      where: (_filter: unknown) => ({
+        returning: async () => {
+          const key = tableToKey.get(table);
+          if (!key) throw new Error('replaceItems test: unknown delete target');
+          const deletedRows = live()[key].map((row) => ({ ...row }));
+          live()[key].length = 0;
+          return deletedRows;
+        },
+      }),
     };
   },
   insert(table: object) {

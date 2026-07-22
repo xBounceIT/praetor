@@ -19,8 +19,9 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -65,8 +66,22 @@ const itemSchema = {
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
     legacyDiscountRounding: { type: 'boolean' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
+    },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitType', 'unitPrice', 'discount'],
 } as const;
@@ -114,8 +129,17 @@ const itemBodySchema = {
     discount: { type: 'number', minimum: 0, maximum: 100 },
     legacyDiscountRounding: { type: 'boolean' },
     note: { type: 'string' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
@@ -226,7 +250,8 @@ const normalizeItems = (
         discountResult.value || 0,
       ),
       note: item.note || null,
-      durationMonths: durationMonthsResult.value ?? 1,
+      durationMonths:
+        durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnitResult.value),
       durationUnit: durationUnitResult.value ?? 'months',
     });
   }
@@ -442,6 +467,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
+      const sourceItemIds = items.map((item) => item.id);
 
       type CreateOutcome =
         | { ok: false; status: number; body: Record<string, unknown> }
@@ -489,6 +515,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
 
+          const sourceQuoteItems = await supplierQuotesRepo.findItemsForQuote(
+            linkedQuoteIdResult.value,
+            tx,
+          );
+          const sourceMarkers = inheritPricingSemanticsVersions(
+            sourceItemIds.map((id) => ({ id })),
+            sourceQuoteItems,
+          );
+          const versionedItems = normalizedItems.map((item, index) => ({
+            ...item,
+            pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
+          }));
+
           let orderId: string;
           if (nextIdResult.value) {
             await reserveDocumentCodeCounterFromCode('supplier_order', nextIdResult.value, tx);
@@ -516,7 +555,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const createdItems = await supplierOrdersRepo.insertItems(order.id, normalizedItems, tx);
+          const createdItems = await supplierOrdersRepo.insertItems(order.id, versionedItems, tx);
           return { ok: true, order, items: createdItems };
         });
       } catch (error) {
@@ -742,6 +781,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (typeof notes === 'string') patch.notes = notes;
 
       let normalizedItems: supplierOrdersRepo.NewSupplierOrderItem[] | null = null;
+      let sourceItemIds: Array<string | undefined> | null = null;
       let itemInputs: SupplierOrderItemInput[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -750,6 +790,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         itemInputs = items;
         normalizedItems = normalizeItems(itemInputs, reply);
         if (!normalizedItems) return;
+        sourceItemIds = items.map((item) => item.id);
       }
 
       const shouldSnapshot = hasLockedFieldUpdates || status !== undefined;
@@ -775,10 +816,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               ? renamedOrder
               : await supplierOrdersRepo.update(renamedOrder?.id ?? idResult.value, patch, tx);
           if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
+          let versionedItems = normalizedItems;
+          if (normalizedItems && sourceItemIds?.some((id) => id)) {
+            const existingItems = await supplierOrdersRepo.findItemsForOrder(order.id, tx);
+            const sourceMarkers = inheritPricingSemanticsVersions(
+              sourceItemIds.map((id) => ({ id })),
+              existingItems,
+            );
+            versionedItems = normalizedItems.map((item, index) => ({
+              ...item,
+              pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
+            }));
+          }
           const replacementItems =
-            normalizedItems && itemInputs && preState
-              ? preserveLegacyDiscountRounding(normalizedItems, itemInputs, preState.items)
-              : normalizedItems;
+            versionedItems && itemInputs && preState
+              ? preserveLegacyDiscountRounding(versionedItems, itemInputs, preState.items)
+              : versionedItems;
           const finalItems = replacementItems
             ? await supplierOrdersRepo.replaceItems(order.id, replacementItems, tx)
             : await supplierOrdersRepo.findItemsForOrder(order.id, tx);

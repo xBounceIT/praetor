@@ -19,9 +19,22 @@ describe('calculateClientLineMol', () => {
     expect(calculateClientLineMol(productLine())).toBe(40);
   });
 
-  test('converts an hourly product cost for a day-priced line', () => {
+  test('does not convert a product cost for a day-labelled line', () => {
     expect(
       calculateClientLineMol(productLine({ unitPrice: 100, productCost: 10, unitType: 'days' })),
+    ).toBe(90);
+  });
+
+  test('preserves the historical day x8 cost only for legacy product lines', () => {
+    expect(
+      calculateClientLineMol(
+        productLine({
+          unitPrice: 100,
+          productCost: 10,
+          unitType: 'days',
+          pricingSemanticsVersion: 1,
+        }),
+      ),
     ).toBe(20);
   });
 

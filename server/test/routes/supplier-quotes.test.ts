@@ -1196,6 +1196,36 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     );
   });
 
+  test('200 defaults an omitted years duration to one displayed year', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            productName: 'Service',
+            quantity: 1,
+            listPrice: 50,
+            unitType: 'days',
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(
+      expect.objectContaining({ durationMonths: 12, durationUnit: 'years' }),
+    );
+  });
+
   test('400 rejects a non-integer durationMonths (issue #776)', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

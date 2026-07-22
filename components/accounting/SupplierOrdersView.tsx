@@ -21,14 +21,13 @@ import { formatInsertDateTime } from '../../utils/date';
 import { formatDocumentCode } from '../../utils/document-code';
 import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
-  convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
   getDiscountedLineTotal,
   getDiscountedUnitPrice,
   getDocumentDiscountAmount,
   getDurationInputValue,
-  getEffectiveDurationMonths,
+  getEffectiveDurationMultiplier,
   isFiniteNumber,
   isPositiveFiniteNumber,
   normalizeDurationForSubmit,
@@ -88,10 +87,11 @@ const calculateTotals = (
   let subtotal = 0;
 
   items.forEach((item) => {
-    // Duration multiplies the line total alongside quantity (issue #776), matching the supplier
+    // Duration multiplies by the numeric value shown in its selected unit, matching the supplier
     // quote the order was created from.
-    const durationMonths = getEffectiveDurationMonths(item);
-    grossSubtotal += (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * durationMonths;
+    const durationMultiplier = getEffectiveDurationMultiplier(item);
+    grossSubtotal +=
+      (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * durationMultiplier;
     subtotal += getDiscountedLineTotal(item);
   });
 
@@ -227,9 +227,8 @@ const supplierOrdersReducer = (
             nextItem.unitPrice = Number(product.costo);
             nextItem.unitType = 'unit';
           } else {
-            const unitType = nextItem.unitType === 'days' ? 'days' : 'hours';
-            nextItem.unitPrice = convertUnitPrice(Number(product.costo), 'hours', unitType);
-            nextItem.unitType = unitType;
+            nextItem.unitType = nextItem.unitType === 'days' ? 'days' : 'hours';
+            nextItem.unitPrice = Number(product.costo);
           }
         }
       }
@@ -382,11 +381,6 @@ const useSupplierOrdersController = ({
       const oldType = item.unitType || 'hours';
       if (oldType === newType) return;
       updateItem(index, 'unitType', newType);
-      updateItem(
-        index,
-        'unitPrice',
-        convertUnitPrice(Number(item.unitPrice) || 0, oldType, newType),
-      );
     },
     [formData.items, isReadOnly, updateItem],
   );
@@ -413,8 +407,8 @@ const useSupplierOrdersController = ({
       const item = items[index];
       if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
       // Switch unit and recompute canonical months in a single update so the line never lands in a
-      // transient state (durationMonths under the old unit). 'na' (N/A) drops the multiplier to a
-      // single month — the value input is disabled and the line never multiplies (issue #775).
+      // transient state (durationMonths under the old unit). 'na' (N/A) applies the neutral ×1
+      // multiplier — the value input is disabled and duration never scales the line (issue #775).
       const durationValue = getDurationInputValue(item);
       const durationMonths =
         newUnit === 'na' || durationValue === undefined
@@ -1061,7 +1055,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
         defaultValue: 'Duration',
       }),
       minWidth: 174,
-      accessorFn: (item) => getEffectiveDurationMonths(item),
+      accessorFn: (item) => getEffectiveDurationMultiplier(item),
       align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[150px]">

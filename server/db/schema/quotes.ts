@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { PricingSemanticsVersion } from '../../utils/pricing-semantics.ts';
 import { clients } from './clients.ts';
 import { products } from './products.ts';
 import { quoteCommunicationChannels } from './quoteCommunicationChannels.ts';
@@ -161,13 +162,10 @@ export const quoteItems = pgTable(
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
     note: text('note'),
     unitType: varchar('unit_type', { length: 10 }).default('hours'),
-    // Number of months the line item's service runs. Acts as a multiplier alongside
-    // `quantity` for both cost and revenue (see issue #757). Defaults to 1 (one-off item),
-    // which keeps totals identical to the pre-duration behavior.
+    // Canonical whole months retained for API/data compatibility. Pricing derives the numeric
+    // duration shown in `durationUnit`; the default represents a one-off ×1 item.
     durationMonths: integer('duration_months').notNull().default(1),
-    // Display unit for `durationMonths` (issue #757): 'months' (default), 'years', or 'na'.
-    // 'na' (N/A) marks a line where duration does not apply and never multiplies (issue #775).
-    // Pricing always uses `durationMonths`; this only controls how the value is shown/entered.
+    // Unit shown beside the duration: pricing uses that displayed value and 'na' is neutral.
     durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     // Stable, user-controlled line order. This must not be derived from created_at: quote edits
@@ -181,6 +179,10 @@ export const quoteItems = pgTable(
       onDelete: 'cascade',
       onUpdate: 'cascade',
     }),
+    pricingSemanticsVersion: integer('pricing_semantics_version')
+      .$type<PricingSemanticsVersion>()
+      .notNull()
+      .default(1),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
@@ -196,5 +198,9 @@ export const quoteItems = pgTable(
     check('chk_quote_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
     check('chk_quote_items_duration_months', sql`${table.durationMonths} >= 1`),
     check('chk_quote_items_duration_unit', sql`${table.durationUnit} IN ('months', 'years', 'na')`),
+    check(
+      'chk_quote_items_pricing_semantics_version',
+      sql`${table.pricingSemanticsVersion} IN (1, 2)`,
+    ),
   ],
 );

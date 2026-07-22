@@ -48,6 +48,7 @@ const findInvoiceForLinkedSaleMock = mock();
 const renameDraftMock = mock();
 const deleteByIdMock = mock();
 const findClientOrderExistingMock = mock();
+const findClientOrderItemsMock = mock();
 const allocateDocumentCodeMock = mock();
 const reserveDocumentCodeCounterFromCodeMock = mock();
 const logAuditMock = mock(async () => undefined);
@@ -94,6 +95,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
     findExisting: findClientOrderExistingMock,
+    findItemsForOrder: findClientOrderItemsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -168,6 +170,7 @@ const SAMPLE_ITEM = {
   unitPrice: 100,
   discount: 0,
   taxRate: 22,
+  pricingSemanticsVersion: 2 as const,
 };
 
 const allMocks = [
@@ -191,6 +194,7 @@ const allMocks = [
   renameDraftMock,
   deleteByIdMock,
   findClientOrderExistingMock,
+  findClientOrderItemsMock,
   allocateDocumentCodeMock,
   reserveDocumentCodeCounterFromCodeMock,
   logAuditMock,
@@ -206,6 +210,8 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   findStatusMock.mockResolvedValue('draft');
   findStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+  findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+  findClientOrderItemsMock.mockResolvedValue([]);
   findClientOrderExistingMock.mockResolvedValue(null);
   findInvoiceForLinkedSaleMock.mockResolvedValue(null);
   allocateDocumentCodeMock.mockResolvedValue('inv-1');
@@ -322,6 +328,101 @@ describe('POST /api/invoices', () => {
       exec: TX_SENTINEL,
       sourceCodes: ['PREV_26_0045_manual', 'OFF_26_0045_manual', 'ORD_26_0045_manual'],
     });
+  });
+
+  test('201 preserves legacy pricing semantics from the linked client order', async () => {
+    findClientOrderItemsMock.mockResolvedValue([{ pricingSemanticsVersion: 1 }]);
+    findClientOrderExistingMock.mockResolvedValue({
+      id: 'ORD_26_0045_manual',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+    });
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'ORD_26_0045_manual' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        linkedSaleId: 'ORD_26_0045_manual',
+        items: [
+          {
+            description: 'Historical annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 120, total: 120 }),
+      TX_SENTINEL,
+    );
+    expect(insertItemsMock.mock.calls[0][1][0]).toEqual(
+      expect.objectContaining({ pricingSemanticsVersion: 1 }),
+    );
+  });
+
+  test('201 preserves each source order pricing marker in a mixed invoice', async () => {
+    findClientOrderItemsMock.mockResolvedValue([
+      { id: 'order-item-legacy', pricingSemanticsVersion: 1 },
+      { id: 'order-item-current', pricingSemanticsVersion: 2 },
+    ]);
+    findClientOrderExistingMock.mockResolvedValue({
+      id: 'ORD_26_0045_manual',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+    });
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'ORD_26_0045_manual' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        linkedSaleId: 'ORD_26_0045_manual',
+        items: [
+          {
+            id: 'order-item-legacy',
+            description: 'Legacy annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'order-item-current',
+            description: 'Current annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 130, total: 130 }),
+      TX_SENTINEL,
+    );
+    expect(
+      (insertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
   });
 
   test('201 inherits the invoice code source from offer when the linked order quote is legacy', async () => {
@@ -497,10 +598,9 @@ describe('POST /api/invoices', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    // 2 * 50 * 12 = 1200: a unit line carries a duration like any other, so the server-authoritative
-    // total scales by it.
+    // The stored 12 months are displayed as 1 year, so pricing uses multiplier 1.
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ subtotal: 1200, taxTotal: 0, total: 1200 }),
+      expect.objectContaining({ subtotal: 100, taxTotal: 0, total: 100 }),
       TX_SENTINEL,
     );
     // ...and the persisted line keeps the multi-month duration.
@@ -859,13 +959,100 @@ describe('PUT /api/invoices/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(replaceItemsMock).toHaveBeenCalled();
-    expect(findItemsForInvoiceMock).not.toHaveBeenCalled();
+    expect(findItemsForInvoiceMock).toHaveBeenCalledWith('inv-1');
     // 2 * 50 = 100
     expect(updateMock).toHaveBeenCalledWith(
       'inv-1',
       expect.objectContaining({ subtotal: 100, total: 100 }),
       TX_SENTINEL,
     );
+  });
+
+  test('recomputes an edited historical invoice with its original year multiplier', async () => {
+    findItemsForInvoiceMock.mockResolvedValue([
+      { ...SAMPLE_ITEM, pricingSemanticsVersion: 1 as const },
+    ]);
+    findAmountPaidMock.mockResolvedValue(0);
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            description: 'Historical annual line',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'inv-1',
+      expect.objectContaining({ subtotal: 120, total: 120 }),
+      TX_SENTINEL,
+    );
+    expect(replaceItemsMock.mock.calls[0][1][0]).toEqual(
+      expect.objectContaining({ pricingSemanticsVersion: 1 }),
+    );
+  });
+
+  test('preserves each retained marker when editing a mixed invoice', async () => {
+    findItemsForInvoiceMock.mockResolvedValue([
+      { ...SAMPLE_ITEM, id: 'invoice-item-legacy', pricingSemanticsVersion: 1 as const },
+      { ...SAMPLE_ITEM, id: 'invoice-item-current', pricingSemanticsVersion: 2 as const },
+    ]);
+    findAmountPaidMock.mockResolvedValue(0);
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'invoice-item-legacy',
+            description: 'Legacy annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'invoice-item-current',
+            description: 'Current annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'inv-1',
+      expect.objectContaining({ subtotal: 130, total: 130 }),
+      TX_SENTINEL,
+    );
+    expect(
+      (replaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
   });
 
   test('400 items replace lowers total below persisted amountPaid (no amountPaid in patch)', async () => {

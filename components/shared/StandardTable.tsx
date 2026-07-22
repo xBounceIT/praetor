@@ -530,6 +530,9 @@ const HEADER_CONTENT_GAP = 4;
 const HEADER_DRAG_HANDLE_WIDTH = 24;
 const HEADER_DRAG_HANDLE_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
+const STICKY_ACTION_COLUMN_SEPARATOR_CLASS = 'shadow-[-1px_0_0_0_var(--border)]';
+const ROW_VALUE_CELL_HOVER_CLASS =
+  'hover:bg-transparent [&:has(.standard-table-value-cell:hover)_.standard-table-value-cell]:bg-muted/50';
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
@@ -3586,12 +3589,18 @@ const StandardTableHeaderCell = <T extends object>({
   const isBeforeActionSpacer =
     shouldAnchorTrailingActionColumn && !isActionColumn && colIdx === headerCount - 2;
   const isBeforeTrailingSpacer = hasTrailingSpacer && colIdx === headerCount - 1;
-  const effectiveAlign = col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
+  const effectiveAlign = isActionColumn
+    ? 'center'
+    : (col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined));
   const minColumnWidth = getColumnMinWidth(col);
   const colWidth = Math.max(header.getSize(), minColumnWidth);
   const sorted = header.column.getIsSorted();
   const isResizing = header.column.getIsResizing();
-  const stickyBorderClass = isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
+  const stickyBorderClass = isStickyRightColumn
+    ? isActionColumn
+      ? STICKY_ACTION_COLUMN_SEPARATOR_CLASS
+      : 'border-l border-border'
+    : '';
   const resizeHandler = header.getResizeHandler();
   const dropPosition =
     columnDropTarget?.columnId === colId && draggingColumnId !== colId
@@ -3645,7 +3654,7 @@ const StandardTableHeaderCell = <T extends object>({
           clearColumnDragState();
         }}
         className={`relative group h-10 border-border ${
-          isLastColumn ? 'pl-3 pr-2' : 'px-3'
+          isActionColumn ? 'px-2' : isLastColumn ? 'pl-3 pr-2' : 'px-3'
         } whitespace-nowrap ${dropPosition === 'before' ? 'before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-30 before:w-0.5 before:bg-primary' : ''} ${
           dropPosition === 'after'
             ? 'after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-30 after:w-0.5 after:bg-primary'
@@ -4014,8 +4023,10 @@ const StandardTableDataRowElement = <T extends object>({
       }}
       className={`${rowProps.className ?? ''} group border-border transition-colors ${fontSizeClass} ${
         disabledRow?.(row)
-          ? 'bg-muted text-muted-foreground opacity-70'
-          : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`
+          ? 'bg-muted text-muted-foreground opacity-70 hover:bg-muted'
+          : `${onRowClick ? 'cursor-pointer' : ''} ${
+              rowClassName ? rowClassName(row) : ROW_VALUE_CELL_HOVER_CLASS
+            }`
       }`}
     >
       {visibleCells.map((cell, colIdx) => (
@@ -4085,8 +4096,11 @@ const StandardTableDataCell = <T extends object>({
   const effectiveAlign = col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
   const minColumnWidth = getColumnMinWidth(col);
   const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
-  const stickyBorderClass = isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
-  const stickyHoverClass = isStickyRightColumn && !isActionColumn ? 'group-hover:bg-muted/50' : '';
+  const stickyBorderClass = isStickyRightColumn
+    ? isActionColumn
+      ? STICKY_ACTION_COLUMN_SEPARATOR_CLASS
+      : 'border-l border-border'
+    : '';
   const rawValue = cell.getValue() as T[keyof T] | string | number | boolean | null | undefined;
   const cellContent =
     isActionColumn && cell.id === rowActionCellId
@@ -4106,28 +4120,31 @@ const StandardTableDataCell = <T extends object>({
         />
       )}
       <TableCell
+        data-standard-table-action-cell={isActionColumn ? 'true' : undefined}
         onDoubleClick={(e) => {
           e.stopPropagation();
           col.onCellDoubleClick?.(row);
         }}
         style={{ width: colWidth, minWidth: minColumnWidth }}
-        className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${
+        className={`${isActionColumn ? 'px-2' : isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${
           !isActionColumn
             ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal'
             : ''
         } ${
-          isStickyRightColumn
-            ? 'w-auto text-right'
-            : `align-middle ${
-                effectiveAlign === 'right'
-                  ? 'text-right'
-                  : effectiveAlign === 'center'
-                    ? 'text-center'
-                    : ''
-              }`
+          isActionColumn
+            ? 'w-auto text-center'
+            : isStickyRightColumn
+              ? 'w-auto text-right'
+              : `align-middle ${
+                  effectiveAlign === 'right'
+                    ? 'text-right'
+                    : effectiveAlign === 'center'
+                      ? 'text-center'
+                      : ''
+                }`
         } ${
           isStickyRightColumn
-            ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass} ${stickyHoverClass}`
+            ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass}`
             : ''
         } ${col.className || ''}`}
       >

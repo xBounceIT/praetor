@@ -50,11 +50,16 @@ import {
   OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
   validateOptionalDocumentCode,
 } from '../utils/document-codes.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { requirePathSegment } from '../utils/path-segments.ts';
 import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
+import {
+  inheritPricingSemanticsVersions,
+  LEGACY_PRICING_SEMANTICS_VERSION,
+  type PricingSemanticsVersion,
+} from '../utils/pricing-semantics.ts';
 import {
   effectiveQuoteStatusFromDate,
   normalizeQuoteStatus,
@@ -192,10 +197,19 @@ const offerItemBodySchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
-  // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
+  // unitType is required as the quantity label; changing it never reprices the line.
   // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'
   // required unitOfMeasure.
   required: ['productName', 'quantity', 'unitPrice', 'unitType'],
@@ -270,6 +284,7 @@ type OfferItemInput = {
 };
 
 type NormalizedOfferItem = {
+  id: string | null;
   productId: string | null;
   productName: string;
   quantity: number;
@@ -289,6 +304,7 @@ type NormalizedOfferItem = {
   note: string | null;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 const normalizeItems = (
@@ -363,9 +379,10 @@ const normalizeItems = (
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
-    const durationMonths = durationMonthsResult.value ?? 1;
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
     normalizedItems.push({
+      id: normalizeNullableString(item.id),
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
@@ -394,8 +411,8 @@ const normalizeItems = (
 // cached copy may be stale, and storing/pushing it verbatim would let an outdated browser revert
 // newer supplier pricing. A RETAINED link stays client-authoritative for the cost (that edit is
 // pushed back onto the supplier item by the forward sync). "Retained" is keyed on
-// supplierQuoteItemId: offer items get fresh row ids on every save, so the link itself is the
-// only stable correlation. Throws on a NEW link whose id doesn't resolve; a retained link
+// supplierQuoteItemId so it also covers historical saves that rotated offer-item ids. Throws on a
+// NEW link whose id doesn't resolve; a retained link
 // tolerates a vanished supplier item (legacy dangle) by keeping the stored metadata.
 // `inheritedItemIds` are the LINKED QUOTE's sourced supplier item ids: offers are created by
 // converting a quote, which copies its sourced lines verbatim while the supplier quote already
@@ -405,11 +422,19 @@ const resolveOfferItemSupplierLinks = async (
   items: NormalizedOfferItem[],
   existingItems: clientOffersRepo.ClientOfferItem[] | null,
   inheritedItemIds: ReadonlySet<string>,
+  inheritedPricingItems: readonly { id: string; pricingSemanticsVersion?: unknown }[] = [],
+  preserveInheritedPricingSemantics = false,
 ): Promise<NormalizedOfferItem[]> => {
-  const linkedIds = items
+  // Retained rows keep their exact marker; added rows inherit the document contract. This makes
+  // MOL correct before replaceItems persists the rows and avoids downgrading mixed documents.
+  const versionedItems = inheritPricingSemanticsVersions(
+    items,
+    existingItems?.length ? existingItems : inheritedPricingItems,
+  );
+  const linkedIds = versionedItems
     .map((item) => item.supplierQuoteItemId)
     .filter((id): id is string => id !== null);
-  if (linkedIds.length === 0) return items.map(withCalculatedClientLineMol);
+  if (linkedIds.length === 0) return versionedItems.map(withCalculatedClientLineMol);
   const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(linkedIds);
   const existingByLink = new Map<string, clientOffersRepo.ClientOfferItem>();
   for (const existing of existingItems ?? []) {
@@ -417,7 +442,7 @@ const resolveOfferItemSupplierLinks = async (
       existingByLink.set(existing.supplierQuoteItemId, existing);
     }
   }
-  const resolvedItems = items.map((item) => {
+  const resolvedItems = versionedItems.map((item) => {
     if (!item.supplierQuoteItemId) return item;
     const snapshot = snapshots.get(item.supplierQuoteItemId);
     const existing = existingByLink.get(item.supplierQuoteItemId);
@@ -461,6 +486,10 @@ const resolveOfferItemSupplierLinks = async (
         : null;
     return {
       ...item,
+      pricingSemanticsVersion:
+        !existing && !existingItems?.length && !preserveInheritedPricingSemantics
+          ? snapshot.pricingSemanticsVersion
+          : item.pricingSemanticsVersion,
       supplierQuoteId: snapshot.supplierQuoteId,
       supplierQuoteSupplierName: snapshot.supplierName,
       supplierQuoteUnitPrice: existing
@@ -471,38 +500,66 @@ const resolveOfferItemSupplierLinks = async (
   return resolvedItems.map(withCalculatedClientLineMol);
 };
 
-// The linked quote's sourced supplier item ids (the conversion-inheritance exemption above).
-const linkedQuoteSourcedItemIds = async (
+// A promotion inherits both the supplier-link exemption and the quote's pricing contract.
+const linkedQuoteContext = async (
   linkedQuoteId: string | null | undefined,
-): Promise<ReadonlySet<string>> => {
-  if (!linkedQuoteId) return new Set<string>();
+): Promise<{
+  sourcedItemIds: ReadonlySet<string>;
+  pricingItems: Array<{ id: string; pricingSemanticsVersion: PricingSemanticsVersion }>;
+}> => {
+  if (!linkedQuoteId) {
+    return {
+      sourcedItemIds: new Set<string>(),
+      pricingItems: [],
+    };
+  }
   const snapshots = await clientQuotesRepo.findItemSnapshotsForQuote(linkedQuoteId);
-  return new Set(
-    snapshots
-      .map((snapshot) => snapshot.supplierQuoteItemId)
-      .filter((id): id is string => id != null),
-  );
+  return {
+    sourcedItemIds: new Set(
+      snapshots
+        .map((snapshot) => snapshot.supplierQuoteItemId)
+        .filter((id): id is string => id != null),
+    ),
+    pricingItems: snapshots.map((snapshot) => ({
+      id: snapshot.id,
+      pricingSemanticsVersion: snapshot.pricingSemanticsVersion,
+    })),
+  };
 };
 
-const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
-  items.map((item) => ({
-    id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
-    productId: item.productId,
-    productName: item.productName,
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    productCost: item.productCost,
-    productMolPercentage: item.productMolPercentage,
-    discount: item.discount,
-    note: item.note,
-    supplierQuoteId: item.supplierQuoteId,
-    supplierQuoteItemId: item.supplierQuoteItemId,
-    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
-    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
-    unitType: item.unitType,
-    durationMonths: item.durationMonths,
-    durationUnit: item.durationUnit,
-  }));
+const buildItemsForInsert = (
+  items: NormalizedOfferItem[],
+  persistedItemIds: ReadonlySet<string> = new Set(),
+): clientOffersRepo.NewClientOfferItem[] => {
+  const reusedItemIds = new Set<string>();
+  return items.map((item) => {
+    // The PUT route accepts client-generated ids for new rows too, so only retain an id that
+    // belongs to this offer already. replaceItems preserves that row's pricing marker as a second
+    // line of defense after the route has used it for the in-memory MOL calculation.
+    const preservedId =
+      item.id && persistedItemIds.has(item.id) && !reusedItemIds.has(item.id) ? item.id : null;
+    if (preservedId) reusedItemIds.add(preservedId);
+    return {
+      id: preservedId ?? generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      productCost: item.productCost,
+      productMolPercentage: item.productMolPercentage,
+      discount: item.discount,
+      note: item.note,
+      supplierQuoteId: item.supplierQuoteId,
+      supplierQuoteItemId: item.supplierQuoteItemId,
+      supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+      supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+      unitType: item.unitType,
+      durationMonths: item.durationMonths,
+      durationUnit: item.durationUnit,
+      pricingSemanticsVersion: item.pricingSemanticsVersion,
+    };
+  });
+};
 
 const buildOrderItemsFromOfferItems = (
   items: clientOffersRepo.ClientOfferItem[],
@@ -527,6 +584,7 @@ const buildOrderItemsFromOfferItems = (
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -771,10 +829,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // quote legitimately derives offer/accepted by now); any OTHER fresh link must still
       // reference a pickable quote (#812 round 15).
       try {
+        const linkedQuote = await linkedQuoteContext(linkedQuoteIdResult.value);
         normalizedItems = await resolveOfferItemSupplierLinks(
           normalizedItems,
           null,
-          await linkedQuoteSourcedItemIds(linkedQuoteIdResult.value),
+          linkedQuote.sourcedItemIds,
+          linkedQuote.pricingItems,
+          linkedQuoteIdResult.value !== null,
         );
       } catch (err) {
         return badRequest(reply, (err as Error).message);
@@ -1273,6 +1334,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
       let previousSyncLines: PreviousClientLine[] = [];
+      let persistedOfferItemIds: ReadonlySet<string> = new Set();
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
@@ -1286,7 +1348,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             existingOfferItems,
             // Re-adding a line the linked quote sources stays allowed (it was inherited via the
             // conversion); only genuinely new picks must be sourceable (#812 round 15).
-            await linkedQuoteSourcedItemIds(existingOffer.linkedQuoteId),
+            (await linkedQuoteContext(existingOffer.linkedQuoteId)).sourcedItemIds,
           );
         } catch (err) {
           return badRequest(reply, (err as Error).message);
@@ -1294,6 +1356,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779) —
         // the stored item shape structurally satisfies PreviousClientLine.
         previousSyncLines = existingOfferItems;
+        persistedOfferItemIds = new Set(existingOfferItems.map((item) => item.id));
       }
 
       // Derived from the declared field set above so the two lists can't drift (issue #779).
@@ -1382,7 +1445,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const updatedItems = normalizedItemsForUpdate
             ? await clientOffersRepo.replaceItems(
                 offer.id,
-                buildItemsForInsert(normalizedItemsForUpdate),
+                buildItemsForInsert(normalizedItemsForUpdate, persistedOfferItemIds),
                 tx,
               )
             : await clientOffersRepo.findItemsForOffer(offer.id, tx);
@@ -2099,11 +2162,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const snapshotDeliveryDate = version.snapshot.offer.deliveryDate ?? null;
 
         const snapshotItems: clientOffersRepo.NewClientOfferItem[] = version.snapshot.items.map(
-          ({ id: _itemId, offerId: _offerId, ...rest }) => ({
-            ...rest,
-            id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
-            productMolPercentage: calculateClientLineMol(rest),
-          }),
+          ({ id: _itemId, offerId: _offerId, ...rest }) => {
+            const pricingSemanticsVersion =
+              rest.pricingSemanticsVersion ?? LEGACY_PRICING_SEMANTICS_VERSION;
+            return {
+              ...rest,
+              id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
+              pricingSemanticsVersion,
+              productMolPercentage: calculateClientLineMol({
+                ...rest,
+                pricingSemanticsVersion,
+              }),
+            };
+          },
         );
 
         await snapshotPreState(idResult.value, 'restore', request, tx);

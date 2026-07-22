@@ -1,8 +1,7 @@
-import type { SupplierQuote, SupplierUnitType } from '../types';
+import type { PricingSemanticsVersion, SupplierQuote, SupplierUnitType } from '../types';
 import {
   calcProductMolPercentage,
   calcProductSalePrice,
-  convertUnitPrice,
   getEffectiveDurationMonths,
   normalizeDurationUnit,
 } from './numbers';
@@ -34,6 +33,15 @@ export const sourcesSupplierQuote = (doc?: SupplierSourcingDocument | null): boo
     candidate.items?.some((item) => item.supplierQuoteItemId != null),
   ) ??
     false);
+
+export const getDocumentPricingSemanticsVersion = (
+  items: ReadonlyArray<{ pricingSemanticsVersion?: PricingSemanticsVersion }> | undefined,
+): PricingSemanticsVersion | undefined =>
+  items?.reduce<PricingSemanticsVersion | undefined>((oldest, item) => {
+    const version = item.pricingSemanticsVersion;
+    if (version === undefined) return oldest;
+    return oldest === undefined || version < oldest ? version : oldest;
+  }, undefined);
 
 // item id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
 // sourceable ones), so order-lock and staleness resolve even for a line whose quote has since
@@ -112,11 +120,7 @@ export const refreshedSupplierLineFields = (
   supplierQuoteBaseUnitPrice: number;
   productMolPercentage: number | null;
 } => {
-  const unitCost = convertUnitPrice(
-    source.unitPrice,
-    source.unitType || 'hours',
-    line.unitType || 'hours',
-  );
+  const unitCost = source.unitPrice;
   return {
     quantity: source.quantity,
     supplierQuoteUnitPrice: source.unitPrice,
@@ -131,7 +135,11 @@ export const refreshedSupplierLineFields = (
 // while duration is only inherited when the supplier item is selected and can then be customized
 // independently on the client document.
 export const pickedSupplierLineFields = (
-  line: { productMolPercentage?: number | string | null; unitType?: SupplierUnitType },
+  line: {
+    productMolPercentage?: number | string | null;
+    unitType?: SupplierUnitType;
+    pricingSemanticsVersion?: PricingSemanticsVersion;
+  },
   source: SupplierQuote['items'][number],
 ) => {
   const mol = line.productMolPercentage ? Number(line.productMolPercentage) : 0;
@@ -141,12 +149,9 @@ export const pickedSupplierLineFields = (
     supplierQuoteBaseQuantity: source.quantity,
     supplierQuoteBaseUnitPrice: source.unitPrice,
     // A new link has no user-authored sale price yet, so initialize it from the line/catalog MOL.
-    unitPrice: convertUnitPrice(
-      calcProductSalePrice(source.unitPrice, mol),
-      source.unitType || 'hours',
-      line.unitType || 'hours',
-    ),
+    unitPrice: calcProductSalePrice(source.unitPrice, mol),
     durationMonths: getEffectiveDurationMonths(source),
     durationUnit: normalizeDurationUnit(source.durationUnit),
+    pricingSemanticsVersion: line.pricingSemanticsVersion ?? source.pricingSemanticsVersion,
   };
 };

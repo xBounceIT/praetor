@@ -1261,6 +1261,9 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
     expect(actionsHeader.className).toContain('bg-background');
+    expect(actionsHeader.className).toContain('text-center');
+    expect(actionsHeader.className).toContain('shadow-[-1px_0_0_0_var(--border)]');
+    expect(actionsHeader.className).not.toContain('border-l');
     expect(Number.parseInt(actionsHeader.style.minWidth, 10)).toBeGreaterThanOrEqual(64);
     expect(actionsHeader.className).not.toContain('bg-card');
     expect(actionsHeader.textContent?.trim()).toBe('Actions');
@@ -1345,10 +1348,11 @@ describe('<StandardTable />', () => {
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-background');
+    expect(firstActionCell?.className).toContain('text-center');
+    expect(firstActionCell?.className).toContain('shadow-[-1px_0_0_0_var(--border)]');
+    expect(firstActionCell?.className).not.toContain('border-l');
     expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(64);
     expect(firstActionCell?.className).not.toContain('bg-card');
-    expect(firstActionCell?.className).not.toContain('border-l');
-    expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');
 
     await user.click(screen.getAllByLabelText('table.rowActions')[0]);
     expect(screen.getByTestId('action-1')).toBeInTheDocument();
@@ -1525,7 +1529,39 @@ describe('<StandardTable />', () => {
     expect(screen.getByTestId('action-2')).toBeInTheDocument();
   });
 
-  test('action column stays borderless even while sticky over scrollable content', () => {
+  test('hovering the actions column does not highlight the row', () => {
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: () => <button type="button">Edit</button>,
+      },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 1)} columns={cols} />);
+
+    const row = screen.getByText('Alice').closest('tr') as HTMLTableRowElement;
+    const nameCell = screen.getByText('Alice').closest('td') as HTMLTableCellElement;
+    const actionCell = screen
+      .getByLabelText('table.rowActions')
+      .closest('td') as HTMLTableCellElement;
+
+    expect(row.className).toContain(
+      '[&:has(.standard-table-value-cell:hover)_.standard-table-value-cell]:bg-muted/50',
+    );
+    expect(row.className).toContain('hover:bg-transparent');
+    expect(row.className).not.toContain('hover:bg-muted/50');
+
+    fireEvent.mouseEnter(actionCell);
+    expect(actionCell.className).toContain('bg-background');
+
+    fireEvent.mouseEnter(nameCell);
+    expect(nameCell.className).toContain('standard-table-value-cell');
+    expect(actionCell.className).toContain('bg-background');
+  });
+
+  test('action column keeps its floating separator while sticky over scrollable content', () => {
     const cols = [
       ...sampleColumns,
       {
@@ -1554,16 +1590,16 @@ describe('<StandardTable />', () => {
       fireEvent.scroll(tableContainer);
     });
 
-    expect(actionHeader.className).not.toContain('border-l');
-    expect(actionCell.className).not.toContain('border-l');
+    expect(actionHeader.className).toContain('shadow-[-1px_0_0_0_var(--border)]');
+    expect(actionCell.className).toContain('shadow-[-1px_0_0_0_var(--border)]');
 
     tableContainer.scrollLeft = 300;
     act(() => {
       fireEvent.scroll(tableContainer);
     });
 
-    expect(actionHeader.className).not.toContain('border-l');
-    expect(actionCell.className).not.toContain('border-l');
+    expect(actionHeader.className).toContain('shadow-[-1px_0_0_0_var(--border)]');
+    expect(actionCell.className).toContain('shadow-[-1px_0_0_0_var(--border)]');
   });
 
   // ---------------------------------------------------------------------------

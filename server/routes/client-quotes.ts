@@ -44,11 +44,20 @@ import {
   OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
   validateOptionalDocumentCode,
 } from '../utils/document-codes.ts';
-import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
+import {
+  type DurationUnit,
+  defaultDurationMonthsForUnit,
+  effectiveDurationMultiplier,
+} from '../utils/duration-unit.ts';
 import { getDocumentDiscountAmount } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { requirePathSegment } from '../utils/path-segments.ts';
+import {
+  CURRENT_PRICING_SEMANTICS_VERSION,
+  type PricingSemanticsVersion,
+  pricingSemanticsVersionForDocument,
+} from '../utils/pricing-semantics.ts';
 import {
   canTransitionClientQuote,
   effectiveQuoteStatusFromDate,
@@ -86,6 +95,7 @@ import {
 import { registerRevisionHistoryRoutes } from './revision-history.ts';
 
 const MAX_CANDIDATE_NAME_LENGTH = 100;
+const NON_DRAFT_READ_ONLY_ERROR = 'Non-draft quotes are read-only';
 
 type IncomingQuoteItem = {
   id?: string;
@@ -119,6 +129,7 @@ type QuoteItemSnapshot = {
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
@@ -148,6 +159,7 @@ const indexExistingQuoteItems = (
       supplierQuoteSupplierName: snapshot.supplierQuoteSupplierName,
       supplierQuoteUnitPrice: snapshot.supplierQuoteUnitPrice,
       unitType: snapshot.unitType,
+      pricingSemanticsVersion: snapshot.pricingSemanticsVersion,
     });
   }
   return indexed;
@@ -304,8 +316,8 @@ const normalizeQuoteItems = (
     const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
     if (!durationUnitResult.ok) return { ok: false, message: durationUnitResult.message };
     const unitType = normalizeUnitType(item.unitType);
-    const durationMonths = durationMonthsResult.value ?? 1;
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
@@ -335,6 +347,7 @@ const calculateQuoteTotals = (
     discount?: number;
     durationMonths?: number;
     durationUnit?: string;
+    pricingSemanticsVersion?: PricingSemanticsVersion;
   }>,
   globalDiscount: number,
   discountType: 'percentage' | 'currency' = 'percentage',
@@ -358,10 +371,14 @@ const calculateQuoteTotals = (
         subtotal: Number.NaN,
       };
     }
-    // Duration multiplies the line revenue (issue #757), except 'na' lines which never multiply
-    // (issue #775); a non-positive value falls back to 1 so it can't zero out the gate.
-    const effectiveMonths = effectiveDurationMonths(item.durationUnit, durationMonths);
-    const lineSubtotal = quantity * unitPrice * effectiveMonths;
+    // Pricing uses the numeric duration value shown in the selected unit. N/A lines remain neutral,
+    // and a non-positive value falls back to 1 so it cannot zero out the total gate.
+    const durationMultiplier = effectiveDurationMultiplier(
+      item.durationUnit,
+      durationMonths,
+      item.pricingSemanticsVersion,
+    );
+    const lineSubtotal = quantity * unitPrice * durationMultiplier;
     const lineDiscount = lineSubtotal * (itemDiscount / 100);
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -379,6 +396,7 @@ const calculateQuoteTotals = (
 const resolveQuoteItemSnapshots = async (
   items: IncomingQuoteItem[],
   existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
+  documentPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
 ): Promise<ResolvedQuoteItem[]> => {
   const itemsNeedingRecalc = items.filter((item) => {
     if (!existingItemsById || !item.id) return true;
@@ -430,6 +448,7 @@ const resolveQuoteItemSnapshots = async (
         resolvedItems.push(
           withCalculatedClientLineMol({
             ...item,
+            pricingSemanticsVersion: existingItem.pricingSemanticsVersion,
             supplierQuoteItemId: normalizedSupplierQuoteItemId,
             productCost: existingItem.productCost,
             productMolPercentage: existingItem.productMolPercentage ?? null,
@@ -448,6 +467,7 @@ const resolveQuoteItemSnapshots = async (
     let supplierQuoteId: string | null = null;
     let supplierQuoteSupplierName: string | null = null;
     let supplierQuoteUnitPrice: number | null = null;
+    let supplierPricingSemanticsVersion: PricingSemanticsVersion | null = null;
 
     if (normalizedSupplierQuoteItemId) {
       const supplierQuoteSnapshot = supplierQuoteSnapshots.get(normalizedSupplierQuoteItemId);
@@ -485,6 +505,7 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
       supplierQuoteSupplierName = supplierQuoteSnapshot.supplierName;
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
+      supplierPricingSemanticsVersion = supplierQuoteSnapshot.pricingSemanticsVersion;
       // Same link RETAINED but other snapshot inputs changed (e.g. product/cost/MOL): the
       // client's live cost still wins (#779 bidirectional sync — it is pushed back onto the
       // supplier item after the write).
@@ -518,6 +539,11 @@ const resolveQuoteItemSnapshots = async (
     resolvedItems.push(
       withCalculatedClientLineMol({
         ...item,
+        pricingSemanticsVersion:
+          existingItem?.pricingSemanticsVersion ??
+          (existingItemsById
+            ? documentPricingSemanticsVersion
+            : (supplierPricingSemanticsVersion ?? documentPricingSemanticsVersion)),
         productId: resolvedProductId,
         supplierQuoteItemId: normalizedSupplierQuoteItemId,
         productCost,
@@ -586,8 +612,22 @@ const quoteItemSchema = {
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
+    },
   },
   required: [
     'id',
@@ -706,10 +746,19 @@ const quoteItemBodySchema = {
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
-  // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
+  // unitType is required as the quantity label; changing it never reprices the line.
   // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'
   // required unitOfMeasure.
   required: ['productId', 'productName', 'quantity', 'unitPrice', 'unitType'],
@@ -797,6 +846,7 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
     unitType: item.unitType ?? 'hours',
     durationMonths: item.durationMonths ?? 1,
     durationUnit: item.durationUnit ?? 'months',
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 const resolveCommunicationChannel = async (
@@ -840,6 +890,7 @@ const buildOfferItemsFromQuoteItems = (
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 type PreparedCandidate = {
@@ -960,6 +1011,7 @@ const prepareCandidateBody = async (
   existingSnapshots?: clientQuotesRepo.ExistingQuoteItemSnapshot[],
   existingCandidatesById?: ReadonlyMap<string, quoteCandidatesRepo.QuoteCandidate>,
   existingItemsByCandidateId?: ReadonlyMap<string, clientQuotesRepo.ClientQuoteItem[]>,
+  documentPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
 ): Promise<PreparedCandidate | null> => {
   if (!raw || typeof raw !== 'object') {
     badRequest(reply, 'candidates[' + index + '] must be an object');
@@ -1033,7 +1085,11 @@ const prepareCandidateBody = async (
       : undefined;
   let resolvedItems: ResolvedQuoteItem[];
   try {
-    resolvedItems = await resolveQuoteItemSnapshots(itemResult.items, existingItemsById);
+    resolvedItems = await resolveQuoteItemSnapshots(
+      itemResult.items,
+      existingItemsById,
+      documentPricingSemanticsVersion,
+    );
   } catch (error) {
     badRequest(reply, (error as Error).message);
     return null;
@@ -1842,6 +1898,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           existingCandidates.map((candidate) => [candidate.id, candidate]),
         );
         const existingItemsByCandidateId = indexQuoteItemsByCandidateId(existingItems);
+        const documentPricingSemanticsVersion = pricingSemanticsVersionForDocument(existingItems);
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
@@ -1852,6 +1909,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             existingSnapshots,
             existingCandidatesById,
             existingItemsByCandidateId,
+            documentPricingSemanticsVersion,
           );
           if (!prepared) return;
           const normalizedName = prepared.name.toLocaleLowerCase();
@@ -1999,6 +2057,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               effectiveQuoteStatusFromDate(lockedCurrent.status, lockedCurrent.expirationDate) ===
                 'expired',
             );
+            // Non-draft (sent) families are content-locked like flat PUT / offers. Expired sent
+            // families still fall through to the expiration-only carve-out below.
+            if (normalizeQuoteStatus(lockedCurrent.status) !== 'draft' && !lockedFamilyExpired) {
+              return {
+                kind: 'conflict' as const,
+                message: NON_DRAFT_READ_ONLY_ERROR,
+                secondaryLabel: 'non_draft_read_only',
+              };
+            }
             if (lockedFamilyExpired) {
               const [lockedParent, lockedItems] = await Promise.all([
                 clientQuotesRepo.findById(idResult.value, tx),
@@ -2236,6 +2303,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return loadFamilyResponse(familyResult.parent.id);
       }
+      // The non-draft lock outranks the expired one: for a SENT quote "extend the date" would not
+      // make its content editable, so it gets the accurate non-draft message; the expired guard
+      // below then only ever fires for an expired DRAFT quote. Mirrors client offers.
+      if (normalizeQuoteStatus(currentStatus) !== 'draft' && hasNonExpirationContentUpdate) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: NON_DRAFT_READ_ONLY_ERROR,
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: 'non_draft_read_only',
+            fromValue: currentStatus,
+          },
+          extraBody: { currentStatus },
+        });
+      }
       // Terminal (accepted/denied) quotes are frozen — only an id rename is allowed (issue #779;
       // replaces the legacy `confirmed` literal). This guard blocks content/date edits; the
       // status-change freeze is enforced in the statusChanged block below. Mirrors the frontend,
@@ -2451,7 +2535,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         previousSyncLines = existingSnapshots;
 
         try {
-          normalizedItems = await resolveQuoteItemSnapshots(incomingItems, existingItemsById);
+          normalizedItems = await resolveQuoteItemSnapshots(
+            incomingItems,
+            existingItemsById,
+            pricingSemanticsVersionForDocument(existingSnapshots),
+          );
         } catch (err) {
           return badRequest(reply, (err as Error).message);
         }
@@ -3242,13 +3330,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_quote.restore.not_found',
             };
           }
-          if (isTerminalQuoteStatus(current.status)) {
+          if (normalizeQuoteStatus(current.status) !== 'draft') {
             return {
               ok: false,
               statusCode: 409,
-              message: 'Accepted or rejected quotes are read-only',
+              message: NON_DRAFT_READ_ONLY_ERROR,
               action: 'client_quote.restore.conflict',
-              secondaryLabel: 'terminal_read_only',
+              secondaryLabel: 'non_draft_read_only',
             };
           }
           // Expired quotes are content-read-only and the ONLY exit is extending the expiration date
@@ -3604,14 +3692,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (normalizeQuoteStatus(status.status) === 'accepted') {
+      if (normalizeQuoteStatus(status.status) !== 'draft') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Cannot delete an accepted quote',
+          message: 'Only draft quotes can be deleted',
           action: 'client_quote.delete.conflict',
           entityType: 'client_quote',
           entityId: idResult.value,
-          details: { secondaryLabel: 'accepted_status' },
+          details: { secondaryLabel: 'non_draft_status', fromValue: status.status },
         });
       }
       // Expired is read-only EVERYWHERE under #779 — the UI already disables deletion, and the

@@ -16,9 +16,13 @@ import {
   getUniqueViolation,
 } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import {
+  inheritPricingSemanticsVersions,
+  type PricingSemanticsVersion,
+} from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -62,8 +66,22 @@ const invoiceItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
+    },
   },
   required: [
     'id',
@@ -116,6 +134,7 @@ const invoiceSchema = {
 const invoiceItemBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     productId: { type: 'string' },
     description: { type: 'string' },
     unitOfMeasure: { type: 'string', enum: [...UNIT_OF_MEASURE_VALUES] },
@@ -123,8 +142,17 @@ const invoiceItemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
@@ -163,6 +191,7 @@ const invoiceUpdateBodySchema = {
 } as const;
 
 type NormalizedInvoiceItemInput = {
+  id: string | null;
   productId: string | null;
   description: string;
   unitOfMeasure: 'unit' | 'hours';
@@ -172,6 +201,7 @@ type NormalizedInvoiceItemInput = {
   taxRate: number;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 const validateAndNormalizeItems = (
@@ -182,6 +212,11 @@ const validateAndNormalizeItems = (
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
+    const itemIdResult = optionalNonEmptyString(item.id, `items[${i}].id`);
+    if (!itemIdResult.ok) {
+      badRequest(reply, itemIdResult.message);
+      return null;
+    }
     const productIdResult = optionalNonEmptyString(item.productId, `items[${i}].productId`);
     if (!productIdResult.ok) {
       badRequest(reply, productIdResult.message);
@@ -263,10 +298,11 @@ const validateAndNormalizeItems = (
     }
 
     const unitOfMeasure = unitOfMeasureResult.value as 'unit' | 'hours';
-    const durationMonths = durationMonthsResult.value ?? 1;
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
 
     normalizedItems.push({
+      id: itemIdResult.value,
       productId: productIdResult.value || null,
       description: descriptionResult.value,
       unitOfMeasure,
@@ -294,6 +330,7 @@ const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.
     taxRate: item.taxRate,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -381,8 +418,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
-      const normalizedItems = validateAndNormalizeItems(items, reply);
+      let normalizedItems = validateAndNormalizeItems(items, reply);
       if (!normalizedItems) return;
+
+      const linkedSaleIdResult = optionalNonEmptyString(linkedSaleId, 'linkedSaleId');
+      if (!linkedSaleIdResult.ok) return badRequest(reply, linkedSaleIdResult.message);
+      if (linkedSaleIdResult.value) {
+        const sourceOrderItems = await clientsOrdersRepo.findItemsForOrder(
+          linkedSaleIdResult.value,
+        );
+        normalizedItems = inheritPricingSemanticsVersions(normalizedItems, sourceOrderItems);
+      }
 
       const {
         subtotal: computedSubtotal,
@@ -403,8 +449,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-      const linkedSaleIdResult = optionalNonEmptyString(linkedSaleId, 'linkedSaleId');
-      if (!linkedSaleIdResult.ok) return badRequest(reply, linkedSaleIdResult.message);
 
       let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] } | null =
         null;
@@ -661,6 +705,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         normalizedItemsForUpdate = validateAndNormalizeItems(items, reply);
         if (!normalizedItemsForUpdate) return;
+        const existingItems = await invoicesRepo.findItemsForInvoice(idResult.value);
+        normalizedItemsForUpdate = inheritPricingSemanticsVersions(
+          normalizedItemsForUpdate,
+          existingItems,
+        );
         const computed = computeInvoiceTotals(normalizedItemsForUpdate);
         patch.subtotal = computed.subtotal;
         patch.taxTotal = computed.taxTotal;

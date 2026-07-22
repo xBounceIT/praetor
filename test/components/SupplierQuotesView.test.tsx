@@ -388,6 +388,30 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     expect(screen.getAllByText('4.813,13 EUR').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('4.813,50 EUR')).not.toBeInTheDocument();
   });
+
+  test('changing the quantity unit preserves list price and unit cost', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    await openQuote('SQ-DRAFT');
+
+    const unitSelector = screen
+      .getAllByRole('combobox')
+      .find((element) => element.textContent?.includes('sales:supplierQuotes.unit'));
+    expect(unitSelector).toBeDefined();
+    fireEvent.click(unitSelector as HTMLElement);
+    const dayOption = screen
+      .getAllByText('sales:supplierQuotes.day')
+      .find((element) => element.tagName === 'SPAN');
+    expect(dayOption).toBeDefined();
+    fireEvent.click(dayOption as HTMLElement);
+
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ unitType: 'days', listPrice: 100, unitPrice: 100 }),
+    );
+  });
 });
 
 describe('<SupplierQuotesView /> summary discount line', () => {
@@ -738,6 +762,26 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(screen.queryByText('200,00 EUR')).not.toBeInTheDocument();
   });
 
+  test('prices a years duration using the displayed year value', () => {
+    const yearsQuote = buildQuote({
+      id: 'SQ-DURATION-YEARS',
+      status: 'draft',
+      items: [
+        {
+          ...daysLineQuote.items[0],
+          id: 'sqi-years',
+          quoteId: 'SQ-DURATION-YEARS',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+
+    render(<SupplierQuotesView {...baseProps} quotes={[yearsQuote]} />);
+    // 24 canonical months display as 2 years: 100 × 2 × 2 = 400.
+    expect(screen.getAllByText('400,00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('renders an editable duration for a unit-measured line (duration applies to every type)', async () => {
     // SQ-DRAFT's sample item is unitType "unit". Under the new model duration applies to every line
     // type (issue #775) — the cell shows the editable value + selector, not a static N/A.
@@ -819,6 +863,42 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
     expect(updates.items?.[0]?.durationMonths).toBe(4);
     expect(updates.items?.[0]?.durationUnit).toBe('months');
+  });
+
+  test('marks an added row with the legacy document pricing semantics', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const legacyQuote = buildQuote({
+      id: 'SQ-LEGACY-ADD',
+      status: 'draft',
+      items: [
+        {
+          ...daysLineQuote.items[0],
+          id: 'sqi-legacy',
+          quoteId: 'SQ-LEGACY-ADD',
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[legacyQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    await openQuote('SQ-LEGACY-ADD');
+
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[1], {
+      target: { value: '1' },
+    });
+    fireEvent.change(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[1],
+      {
+        target: { value: '100' },
+      },
+    );
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[1]?.pricingSemanticsVersion).toBe(1);
   });
 
   test("submits each line's stored duration verbatim (no unit-line coercion)", async () => {

@@ -207,6 +207,7 @@ export const autoCreateSupplierOrdersForClientOrder = async (
                 note: item.note,
                 durationMonths: item.durationMonths,
                 durationUnit: item.durationUnit,
+                pricingSemanticsVersion: item.pricingSemanticsVersion,
               };
             });
 

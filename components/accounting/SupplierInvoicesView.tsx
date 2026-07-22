@@ -26,7 +26,7 @@ import {
   formatDecimal,
   getDiscountedLineTotal,
   getDurationInputValue,
-  getEffectiveDurationMonths,
+  getEffectiveDurationMultiplier,
   isPositiveFiniteNumber,
   normalizeDurationForSubmit,
   normalizeDurationUnit,
@@ -286,8 +286,8 @@ const useSupplierInvoicesController = ({
       const items = formData.items || [];
       const item = items[index];
       if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-      // 'na' (N/A) drops the multiplier to a single month — the value input is disabled and the line
-      // never multiplies (issue #775). Recompute totals atomically so the summary stays in sync.
+      // 'na' (N/A) applies the neutral ×1 multiplier — the value input is disabled and the line
+      // never multiplies by a duration. Recompute totals atomically so the summary stays in sync.
       const durationValue = getDurationInputValue(item);
       const durationMonths =
         newUnit === 'na' || durationValue === undefined
@@ -769,7 +769,7 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
         defaultValue: 'Duration',
       }),
       minWidth: 174,
-      accessorFn: (item) => getEffectiveDurationMonths(item),
+      accessorFn: (item) => getEffectiveDurationMultiplier(item),
       align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[150px]">
