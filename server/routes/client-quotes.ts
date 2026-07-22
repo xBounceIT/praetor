@@ -2015,6 +2015,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             // Serialize family edits with promotion/restore, which lock the same parent first.
             const lockedCurrent = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
             if (!lockedCurrent) return { kind: 'not_found' as const };
+            const lockedLinkedOfferId = await clientQuotesRepo.findLinkedOfferId(
+              idResult.value,
+              tx,
+            );
+            if (lockedLinkedOfferId) {
+              return {
+                kind: 'conflict' as const,
+                message: 'Candidate families are read-only after promotion or finalization',
+                secondaryLabel: 'candidate_family_read_only',
+              };
+            }
             const isSending =
               normalizeQuoteStatus(lockedCurrent.status) === 'draft' &&
               normalizeQuoteStatus(requestedStatus) === 'sent';
@@ -2605,15 +2616,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: clientQuotesRepo.ClientQuoteItem[];
         syncAudits: SupplierItemSyncAudit[];
         revisionConflict?: boolean;
+        concurrentConflict?: boolean;
       };
       try {
         result = await withDbTransaction(async (tx) => {
           const sendingIntent =
             normalizeQuoteStatus(current.status) === 'draft' &&
             normalizeQuoteStatus(targetStatus ?? current.status) === 'sent';
-          const lockedQuote = sendingIntent
-            ? await clientQuotesRepo.lockCurrentById(idResult.value, tx)
-            : current;
+          const lockedQuote = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
           if (!lockedQuote) return { quote: null, items: [], syncAudits: [] };
           if (sendingIntent && normalizeQuoteStatus(lockedQuote.status) !== 'draft') {
             return {
@@ -2621,6 +2631,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               items: [],
               syncAudits: [],
               revisionConflict: true,
+            };
+          }
+          const lockedLinkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value, tx);
+          if (
+            normalizeQuoteStatus(lockedQuote.status) !== normalizeQuoteStatus(current.status) ||
+            lockedQuote.expirationDate !== current.expirationDate ||
+            lockedLinkedOfferId !== linkedOfferId
+          ) {
+            return {
+              quote: null,
+              items: [],
+              syncAudits: [],
+              concurrentConflict: true,
             };
           }
           const isSending =
@@ -2797,6 +2820,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'client_quote',
           entityId: idResult.value,
           details: { secondaryLabel: 'concurrent_send' },
+        });
+      }
+      if (result.concurrentConflict) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'The quote changed while it was being saved',
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'concurrent_update' },
         });
       }
       if (!updatedQuote) {
@@ -3668,22 +3701,63 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (await clientQuotesRepo.findLinkedOfferId(idResult.value)) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Cannot delete a quote once an offer has been created from it',
-          action: 'client_quote.delete.conflict',
-          entityType: 'client_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'offer_exists' },
-        });
-      }
+      type DeleteResult =
+        | { kind: 'not_found' }
+        | {
+            kind: 'conflict';
+            message: string;
+            secondaryLabel: string;
+            fromValue?: string;
+          }
+        | { kind: 'success'; clientName: string };
+      const result = await withDbTransaction<DeleteResult>(async (tx) => {
+        const current = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
+        if (!current) return { kind: 'not_found' };
 
-      const [status, familyCandidates] = await Promise.all([
-        clientQuotesRepo.findStatusAndClientName(idResult.value),
-        quoteCandidatesRepo.listForQuote(idResult.value),
-      ]);
-      if (!status) {
+        const [linkedOfferId, status, familyCandidates] = await Promise.all([
+          clientQuotesRepo.findLinkedOfferId(idResult.value, tx),
+          clientQuotesRepo.findStatusAndClientName(idResult.value, tx),
+          quoteCandidatesRepo.listForQuote(idResult.value, tx),
+        ]);
+        if (linkedOfferId) {
+          return {
+            kind: 'conflict',
+            message: 'Cannot delete a quote once an offer has been created from it',
+            secondaryLabel: 'offer_exists',
+          };
+        }
+        if (!status) return { kind: 'not_found' };
+        if (normalizeQuoteStatus(status.status) !== 'draft') {
+          return {
+            kind: 'conflict',
+            message: 'Only draft quotes can be deleted',
+            secondaryLabel: 'non_draft_status',
+            fromValue: status.status,
+          };
+        }
+        // Expired is read-only EVERYWHERE under #779 — the UI already disables deletion, and the
+        // only exit is extending the expiration date. Derive it here too so a direct API caller
+        // cannot delete what the model freezes (#812 round 25).
+        const familyIsExpired =
+          !isTerminalQuoteStatus(status.status) &&
+          isCandidateFamilyExpired(
+            familyCandidates,
+            effectiveQuoteStatusFromDate(status.status, status.expirationDate) === 'expired',
+          );
+        if (familyIsExpired) {
+          return {
+            kind: 'conflict',
+            message:
+              'Expired quotes are read-only and cannot be deleted; extend the expiration date instead',
+            secondaryLabel: 'expired_read_only',
+          };
+        }
+
+        await clientQuotesRepo.deleteById(idResult.value, tx);
+        return { kind: 'success', clientName: status.clientName };
+      });
+
+      if (result.kind === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Quote not found',
@@ -3692,38 +3766,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (normalizeQuoteStatus(status.status) !== 'draft') {
+      if (result.kind === 'conflict') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Only draft quotes can be deleted',
+          message: result.message,
           action: 'client_quote.delete.conflict',
           entityType: 'client_quote',
           entityId: idResult.value,
-          details: { secondaryLabel: 'non_draft_status', fromValue: status.status },
+          details: {
+            secondaryLabel: result.secondaryLabel,
+            fromValue: result.fromValue,
+          },
         });
       }
-      // Expired is read-only EVERYWHERE under #779 — the UI already disables deletion, and the
-      // only exit is extending the expiration date. Derive it here too so a direct API caller
-      // cannot delete what the model freezes (#812 round 25).
-      const familyIsExpired =
-        !isTerminalQuoteStatus(status.status) &&
-        isCandidateFamilyExpired(
-          familyCandidates,
-          effectiveQuoteStatusFromDate(status.status, status.expirationDate) === 'expired',
-        );
-      if (familyIsExpired) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message:
-            'Expired quotes are read-only and cannot be deleted; extend the expiration date instead',
-          action: 'client_quote.delete.conflict',
-          entityType: 'client_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'expired_read_only' },
-        });
-      }
-
-      await clientQuotesRepo.deleteById(idResult.value);
 
       await logAudit({
         request,
@@ -3732,7 +3787,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: status.clientName ?? '',
+          secondaryLabel: result.clientName,
         },
       });
       return reply.code(204).send();
