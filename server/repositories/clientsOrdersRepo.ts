@@ -564,9 +564,15 @@ export const replaceItems = async (
     return insertItems(orderId, versionedItems, tx);
   });
 
-export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
-  const result = await exec.delete(sales).where(eq(sales.id, id));
-  return (result.rowCount ?? 0) > 0;
+export const deleteDraftById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ clientName: string } | null> => {
+  const rows = await exec
+    .delete(sales)
+    .where(and(eq(sales.id, id), eq(sales.status, 'draft')))
+    .returning({ clientName: sales.clientName });
+  return rows[0] ?? null;
 };
 
 export type NewSupplierOrderForAutoCreate = {

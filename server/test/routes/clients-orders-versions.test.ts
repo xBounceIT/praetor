@@ -41,10 +41,12 @@ const coFindItemsForOrderMock = mock();
 const coFindIdConflictMock = mock();
 const coFindOfferDetailsMock = mock();
 const coFindExistingForOfferMock = mock();
+const coFindStatusAndClientNameMock = mock();
 const coUpdateMock = mock();
 const coRenameMock = mock();
 const coRestoreSnapshotOrderMock = mock();
 const coReplaceItemsMock = mock();
+const coDeleteDraftByIdMock = mock();
 
 const clientsExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
@@ -88,10 +90,12 @@ beforeAll(async () => {
     findIdConflict: coFindIdConflictMock,
     findOfferDetails: coFindOfferDetailsMock,
     findExistingForOffer: coFindExistingForOfferMock,
+    findStatusAndClientName: coFindStatusAndClientNameMock,
     update: coUpdateMock,
     rename: coRenameMock,
     restoreSnapshotOrder: coRestoreSnapshotOrderMock,
     replaceItems: coReplaceItemsMock,
+    deleteDraftById: coDeleteDraftByIdMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -227,10 +231,12 @@ const allMocks = [
   coFindIdConflictMock,
   coFindOfferDetailsMock,
   coFindExistingForOfferMock,
+  coFindStatusAndClientNameMock,
   coUpdateMock,
   coRenameMock,
   coRestoreSnapshotOrderMock,
   coReplaceItemsMock,
+  coDeleteDraftByIdMock,
   clientsExistsByIdMock,
   productsGetSnapshotsMock,
   sqGetQuoteItemSnapshotsMock,
@@ -266,6 +272,8 @@ beforeEach(async () => {
     status: 'accepted',
   });
   coFindExistingForOfferMock.mockResolvedValue(null);
+  coFindStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+  coDeleteDraftByIdMock.mockResolvedValue({ clientName: 'Client' });
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(
     new Map([
       [
@@ -289,6 +297,66 @@ afterEach(async () => {
 });
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+
+describe('DELETE /api/clients-orders/:id', () => {
+  test('204 atomically deletes a draft and audits the returned client name', async () => {
+    coDeleteDraftByIdMock.mockResolvedValue({ clientName: 'Deleted Client' });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(coDeleteDraftByIdMock).toHaveBeenCalledWith('o-1');
+    expect(coFindStatusAndClientNameMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'client_order.deleted',
+        details: expect.objectContaining({ secondaryLabel: 'Deleted Client' }),
+      }),
+    );
+  });
+
+  test('409 when a concurrent confirmation wins before the atomic draft delete', async () => {
+    coFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'confirmed',
+      clientName: 'Client',
+    });
+    coDeleteDraftByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Only draft clients_orders can be deleted');
+    expect(coDeleteDraftByIdMock).toHaveBeenCalledWith('o-1');
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'client_order.deleted' }),
+    );
+  });
+
+  test('404 when the draft disappears before the atomic delete', async () => {
+    coFindStatusAndClientNameMock.mockResolvedValue(null);
+    coDeleteDraftByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(coDeleteDraftByIdMock).toHaveBeenCalledWith('o-1');
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'client_order.deleted' }),
+    );
+  });
+});
 
 describe('PUT /api/clients-orders/:id document discount validation', () => {
   test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {

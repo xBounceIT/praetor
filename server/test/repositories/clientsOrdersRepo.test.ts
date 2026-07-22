@@ -438,15 +438,19 @@ describe('supplier-order auto-creation flow', () => {
   });
 });
 
-describe('deleteById', () => {
-  test('returns true when row deleted', async () => {
-    exec.enqueue({ rows: [], rowCount: 1 });
-    expect(await repo.deleteById('co-1', testDb)).toBe(true);
+describe('deleteDraftById', () => {
+  test('returns the client name only when a draft row is deleted', async () => {
+    exec.enqueue({ rows: [['Acme']] });
+    expect(await repo.deleteDraftById('co-1', testDb)).toEqual({ clientName: 'Acme' });
+
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('"sales"."status" =');
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['co-1', 'draft']));
   });
 
-  test('returns false when no row matched', async () => {
-    exec.enqueue({ rows: [], rowCount: 0 });
-    expect(await repo.deleteById('co-x', testDb)).toBe(false);
+  test('returns null when no draft row matched', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await repo.deleteDraftById('co-x', testDb)).toBeNull();
   });
 });
 

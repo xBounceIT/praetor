@@ -1869,8 +1869,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const order = await clientsOrdersRepo.findStatusAndClientName(idResult.value);
-      if (!order) {
+      const deleted = await clientsOrdersRepo.deleteDraftById(idResult.value);
+      if (!deleted) {
+        const current = await clientsOrdersRepo.findStatusAndClientName(idResult.value);
+        if (current && current.status !== 'draft') {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Only draft clients_orders can be deleted',
+            action: 'client_order.delete.conflict',
+            entityType: 'client_order',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'non_draft_status', fromValue: current.status },
+            extraBody: { currentStatus: current.status },
+          });
+        }
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Order not found',
@@ -1879,19 +1891,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (order.status !== 'draft') {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Only draft clients_orders can be deleted',
-          action: 'client_order.delete.conflict',
-          entityType: 'client_order',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'non_draft_status', fromValue: order.status },
-          extraBody: { currentStatus: order.status },
-        });
-      }
-
-      await clientsOrdersRepo.deleteById(idResult.value);
 
       await logAudit({
         request,
@@ -1900,7 +1899,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: order.clientName ?? '',
+          secondaryLabel: deleted.clientName,
         },
       });
       return reply.code(204).send();
