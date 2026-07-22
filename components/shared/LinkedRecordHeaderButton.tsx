@@ -18,7 +18,14 @@ export function LinkedRecordHeaderButton({
   className,
 }: LinkedRecordHeaderButtonProps) {
   return (
-    <Button type="button" size="sm" variant="outline" className={className} onClick={onClick}>
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className={className}
+      data-skip-initial-focus
+      onClick={onClick}
+    >
       {label}
       <ArrowRight className="size-3.5" aria-hidden="true" />
     </Button>
