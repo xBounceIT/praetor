@@ -519,11 +519,35 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
         within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
       ),
     ).toBe(false);
-    // The linked-offer note now says details are editable, not read-only.
-    expect(
-      within(dialog).getByText('accounting:clientsOrders.offerDetailsEditable'),
-    ).toBeInTheDocument();
+    expect(within(dialog).queryByText('accounting:clientsOrders.offerDetailsEditable')).toBeNull();
     expect(within(dialog).queryByText('accounting:clientsOrders.offerDetailsReadOnly')).toBeNull();
+  });
+
+  test('shows a header "view offer" action for an order linked to an offer', async () => {
+    const onViewOffer = mock(() => {});
+    render(
+      <ClientsOrdersView
+        orders={[draftLinkedOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+        onViewOffer={onViewOffer}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).queryByText('accounting:clientsOrders.linkedOffer')).toBeNull();
+    const viewButton = within(dialog).getByRole('button', {
+      name: 'sales:clientOffers.viewOffer',
+    });
+    expect(viewButton.getAttribute('data-variant')).toBe('secondary');
+
+    fireEvent.click(viewButton);
+    expect(onViewOffer).toHaveBeenCalledWith('off-1');
   });
 
   test('a confirmed order linked to an offer keeps identity locked but content editable', async () => {

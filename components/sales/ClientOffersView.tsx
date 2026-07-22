@@ -2,7 +2,7 @@ import { RotateCcw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { LinkedRecordHeaderButton } from '@/components/shared/LinkedRecordHeaderButton';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -1539,7 +1539,6 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
             ) : (
               <ClientOfferClientSection controller={controller} />
             )}
-            <ClientOfferModalAlerts controller={controller} />
             <ClientOfferItemsSection controller={controller} />
             <ClientOfferNotesSummarySection controller={controller} />
           </ModalBody>
@@ -1575,7 +1574,8 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
 const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingOffer, isReadOnly, baseReadOnly, readOnlyReason } = controller;
+  const { t, closeModal, editingOffer, isReadOnly, baseReadOnly, readOnlyReason, onViewQuote } =
+    controller;
 
   return (
     <ModalHeader>
@@ -1596,39 +1596,17 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
             <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
           ) : null}
         </ModalTitle>
-        <ModalCloseButton onClick={closeModal} />
+        <div className="flex shrink-0 items-center gap-2">
+          {editingOffer?.linkedQuoteId && onViewQuote ? (
+            <LinkedRecordHeaderButton
+              label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
+              onClick={() => onViewQuote(editingOffer.linkedQuoteId)}
+            />
+          ) : null}
+          <ModalCloseButton onClick={closeModal} />
+        </div>
       </div>
     </ModalHeader>
-  );
-};
-
-const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> = ({
-  controller,
-}) => {
-  const { t, editingOffer, onViewQuote } = controller;
-
-  return (
-    <>
-      {editingOffer?.linkedQuoteId && (
-        <LinkedRecordBanner
-          label={t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}
-          value={formatDocumentCode(
-            editingOffer.linkedQuoteId,
-            editingOffer.linkedQuoteRevisionCode ??
-              controller.quotes.find((quote) => quote.id === editingOffer.linkedQuoteId)
-                ?.revisionCode,
-          )}
-          action={
-            onViewQuote
-              ? {
-                  label: t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' }),
-                  onClick: () => onViewQuote(editingOffer.linkedQuoteId),
-                }
-              : undefined
-          }
-        />
-      )}
-    </>
   );
 };
 

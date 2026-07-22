@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next';
 import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { LinkedRecordHeaderButton } from '@/components/shared/LinkedRecordHeaderButton';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,6 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
-import { formatDocumentCode } from '../../utils/document-code';
 import {
   createLineItemIndexResolver,
   createTemporaryLineItemId,
@@ -1066,7 +1065,22 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
                 </ModalReadOnlyStatusBanner>
               ) : null}
             </ModalTitle>
-            <ModalCloseButton onClick={controller.closeEditModal} />
+            <div className="flex shrink-0 items-center gap-2">
+              {controller.formData.linkedOfferId && controller.onViewOffer ? (
+                <LinkedRecordHeaderButton
+                  label={controller.t('sales:clientOffers.viewOffer', {
+                    defaultValue: 'View offer',
+                  })}
+                  onClick={() => {
+                    const offerId = controller.formData.linkedOfferId;
+                    if (offerId && controller.onViewOffer) {
+                      controller.onViewOffer(offerId);
+                    }
+                  }}
+                />
+              ) : null}
+              <ModalCloseButton onClick={controller.closeEditModal} />
+            </div>
           </div>
         </ModalHeader>
         <ModalBody className="flex-1 space-y-5">
@@ -1083,7 +1097,6 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
               />
             </div>
           ) : null}
-          <ClientsOrderModalAlerts controller={controller} />
           <OrderDetailsSection controller={controller} />
           <OrderItemsSection controller={controller} />
           <OrderNotesSummarySection controller={controller} />
@@ -1101,49 +1114,6 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
       </form>
     </ModalContent>
   </Modal>
-);
-
-const ClientsOrderModalAlerts: React.FC<{ controller: ClientsOrdersController }> = ({
-  controller,
-}) => (
-  <>
-    {controller.formData.linkedOfferId && (
-      <LinkedRecordBanner
-        label={controller.t('accounting:clientsOrders.linkedOffer', {
-          defaultValue: 'Linked Offer',
-        })}
-        value={controller.t('accounting:clientsOrders.linkedOfferInfo', {
-          number: formatDocumentCode(
-            controller.formData.linkedOfferId,
-            controller.formData.linkedOfferRevisionCode ??
-              controller.offers.find((offer) => offer.id === controller.formData.linkedOfferId)
-                ?.revisionCode,
-          ),
-          defaultValue: 'Offer #{{number}}',
-        })}
-        note={
-          controller.isReadOnly
-            ? controller.t('accounting:clientsOrders.offerDetailsReadOnly', {
-                defaultValue: '(Order details are read-only)',
-              })
-            : controller.t('accounting:clientsOrders.offerDetailsEditable', {
-                defaultValue: '(Order details are editable)',
-              })
-        }
-        action={
-          controller.onViewOffer && controller.formData.linkedOfferId
-            ? {
-                label: controller.t('sales:clientOffers.viewOffer', {
-                  defaultValue: 'View offer',
-                }),
-                onClick: () =>
-                  controller.onViewOffer?.(controller.formData.linkedOfferId as string),
-              }
-            : undefined
-        }
-      />
-    )}
-  </>
 );
 
 const OrderSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (

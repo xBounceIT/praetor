@@ -1888,6 +1888,45 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     expect(within(dialog).getByText('sales:clientQuotes.readOnlyBecauseOffer')).toBeTruthy();
   });
 
+  test('shows a header "view offer" action for a quote linked to an offer', async () => {
+    const user = userEvent.setup();
+    const onViewOffers = mock(() => {});
+    render(
+      <ClientQuotesView
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-OFFERED',
+            status: 'offer',
+            expirationDate: '2099-12-31',
+            linkedOfferId: 'off-1',
+          },
+        ]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onViewOffers={onViewOffers}
+      />,
+    );
+
+    await waitForSavedViewsLoad();
+    await user.click(screen.getByText('Q-OFFERED'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByText('sales:clientQuotes.linkedOffer')).toBeNull();
+    const viewButton = within(dialog).getByRole('button', {
+      name: 'sales:clientQuotes.viewOffer',
+    });
+    expect(viewButton.getAttribute('data-variant')).toBe('secondary');
+
+    await user.click(viewButton);
+    expect(onViewOffers).toHaveBeenCalledWith('Q-OFFERED');
+  });
+
   test('uses candidate rollback for an offer quote whose linked offer is still draft', async () => {
     const user = userEvent.setup();
     const onRollbackPromotion = mock(() => Promise.resolve());

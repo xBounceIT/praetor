@@ -412,24 +412,21 @@ describe('<ClientOffersView /> discount summary', () => {
   });
 });
 
-describe('<ClientOffersView /> source-quote banner', () => {
-  test('shows the source quote with a primary "view quote" action for a linked offer', async () => {
+describe('<ClientOffersView /> source-quote header action', () => {
+  test('shows a header "view quote" action for a linked offer', async () => {
     const user = userEvent.setup();
     const onViewQuote = mock(() => {});
     const linkedOffer = buildOffer({ id: 'O-LINKED', linkedQuoteId: 'Q0001' });
 
     render(<ClientOffersView {...baseProps} offers={[linkedOffer]} onViewQuote={onViewQuote} />);
 
-    // Clicking the row opens the edit dialog that hosts the source-quote banner.
     fireEvent.click(screen.getByText('O-LINKED'));
 
-    expect(screen.getByText('sales:clientOffers.sourceQuote')).toBeInTheDocument();
-    expect(screen.getByText('Q0001')).toBeInTheDocument();
+    expect(screen.queryByText('sales:clientOffers.sourceQuote')).not.toBeInTheDocument();
+    expect(screen.queryByText('Q0001')).not.toBeInTheDocument();
 
-    // The "view quote" control must now be a primary shadcn button (data-variant
-    // "default"), not the old text link (variant="link").
     const viewButton = screen.getByRole('button', { name: 'sales:clientOffers.viewQuote' });
-    expect(viewButton.getAttribute('data-variant')).toBe('default');
+    expect(viewButton.getAttribute('data-variant')).toBe('secondary');
     expect(viewButton.getAttribute('data-variant')).not.toBe('link');
 
     await user.click(viewButton);
