@@ -1854,6 +1854,100 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     expect(screen.getByText('sales:clientQuotes.readOnlyStatus')).toBeTruthy();
   });
 
+  test('shows an enabled restore-to-draft button next to the read-only badge for sent quotes', async () => {
+    const user = userEvent.setup();
+    const onUpdateQuote = mock(() => Promise.resolve());
+    render(
+      <ClientQuotesView
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-SENT-RESTORE',
+            status: 'sent',
+            expirationDate: '2999-12-31',
+          },
+        ]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await waitForSavedViewsLoad();
+    await user.click(screen.getByText('Q-SENT-RESTORE'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('sales:clientQuotes.readOnlyStatus')).toBeTruthy();
+    const restore = within(dialog).getByTestId('client-quote-modal-restore-draft');
+    expect(restore).not.toBeDisabled();
+
+    await user.click(restore);
+    await waitFor(() =>
+      expect(onUpdateQuote).toHaveBeenCalledWith('Q-SENT-RESTORE', { status: 'draft' }),
+    );
+    await waitFor(() => {
+      expect(within(dialog).queryByTestId('client-quote-modal-restore-draft')).toBeNull();
+      expect(within(dialog).queryByText('sales:clientQuotes.readOnlyStatus')).toBeNull();
+      expect(within(dialog).getByText('sales:clientQuotes.editQuote')).toBeTruthy();
+    });
+  });
+
+  test('disables modal restore-to-draft for accepted quotes', async () => {
+    const user = userEvent.setup();
+    renderQuote({
+      ...quotes[0],
+      id: 'Q-ACCEPTED',
+      status: 'accepted',
+      expirationDate: '2999-12-31',
+    });
+
+    await waitForSavedViewsLoad();
+    await user.click(screen.getByText('Q-ACCEPTED'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('client-quote-modal-restore-draft')).toBeDisabled();
+  });
+
+  test('modal restore uses candidate rollback when the linked offer is still draft', async () => {
+    const user = userEvent.setup();
+    const onRollbackPromotion = mock(() => Promise.resolve());
+    render(
+      <ClientQuotesView
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-OFFERED-MODAL',
+            status: 'offer',
+            expirationDate: '2099-12-31',
+            linkedOfferId: 'off-1',
+            selectedCandidateId: 'qc-selected',
+          },
+        ]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onRollbackPromotion={onRollbackPromotion}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        quoteOfferStatuses={{ 'Q-OFFERED-MODAL': 'draft' }}
+      />,
+    );
+
+    await waitForSavedViewsLoad();
+    await user.click(screen.getByText('Q-OFFERED-MODAL'));
+    const dialog = await screen.findByRole('dialog');
+    const restore = within(dialog).getByTestId('client-quote-modal-restore-draft');
+    expect(restore).not.toBeDisabled();
+    await user.click(restore);
+    await waitFor(() => {
+      expect(onRollbackPromotion).toHaveBeenCalledWith('Q-OFFERED-MODAL');
+    });
+  });
+
   test('an expired sent quote keeps only the expiration date editable', async () => {
     const user = userEvent.setup();
     renderQuote({

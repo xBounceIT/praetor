@@ -102,6 +102,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
+import { ModalRestoreToDraftButton } from '../shared/ModalRestoreToDraftButton';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
@@ -601,9 +602,18 @@ const useClientOffersController = ({
     [paymentTermsOptions],
   );
 
+  const applyOfferDraftLocally = useCallback((offer: ClientOffer) => {
+    const next = { ...offer, status: 'draft' as const };
+    dispatch({ type: 'setEditingOffer', offer: next });
+    setFormData(offerToFormData(next));
+  }, []);
+
   const handleStatusUpdate = async (id: string, updates: Partial<ClientOffer>) => {
     try {
       await onUpdateOffer(id, updates);
+      if (editingOffer?.id === id && updates.status === 'draft') {
+        applyOfferDraftLocally(editingOffer);
+      }
     } catch (err) {
       toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
     }
@@ -624,6 +634,9 @@ const useClientOffersController = ({
     try {
       const reason = revertReason.trim();
       await onRevertOfferToDraft(offerToRevert.id, reason || undefined);
+      if (editingOffer?.id === offerToRevert.id) {
+        applyOfferDraftLocally(offerToRevert);
+      }
       dispatch({ type: 'revertSuccess' });
     } catch (err) {
       toastError((err as Error).message || t('sales:clientOffers.failedToUpdateStatus'));
@@ -1442,6 +1455,11 @@ const useClientOffersController = ({
     handleClearPreview,
     handleVersionRestored,
     getStatusLabel,
+    offerIdsWithOrders,
+    canRevertTerminalStatus,
+    onRevertOfferToDraft,
+    handleStatusUpdate,
+    openRevertConfirm,
     closeRevertConfirm,
     handleRevertToDraft,
     handleDelete,
@@ -1574,8 +1592,69 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
 const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingOffer, isReadOnly, baseReadOnly, readOnlyReason, onViewQuote } =
-    controller;
+  const {
+    t,
+    closeModal,
+    editingOffer,
+    isReadOnly,
+    baseReadOnly,
+    readOnlyReason,
+    isOfferExpired,
+    offerIdsWithOrders,
+    canRevertTerminalStatus,
+    onRevertOfferToDraft,
+    handleStatusUpdate,
+    openRevertConfirm,
+    previewVersion,
+    onViewQuote,
+  } = controller;
+
+  const showRestoreToDraft = Boolean(
+    editingOffer && baseReadOnly && editingOffer.status !== 'draft' && previewVersion === null,
+  );
+  const revertLabel = t('sales:clientOffers.revertToDraft', {
+    defaultValue: 'Revert to Draft',
+  });
+  let restoreDisabled = true;
+  let restoreTooltip = revertLabel;
+  let onRestoreClick: (() => void) | undefined;
+
+  if (editingOffer && showRestoreToDraft) {
+    const expired = isOfferExpired(editingOffer);
+    const hasOrder = offerIdsWithOrders.has(editingOffer.id);
+
+    if (editingOffer.status === 'sent') {
+      if (expired) {
+        restoreTooltip = t('sales:clientOffers.expiredActionsDisabled', {
+          defaultValue: 'Expired offers cannot change status; extend the expiration date.',
+        });
+      } else {
+        restoreDisabled = false;
+        onRestoreClick = () => {
+          void handleStatusUpdate(editingOffer.id, { status: 'draft' });
+        };
+      }
+    } else if (editingOffer.status === 'accepted' || editingOffer.status === 'denied') {
+      if (hasOrder) {
+        restoreTooltip = t('sales:clientQuotes.cannotRevertLinkedSale', {
+          defaultValue: 'Cannot revert: linked sale order exists',
+        });
+      } else if (!canRevertTerminalStatus || !onRevertOfferToDraft) {
+        restoreTooltip = t('sales:clientOffers.revertRequiresElevatedRole', {
+          defaultValue: 'Only Admin or Top Manager can restore terminal offers to draft',
+        });
+      } else {
+        restoreDisabled = false;
+        onRestoreClick = () => {
+          openRevertConfirm(editingOffer);
+        };
+      }
+    } else {
+      restoreTooltip = t('sales:clientOffers.revertStatusNotCompatible', {
+        defaultValue: 'This status cannot be restored to draft',
+      });
+    }
+  }
 
   return (
     <ModalHeader>
@@ -1594,6 +1673,17 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
               : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
           {baseReadOnly ? (
             <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
+          ) : null}
+          {showRestoreToDraft ? (
+            <ModalRestoreToDraftButton
+              label={revertLabel}
+              tooltip={restoreTooltip}
+              disabled={restoreDisabled}
+              testId="client-offer-modal-restore-draft"
+              onClick={() => {
+                onRestoreClick?.();
+              }}
+            />
           ) : null}
         </ModalTitle>
         <div className="flex shrink-0 items-center gap-2">

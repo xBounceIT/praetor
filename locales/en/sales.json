@@ -232,6 +232,7 @@
     "restoreDisabledSaleStatus": "Restore is only possible when the linked sale order is in draft status.",
     "restoreDisabledOfferStatus": "Restore is only possible when the linked offer is in draft status.",
     "restoreQuote": "Restore quote",
+    "restoreStatusNotCompatible": "This status cannot be restored to draft",
     "rowsPerPage": "Rows per page:",
     "convertToOrder": "Convert to Order",
     "orderAlreadyExists": "An order for this quote already exists.",
@@ -362,6 +363,8 @@
     "revertReasonLabel": "Reason",
     "revertReasonPlaceholder": "Optional note for the audit trail",
     "confirmRevertToDraft": "Revert to Draft",
+    "revertRequiresElevatedRole": "Only Admin or Top Manager can restore terminal offers to draft",
+    "revertStatusNotCompatible": "This status cannot be restored to draft",
     "createOrder": "Create sale order",
     "clientLockedByQuote": "Locked due to linked quote",
     "versionHistory": {

@@ -232,6 +232,7 @@
     "restoreDisabledSaleStatus": "Il ripristino è possibile solo se l'ordine di vendita collegato è in stato Bozza.",
     "restoreDisabledOfferStatus": "Il ripristino è possibile solo se l'offerta collegata è in stato Bozza.",
     "restoreQuote": "Ripristina preventivo",
+    "restoreStatusNotCompatible": "Questo stato non può essere ripristinato in bozza",
     "rowsPerPage": "Righe per pagina:",
     "convertToOrder": "Converti in Ordine",
     "orderAlreadyExists": "Esiste già un ordine per questo preventivo.",
@@ -362,6 +363,8 @@
     "revertReasonLabel": "Motivo",
     "revertReasonPlaceholder": "Nota opzionale per l'audit trail",
     "confirmRevertToDraft": "Riporta in bozza",
+    "revertRequiresElevatedRole": "Solo Admin o Top Manager possono ripristinare le offerte terminali in bozza",
+    "revertStatusNotCompatible": "Questo stato non può essere ripristinato in bozza",
     "createOrder": "Crea ordine di vendita",
     "clientLockedByQuote": "Bloccato per preventivo collegato",
     "versionHistory": {
