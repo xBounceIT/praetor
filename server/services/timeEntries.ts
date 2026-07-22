@@ -507,6 +507,9 @@ export const updateTimeEntry = async (
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
+  const entryKeyChanging =
+    dateChanging || (catalogChanging && (projectId !== context.projectId || task !== context.task));
+
   const applyUpdate = (hourlyCost?: number, exec?: DbExecutor) => {
     const update = {
       version,
@@ -526,14 +529,26 @@ export const updateTimeEntry = async (
     return exec ? entriesRepo.update(entryId, update, exec) : entriesRepo.update(entryId, update);
   };
 
-  const updated = dateChanging
+  const updated = entryKeyChanging
     ? await withSerializableWriteTransaction(async (tx) => {
         await usersRepo.lockById(context.userId, tx);
-        const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(
-          context.userId,
-          date as string,
+        const duplicateExists = await entriesRepo.existsForEntryKey(
+          {
+            userId: context.userId,
+            date: date ?? context.date,
+            projectId: projectId ?? context.projectId,
+            task: task ?? context.task,
+            excludeId: entryId,
+          },
           tx,
         );
+        if (duplicateExists) {
+          fail(409, 'A time entry already exists for this date, project, and task');
+        }
+
+        const hourlyCost = dateChanging
+          ? await userHourlyCostPeriodsRepo.findCostForDate(context.userId, date as string, tx)
+          : undefined;
         return applyUpdate(hourlyCost, tx);
       })
     : await applyUpdate();

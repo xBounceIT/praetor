@@ -351,8 +351,12 @@ export type EntryUniquenessKey = {
   task: string;
 };
 
+type EntryKeyLookup = EntryUniquenessKey & {
+  excludeId?: string;
+};
+
 export const existsForEntryKey = async (
-  key: EntryUniquenessKey,
+  key: EntryKeyLookup,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
   const rows = await exec
@@ -364,6 +368,7 @@ export const existsForEntryKey = async (
         eq(timeEntries.date, key.date),
         eq(timeEntries.projectId, key.projectId),
         eq(timeEntries.task, key.task),
+        key.excludeId ? ne(timeEntries.id, key.excludeId) : undefined,
       ),
     )
     .limit(1);

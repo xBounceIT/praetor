@@ -13,19 +13,19 @@ Before saving, verify that dates are correct and that the task belongs to the se
 
 The tracker always allows entries on Saturdays, Sundays, and Italian holidays. When the daily total exceeds **8 hours**, or when any time is recorded on a weekend or Italian holiday, Praetor creates an overtime notification for the user's competence-center managers and all Top Managers. Each event is notified only once per user, date, and tracker source.
 
-Praetor does not allow a second entry for the same user, date, project, and task: `POST /api/entries` returns `409` when that combination already exists. Update the existing entry instead of creating a duplicate.
+Praetor does not allow a second entry for the same user, date, project, and task: `POST /api/entries` returns `409` when that combination already exists, and `PUT /api/entries/:id` returns `409` when a date, project, or task change would produce it. Update the existing entry instead of creating a duplicate.
 
 Single-entry duration is capped at 24 hours: both `POST /api/entries` and `PUT /api/entries/:id` reject any `duration` greater than `24`. Split work across separate dates instead of recording impossibly long durations.
 
 Projects whose end date is before today are considered expired. Without the `timesheets.expired_projects.create` permission, they are hidden from the daily and weekly selections and the server rejects new entries or moves into those projects with `403`. Jobs in **In pausa** or **Terminato** status are always excluded from the tracker, weekly-view, and RIL selectors, and the server always rejects new entries or moves into those jobs even when the user can work on expired projects. Existing entries already logged on expired projects can still be edited for non-catalog fields such as duration, notes, location, and placeholder state; **In pausa** or **Terminato** also blocks edits to entries already linked to that job and any catalog change into that job.
 
-When an entry is edited, Praetor uses the API-returned `version` field to prevent concurrent overwrites. If the same entry was saved elsewhere meanwhile, `PUT /api/entries/:id` returns `409` and the entry must be reloaded before retrying.
+When an entry is edited, Praetor uses the API-returned `version` field to prevent concurrent overwrites. If the same entry was saved elsewhere meanwhile, `PUT /api/entries/:id` returns `409` and the entry must be reloaded before retrying. The same status also reports a conflict with the unique user/date/project/task combination.
 
 ## Weekly view
 
 The weekly view helps you quickly review hours across days. Use it to find missing days, duplicates, or entries assigned to the wrong project.
 
-Each existing entry occupies its own row, so any historical duplicate data stays visible and can be edited independently. The "New entry" row at the top is for creating new entries only and follows the duplicate-entry guard.
+Each existing entry occupies its own row. During the upgrade that introduces the unique constraint, any historical duplicates are removed from the active view only after the full row is archived in the audit log so an administrator can recover its data. The "New entry" row at the top is for creating new entries only and follows the duplicate-entry guard.
 
 ## RIL
 

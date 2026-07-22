@@ -604,6 +604,25 @@ describe('existsForEntryKey', () => {
 
     expect(result).toBe(false);
   });
+
+  test('can exclude the entry being updated from the key lookup', async () => {
+    exec.enqueue({ rows: [] });
+
+    const result = await entriesRepo.existsForEntryKey(
+      {
+        userId: 'u-1',
+        date: '2026-04-30',
+        projectId: 'p-1',
+        task: 'Dev',
+        excludeId: 'e-1',
+      },
+      testDb,
+    );
+
+    expect(result).toBe(false);
+    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', 'p-1', 'Dev', 'e-1', 1]);
+    expect(exec.calls[0].sql).toContain('"time_entries"."id" <> $5');
+  });
 });
 
 const newEntry = {

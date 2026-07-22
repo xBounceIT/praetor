@@ -333,6 +333,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['entries'],
         summary: 'Update time entry',
+        description:
+          'Updates one time entry. Returns 409 when a date, project, or task change would ' +
+          'give the owner another entry with the same date, project, and task, or when the ' +
+          'optimistic-lock version is stale.',
         params: idParamSchema,
         body: entryUpdateBodySchema,
         response: {

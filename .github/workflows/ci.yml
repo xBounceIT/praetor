@@ -138,6 +138,29 @@ jobs:
           DB_PASSWORD: praetor
         run: bun run db:ready
 
+      - name: Verify legacy time-entry duplicate upgrade
+        working-directory: server
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: praetor_test
+          DB_USER: praetor
+          DB_PASSWORD: praetor
+          RUN_TIME_ENTRY_KEY_MIGRATION_TEST: '1'
+        run: bun test ./test/db/migration0121TimeEntryKeys.postgres.test.ts
+
+      - name: Refresh canonical demo data on migrated schema
+        working-directory: server
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: praetor_test
+          DB_USER: praetor
+          DB_PASSWORD: praetor
+          ADMIN_DEFAULT_PASSWORD: ci-migration-admin-password
+          DEMO_USER_PASSWORD: ci-migration-demo-password
+        run: bun run seed:demo
+
   ldap-integration:
     name: LDAP Integration Tests
     runs-on: ubuntu-latest
