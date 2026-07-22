@@ -39,15 +39,45 @@ END $$;
 -- lowest-version, oldest row is the deterministic survivor because an entry moved onto
 -- another key has normally already had its optimistic-lock version incremented. Consolidate
 -- the operational ledger into that survivor while the audit copy retains every original row.
-WITH "ranked_time_entries" AS (
+-- Lock only rows in duplicate groups so their values cannot change during consolidation while
+-- unrelated time-entry writes remain available.
+WITH "duplicate_entry_keys" AS (
+	SELECT "user_id", "date", "project_id", "task"
+	FROM "time_entries"
+	GROUP BY "user_id", "date", "project_id", "task"
+	HAVING COUNT(*) > 1
+),
+"locked_time_entries" AS (
 	SELECT
-		"time_entries".*,
+		"entry".*,
+		EXISTS (
+			SELECT 1
+			FROM "audit_logs" AS "prior_archive"
+			WHERE "prior_archive"."action" = 'time_entry.migration_duplicate_archived'
+				AND "prior_archive"."details" ->> 'migration' = '0121_enforce_time_entry_keys'
+				AND "prior_archive"."details" ->> 'duplicateOf' = "entry"."id"
+		) AS "is_prior_survivor"
+	FROM "time_entries" AS "entry"
+	JOIN "duplicate_entry_keys" AS "duplicate_key"
+		ON "duplicate_key"."user_id" = "entry"."user_id"
+		AND "duplicate_key"."date" = "entry"."date"
+		AND "duplicate_key"."project_id" = "entry"."project_id"
+		AND "duplicate_key"."task" = "entry"."task"
+	FOR UPDATE OF "entry"
+),
+"ranked_time_entries" AS (
+	SELECT
+		"locked_time_entries".*,
 		FIRST_VALUE("id") OVER "entry_key_order" AS "survivor_id",
 		ROW_NUMBER() OVER "entry_key_order" AS "entry_key_rank"
-	FROM "time_entries"
+	FROM "locked_time_entries"
 	WINDOW "entry_key_order" AS (
 		PARTITION BY "user_id", "date", "project_id", "task"
-		ORDER BY "version" ASC NULLS LAST, "created_at" ASC NULLS LAST, "id" ASC
+		ORDER BY
+			"is_prior_survivor" DESC,
+			"version" ASC NULLS LAST,
+			"created_at" ASC NULLS LAST,
+			"id" ASC
 	)
 ),
 "consolidated_time_entries" AS (
@@ -139,4 +169,10 @@ WHERE "duplicate_entry"."id" = "duplicate"."id"
 		WHERE "updated"."id" = "duplicate"."survivor_id"
 	);--> statement-breakpoint
 
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_time_entries_entry_key_unique" ON "time_entries" USING btree ("user_id","date","project_id","task");
+-- migrationsRunner executes these statements in autocommit mode. Dropping first removes an
+-- invalid index left by an interrupted concurrent build. If an older instance recreates a
+-- duplicate after the backfill commits, PostgreSQL fails the unique build safely; the migration
+-- remains pending and a retry consolidates that row before replacing the invalid index.
+DROP INDEX CONCURRENTLY IF EXISTS "idx_time_entries_entry_key_unique";--> statement-breakpoint
+
+CREATE UNIQUE INDEX CONCURRENTLY "idx_time_entries_entry_key_unique" ON "time_entries" USING btree ("user_id","date","project_id","task");
