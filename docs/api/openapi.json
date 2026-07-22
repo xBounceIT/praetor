@@ -43674,7 +43674,12 @@
                         ]
                       },
                       "status": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": [
+                          "draft",
+                          "confirmed",
+                          "denied"
+                        ]
                       },
                       "notes": {
                         "type": [
@@ -44204,7 +44209,11 @@
                     ]
                   },
                   "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "draft"
+                    ],
+                    "description": "Client orders are always created in draft status."
                   },
                   "notes": {
                     "type": "string"
@@ -44283,7 +44292,12 @@
                       ]
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "confirmed",
+                        "denied"
+                      ]
                     },
                     "notes": {
                       "type": [
@@ -44767,7 +44781,12 @@
                     ]
                   },
                   "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "confirmed",
+                      "denied"
+                    ]
                   },
                   "notes": {
                     "type": [
@@ -44854,7 +44873,12 @@
                       ]
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "confirmed",
+                        "denied"
+                      ]
                     },
                     "notes": {
                       "type": [
@@ -45838,7 +45862,12 @@
                       ]
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "confirmed",
+                        "denied"
+                      ]
                     },
                     "notes": {
                       "type": [

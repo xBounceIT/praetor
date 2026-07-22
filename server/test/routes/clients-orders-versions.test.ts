@@ -36,6 +36,7 @@ const getRolePermissionsMock = mock();
 
 const coExistsByIdMock = mock();
 const coFindExistingMock = mock();
+const coLockExistingByIdMock = mock();
 const coFindFullForSnapshotMock = mock();
 const coFindItemsForOrderMock = mock();
 const coFindIdConflictMock = mock();
@@ -85,6 +86,7 @@ beforeAll(async () => {
     ...clientsOrdersRepoSnap,
     existsById: coExistsByIdMock,
     findExisting: coFindExistingMock,
+    lockExistingById: coLockExistingByIdMock,
     findFullForSnapshot: coFindFullForSnapshotMock,
     findItemsForOrder: coFindItemsForOrderMock,
     findIdConflict: coFindIdConflictMock,
@@ -226,6 +228,7 @@ const allMocks = [
   getRolePermissionsMock,
   coExistsByIdMock,
   coFindExistingMock,
+  coLockExistingByIdMock,
   coFindFullForSnapshotMock,
   coFindItemsForOrderMock,
   coFindIdConflictMock,
@@ -263,6 +266,7 @@ beforeEach(async () => {
     items,
   }));
   coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+  coLockExistingByIdMock.mockResolvedValue(SAMPLE_ORDER);
   coFindIdConflictMock.mockResolvedValue(false);
   coFindOfferDetailsMock.mockResolvedValue({
     id: 'off-1',
@@ -414,6 +418,122 @@ describe('PUT /api/clients-orders/:id document discount validation', () => {
     expect(res.statusCode).toBe(400);
     expect(coUpdateMock).not.toHaveBeenCalled();
   });
+});
+
+describe('PUT /api/clients-orders/:id status transitions', () => {
+  test('200 allows the dedicated draft to denied workflow', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'denied' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { status: 'denied' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('o-1', TX_SENTINEL);
+    expect(coUpdateMock).toHaveBeenCalledWith('o-1', { status: 'denied' }, TX_SENTINEL);
+  });
+
+  test('400 rejects an unknown status before loading the order', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { status: 'paid' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coFindExistingMock).not.toHaveBeenCalled();
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects a draft transition when another request changed the status first', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coLockExistingByIdMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'confirmed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { status: 'denied' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('o-1', TX_SENTINEL);
+    expect(JSON.parse(res.body).error).toContain('status transition is not allowed');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'client_order.update.conflict',
+        details: expect.objectContaining({
+          fromValue: 'confirmed',
+          toValue: 'denied',
+        }),
+      }),
+    );
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects a draft content edit when another request terminalized the order first', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coLockExistingByIdMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'denied' });
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, clientId: 'c2' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { clientId: 'c2' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('o-1', TX_SENTINEL);
+    expect(JSON.parse(res.body).error).toContain('status changed');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'client_order.update.conflict',
+        details: expect.objectContaining({
+          fromValue: 'draft',
+          toValue: 'denied',
+        }),
+      }),
+    );
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  for (const [currentStatus, requestedStatus] of [
+    ['confirmed', 'draft'],
+    ['confirmed', 'denied'],
+    ['denied', 'draft'],
+    ['denied', 'confirmed'],
+  ] as const) {
+    test(`409 rejects ${currentStatus} to ${requestedStatus}`, async () => {
+      coFindExistingMock.mockResolvedValue({ ...SAMPLE_ORDER, status: currentStatus });
+      coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, status: requestedStatus });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/clients-orders/o-1',
+        headers: authHeader(),
+        payload: { status: requestedStatus },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(JSON.parse(res.body).error).toContain('status transition is not allowed');
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'client_order.update.conflict',
+          details: expect.objectContaining({
+            fromValue: currentStatus,
+            toValue: requestedStatus,
+          }),
+        }),
+      );
+      expect(coUpdateMock).not.toHaveBeenCalled();
+    });
+  }
 });
 
 describe('GET /api/clients-orders/:id/versions', () => {
