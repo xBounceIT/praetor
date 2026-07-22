@@ -752,9 +752,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           async (tx): Promise<UpdateTransactionResult> => {
             const lockedInvoice = await supplierInvoicesRepo.lockExistingById(idResult.value, tx);
             if (!lockedInvoice) return { kind: 'not_found' };
-            if (lockedInvoice.status !== 'draft' && hasLockedFieldUpdates) {
+            // Lifecycle-only transitions remain valid after draft, but a status write based on a
+            // stale preflight read must not overwrite a concurrent transition. Re-sending the
+            // status already held by the locked row is an idempotent no-op and remains safe.
+            const hasStaleStatusUpdate =
+              patch.status !== undefined &&
+              patch.status !== lockedInvoice.status &&
+              existingInvoice.status !== lockedInvoice.status;
+            if (
+              lockedInvoice.status !== 'draft' &&
+              (hasLockedFieldUpdates || hasStaleStatusUpdate)
+            ) {
               return { kind: 'non_draft', currentStatus: lockedInvoice.status };
             }
+            const patchForWrite =
+              patch.status === lockedInvoice.status && !hasLockedFieldUpdates ? {} : patch;
 
             const effectiveIssueDate = patch.issueDate ?? lockedInvoice.issueDate;
             const effectiveDueDate = patch.dueDate ?? lockedInvoice.dueDate;
@@ -784,11 +796,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
             // id-only renames have nothing left to write — reuse the row returned by rename().
             const invoice =
-              Object.keys(patch).length === 0 && renamedInvoice
+              Object.keys(patchForWrite).length === 0 && renamedInvoice
                 ? renamedInvoice
                 : await supplierInvoicesRepo.update(
                     renamedInvoice?.id ?? idResult.value,
-                    patch,
+                    patchForWrite,
                     tx,
                   );
             if (!invoice) return { kind: 'not_found' };

@@ -949,6 +949,47 @@ describe('PUT /api/supplier-invoices/:id', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  test('409 when the status changes before a conflicting transactional status update', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'cancelled' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'cancelled' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Non-draft invoices are read-only' });
+    expect(lockExistingByIdMock).toHaveBeenCalledWith('SINV-2025-0001', TX_SENTINEL);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 when a concurrent status update already applied the requested status', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ status: 'sent' }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'sent' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'sent' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('SINV-2025-0001', {}, TX_SENTINEL);
+  });
+
   test('409 when the invoice becomes non-draft before a transactional rename', async () => {
     findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     lockExistingByIdMock.mockResolvedValue({
@@ -988,11 +1029,11 @@ describe('PUT /api/supplier-invoices/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(renameMock).not.toHaveBeenCalled();
-    expect(updateMock).toHaveBeenCalledWith('SINV-2025-0001', { status: 'sent' }, TX_SENTINEL);
+    expect(updateMock).toHaveBeenCalledWith('SINV-2025-0001', {}, TX_SENTINEL);
   });
 
   test('audits a status transition from the transactionally locked status', async () => {
-    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ status: 'sent' }));
     lockExistingByIdMock.mockResolvedValue({
       ...existingInvoiceForUpdate({ status: 'sent' }),
       supplierName: 'Acme Supply',
