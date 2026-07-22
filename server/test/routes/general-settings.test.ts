@@ -143,7 +143,7 @@ beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
-  // Default: viewer with admin perms (reveal API keys, allowed to PUT)
+  // Default: viewer with admin perms (allowed to PUT; API keys remain write-only)
   getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
   revokeTokensForUnenrolledEnforcedUsersMock.mockResolvedValue(0);
   withDbTransactionMock.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({}));
@@ -159,7 +159,7 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('GET /api/general-settings', () => {
-  test('200 with administration.general.update reveals API keys and MFA exemption user IDs', async () => {
+  test('200 with administration.general.update masks write-only API keys and reveals MFA exemption user IDs', async () => {
     settingsGetMock.mockResolvedValue({
       ...SETTINGS_WITH_KEYS,
       totpExemptUserIds: ['u2'],
@@ -173,11 +173,11 @@ describe('GET /api/general-settings', () => {
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(body.geminiApiKey).toBe('plaintext-gemini-key');
-    expect(body.openrouterApiKey).toBe('plaintext-openrouter-key');
-    expect(body.anthropicApiKey).toBe('plaintext-anthropic-key');
-    expect(body.openaiApiKey).toBe('plaintext-openai-key');
-    expect(body.localApiKey).toBe('plaintext-local-key');
+    expect(body.geminiApiKey).toBe(MASKED_SECRET);
+    expect(body.openrouterApiKey).toBe(MASKED_SECRET);
+    expect(body.anthropicApiKey).toBe(MASKED_SECRET);
+    expect(body.openaiApiKey).toBe(MASKED_SECRET);
+    expect(body.localApiKey).toBe(MASKED_SECRET);
     expect(body.localBaseUrl).toBe('http://inference:11434/v1');
     expect(body.totpExemptUserIds).toEqual(['u2']);
   });
@@ -245,7 +245,7 @@ describe('GET /api/general-settings', () => {
 });
 
 describe('PUT /api/general-settings', () => {
-  test('200 round-trip: updates fields, emits audit, response unmasked', async () => {
+  test('200 round-trip: updates fields, emits audit, response masks API keys', async () => {
     settingsUpdateMock.mockResolvedValue({
       ...SETTINGS_WITH_KEYS,
       aiProvider: 'openai',
@@ -269,7 +269,39 @@ describe('PUT /api/general-settings', () => {
       }),
     );
     const body = JSON.parse(res.body);
-    expect(body.geminiApiKey).toBe('plaintext-gemini-key');
+    expect(body.geminiApiKey).toBe(MASKED_SECRET);
+  });
+
+  test('200 treats masked API keys as write-only preserve sentinels', async () => {
+    settingsGetMock.mockResolvedValue(SETTINGS_WITH_KEYS);
+    settingsUpdateMock.mockResolvedValue(SETTINGS_WITH_KEYS);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        currency: 'USD',
+        geminiApiKey: MASKED_SECRET,
+        openrouterApiKey: MASKED_SECRET,
+        anthropicApiKey: MASKED_SECRET,
+        openaiApiKey: MASKED_SECRET,
+        localApiKey: MASKED_SECRET,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currency: 'USD',
+        geminiApiKey: undefined,
+        openrouterApiKey: undefined,
+        anthropicApiKey: undefined,
+        openaiApiKey: undefined,
+        localApiKey: undefined,
+      }),
+    );
+    expect(JSON.parse(res.body).openaiApiKey).toBe(MASKED_SECRET);
   });
 
   test('200 enabling 2FA enforcement revokes unenrolled-enforced tokens atomically and audits it', async () => {

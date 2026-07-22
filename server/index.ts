@@ -3,6 +3,7 @@ import { ensureBootstrapAdmin } from './db/bootstrapAdmin.ts';
 import { runDemoSeedRefresh } from './db/demoSeed.ts';
 import { query } from './db/index.ts';
 import { prepareDatabaseForStartup } from './db/startup.ts';
+import { migrateLegacyAiApiKeys } from './repositories/generalSettingsRepo.ts';
 import {
   type LdapSyncSchedulerHandle,
   startLdapSyncScheduler,
@@ -88,6 +89,11 @@ try {
     },
     'Database schema verified',
   );
+
+  const migratedLegacyAiApiKeys = await migrateLegacyAiApiKeys();
+  if (migratedLegacyAiApiKeys) {
+    logger.info('Legacy AI provider credentials encrypted');
+  }
 
   // Ensure required bootstrap user data always exists.
   await ensureBootstrapAdmin();

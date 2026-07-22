@@ -27,12 +27,14 @@ import type {
   RilNoteOption,
   TimeEntryLocation,
 } from '../../types';
+import { MASKED_SECRET } from '../../utils/maskedSecret';
 import {
   DEFAULT_RIL_EXIT_TIME,
   DEFAULT_RIL_START_TIME,
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from '../../utils/ril';
+import SecretField from '../shared/SecretField';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -743,6 +745,7 @@ const AiSettingsPanel: React.FC<{
   currentApiKey: string;
   currentBaseUrl: string;
   currentModelId: string;
+  isApiKeyStored: boolean;
   validation: {
     isAnyAiEnabled: boolean;
     isApiKeyMissing: boolean;
@@ -763,6 +766,7 @@ const AiSettingsPanel: React.FC<{
   currentApiKey,
   currentBaseUrl,
   currentModelId,
+  isApiKeyStored,
   validation,
   state,
   dispatch,
@@ -874,28 +878,23 @@ const AiSettingsPanel: React.FC<{
               </Field>
             )}
 
-            <Field data-invalid={validation.isApiKeyMissing ? 'true' : undefined}>
-              <FieldLabel htmlFor="general-ai-api-key" required={state.aiProvider !== 'local'}>
-                {providerUi.apiKeyLabel}
-              </FieldLabel>
-              <Input
+            <div className="space-y-2">
+              <SecretField
                 id="general-ai-api-key"
-                type="password"
+                label={providerUi.apiKeyLabel}
                 value={currentApiKey}
-                onChange={(e) => onApiKeyChange(e.target.value)}
+                onChange={onApiKeyChange}
+                isStored={isApiKeyStored}
+                isReplacing={isApiKeyStored && currentApiKey !== MASKED_SECRET}
+                onStartReplace={() => onApiKeyChange('')}
+                onCancelReplace={() => onApiKeyChange(MASKED_SECRET)}
+                storedLabel={t('general.apiKeyStored')}
+                storedHelp={t('general.apiKeyStoredHelp')}
                 placeholder={providerUi.apiKeyPlaceholder}
-                aria-invalid={validation.isApiKeyMissing || undefined}
-                className={
-                  validation.isApiKeyMissing
-                    ? 'border-destructive focus-visible:ring-destructive/30'
-                    : undefined
-                }
+                required={state.aiProvider !== 'local'}
+                error={validation.isApiKeyMissing ? t('general.apiKeyRequired') : undefined}
+                testId="general-ai-api-key"
               />
-              {validation.isApiKeyMissing && (
-                <p className="text-xs font-medium text-destructive">
-                  {t('general.apiKeyRequired')}
-                </p>
-              )}
               <FieldDescription>
                 {providerUi.apiKeyDescription}
                 {providerUi.dashboardUrl && (
@@ -913,7 +912,7 @@ const AiSettingsPanel: React.FC<{
                   </>
                 )}
               </FieldDescription>
-            </Field>
+            </div>
 
             <Field
               data-invalid={
@@ -1052,7 +1051,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   const modelCheckRequestIdRef = useRef(0);
   const modelCheckTargetRef = useRef<{
     provider: AiProvider;
-    apiKey: string;
+    apiKey?: string;
     baseUrl?: string;
     modelId: string;
   } | null>(null);
@@ -1097,13 +1096,14 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   const providerFields = AI_PROVIDER_FIELDS[aiProvider];
   const currentApiKey = state[providerFields.apiKey];
+  const isApiKeyStored = settings[providerFields.apiKey] === MASKED_SECRET;
   const currentBaseUrl = aiProvider === 'local' ? state.localBaseUrl : '';
   const currentModelId = state[providerFields.modelId];
 
   useEffect(() => {
     modelCheckTargetRef.current = {
       provider: aiProvider,
-      apiKey: currentApiKey,
+      ...(currentApiKey === MASKED_SECRET ? {} : { apiKey: currentApiKey }),
       baseUrl: aiProvider === 'local' ? currentBaseUrl : undefined,
       modelId: currentModelId,
     };
@@ -1168,7 +1168,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     modelCheckRequestIdRef.current = requestId;
     const target = {
       provider: aiProvider,
-      apiKey: currentApiKey,
+      ...(currentApiKey === MASKED_SECRET ? {} : { apiKey: currentApiKey }),
       ...(aiProvider === 'local' ? { baseUrl: currentBaseUrl } : {}),
       modelId: currentModelId,
     };
@@ -1330,6 +1330,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
             currentApiKey={currentApiKey}
             currentBaseUrl={currentBaseUrl}
             currentModelId={currentModelId}
+            isApiKeyStored={isApiKeyStored}
             validation={{
               isAnyAiEnabled,
               isApiKeyMissing: isApiKeyMissing(),

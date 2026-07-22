@@ -206,8 +206,10 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 };
 
-const maskApiKey = (value: string | null, reveal: boolean) =>
-  reveal ? (value ?? '') : value ? MASKED_SECRET : '';
+const maskApiKey = (value: string | null) => (value ? MASKED_SECRET : '');
+
+const preserveMaskedApiKey = (value: string | undefined): string | undefined =>
+  value === MASKED_SECRET ? undefined : value;
 
 const TIME_OF_DAY_PATTERN = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 
@@ -420,12 +422,12 @@ const toResponse = (
   startOfWeek: settings.startOfWeek,
   treatSaturdayAsHoliday: settings.treatSaturdayAsHoliday,
   enableAiReporting: settings.enableAiReporting ?? false,
-  geminiApiKey: maskApiKey(settings.geminiApiKey, revealSensitiveSettings),
+  geminiApiKey: maskApiKey(settings.geminiApiKey),
   aiProvider: settings.aiProvider || 'gemini',
-  openrouterApiKey: maskApiKey(settings.openrouterApiKey, revealSensitiveSettings),
-  anthropicApiKey: maskApiKey(settings.anthropicApiKey, revealSensitiveSettings),
-  openaiApiKey: maskApiKey(settings.openaiApiKey, revealSensitiveSettings),
-  localApiKey: maskApiKey(settings.localApiKey, revealSensitiveSettings),
+  openrouterApiKey: maskApiKey(settings.openrouterApiKey),
+  anthropicApiKey: maskApiKey(settings.anthropicApiKey),
+  openaiApiKey: maskApiKey(settings.openaiApiKey),
+  localApiKey: maskApiKey(settings.localApiKey),
   localBaseUrl: revealSensitiveSettings ? settings.localBaseUrl || '' : '',
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
@@ -748,12 +750,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         startOfWeek: startOfWeekResult.value,
         treatSaturdayAsHoliday: treatSaturdayAsHolidayResult.value,
         enableAiReporting: enableAiReportingResult.value,
-        geminiApiKey,
+        geminiApiKey: preserveMaskedApiKey(geminiApiKey),
         aiProvider: aiProviderResult.value,
-        openrouterApiKey,
-        anthropicApiKey,
-        openaiApiKey,
-        localApiKey,
+        openrouterApiKey: preserveMaskedApiKey(openrouterApiKey),
+        anthropicApiKey: preserveMaskedApiKey(anthropicApiKey),
+        openaiApiKey: preserveMaskedApiKey(openaiApiKey),
+        localApiKey: preserveMaskedApiKey(localApiKey),
         localBaseUrl: normalizedLocalBaseUrl,
         geminiModelId,
         openrouterModelId,
