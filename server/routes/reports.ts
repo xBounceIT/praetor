@@ -99,7 +99,7 @@ const datasetDb: DbExecutor = drizzle(pool, {
 });
 
 export const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
-  const settings = await generalSettingsRepo.get();
+  const settings = await generalSettingsRepo.getWithAiApiKeys();
   return {
     enableAiReporting: settings?.enableAiReporting ?? false,
     aiProvider: (settings?.aiProvider || 'gemini') as AiProvider,

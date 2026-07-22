@@ -155,10 +155,22 @@ describe('get', () => {
     const encryptedKey = encrypt('secret-openai-key');
     exec.enqueue({ rows: [buildRow({ openaiApiKey: encryptedKey })] });
 
-    const result = await generalSettingsRepo.get(testDb);
+    const result = await generalSettingsRepo.getWithAiApiKeys(testDb);
 
     expect(result?.openaiApiKey).toBe('secret-openai-key');
     expect(exec.calls).toHaveLength(1);
+  });
+
+  test('ordinary settings reads do not decrypt corrupted AI credentials', async () => {
+    const parts = encrypt('secret-openai-key').split(':');
+    parts[4] = Buffer.from('tampered-ciphertext').toString('base64');
+    const corruptedCiphertext = parts.join(':');
+    exec.enqueue({ rows: [buildRow({ openaiApiKey: corruptedCiphertext })] });
+
+    const result = await generalSettingsRepo.get(testDb);
+
+    expect(result?.sessionIdleTimeoutMinutes).toBe(30);
+    expect(result?.openaiApiKey).toBe(corruptedCiphertext);
   });
 
   test('lazily migrates legacy plaintext provider keys in one retry-safe update', async () => {
@@ -347,6 +359,14 @@ describe('update', () => {
     // singleton WHERE param (1), so we expect >=30 nulls in the param list.
     const nullCount = exec.calls[0].params.filter((p) => p === null).length;
     expect(nullCount).toBeGreaterThanOrEqual(30);
+  });
+
+  test('binds an explicit empty API key so administrators can clear a credential', async () => {
+    exec.enqueue({ rows: [buildRow()] });
+
+    await generalSettingsRepo.update({ openaiApiKey: '' }, testDb);
+
+    expect(exec.calls[0].params[15]).toBe('');
   });
 
   test('binds NULL for explicit null RIL arrays to preserve existing values', async () => {

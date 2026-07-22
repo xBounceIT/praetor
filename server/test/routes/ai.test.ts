@@ -49,6 +49,7 @@ beforeAll(async () => {
   mock.module('../../repositories/generalSettingsRepo.ts', () => ({
     ...generalSettingsRepoSnap,
     get: getGeneralSettingsMock,
+    getWithAiApiKeys: getGeneralSettingsMock,
   }));
   mock.module('../../utils/local-ai-endpoint.ts', () => ({
     ...localAiEndpointSnap,

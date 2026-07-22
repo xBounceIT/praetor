@@ -171,7 +171,7 @@ const decodeApiKey = (value: string | null): string | null => {
   return decrypt(value);
 };
 
-const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
+const mapRow = (row: GeneralSettingsRow, decryptAiApiKeys = false): GeneralSettings => ({
   currency: row.currency ?? DEFAULT_FALLBACKS.currency,
   dailyLimit: parseFloat(row.dailyLimit ?? DEFAULT_FALLBACKS.dailyLimit),
   startOfWeek: row.startOfWeek ?? DEFAULT_FALLBACKS.startOfWeek,
@@ -185,12 +185,12 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(
     row.sessionIdleTimeoutMinutes ?? DEFAULT_FALLBACKS.sessionIdleTimeoutMinutes,
   ),
-  geminiApiKey: decodeApiKey(row.geminiApiKey),
+  geminiApiKey: decryptAiApiKeys ? decodeApiKey(row.geminiApiKey) : row.geminiApiKey,
   aiProvider: row.aiProvider,
-  openrouterApiKey: decodeApiKey(row.openrouterApiKey),
-  anthropicApiKey: decodeApiKey(row.anthropicApiKey),
-  openaiApiKey: decodeApiKey(row.openaiApiKey),
-  localApiKey: decodeApiKey(row.localApiKey),
+  openrouterApiKey: decryptAiApiKeys ? decodeApiKey(row.openrouterApiKey) : row.openrouterApiKey,
+  anthropicApiKey: decryptAiApiKeys ? decodeApiKey(row.anthropicApiKey) : row.anthropicApiKey,
+  openaiApiKey: decryptAiApiKeys ? decodeApiKey(row.openaiApiKey) : row.openaiApiKey,
+  localApiKey: decryptAiApiKeys ? decodeApiKey(row.localApiKey) : row.localApiKey,
   localBaseUrl: row.localBaseUrl,
   geminiModelId: row.geminiModelId,
   openrouterModelId: row.openrouterModelId,
@@ -260,18 +260,28 @@ const migrateLegacyApiKeysIfNeeded = async (
   }
 };
 
-export const get = async (exec: DbExecutor = db): Promise<GeneralSettings | null> => {
+const read = async (
+  exec: DbExecutor,
+  decryptAiApiKeys: boolean,
+): Promise<GeneralSettings | null> => {
   const rows = await exec
     .select(GENERAL_SETTINGS_PROJECTION)
     .from(generalSettings)
     .where(eq(generalSettings.id, 1));
   if (!rows[0]) return null;
   await migrateLegacyApiKeysIfNeeded(rows[0], exec);
-  return mapRow(rows[0]);
+  return mapRow(rows[0], decryptAiApiKeys);
 };
 
+// Ordinary settings consumers (auth/session policy, time-entry policy, and the masked admin API)
+// must not depend on decrypting unrelated AI credentials. Only AI execution paths opt in below.
+export const get = (exec: DbExecutor = db): Promise<GeneralSettings | null> => read(exec, false);
+
+export const getWithAiApiKeys = (exec: DbExecutor = db): Promise<GeneralSettings | null> =>
+  read(exec, true);
+
 const encryptApiKeyPatch = (value: string | null | undefined): string | null =>
-  value == null || value === '' ? (value ?? null) : encrypt(value);
+  value == null ? null : value === '' ? '' : encrypt(value);
 
 export const update = async (
   patch: GeneralSettingsPatch,
