@@ -15,7 +15,8 @@ interface SupplierQuoteVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedQuote: SupplierQuote) => void;
   disabled?: boolean;
-  embedded?: boolean;
+  layout?: 'inline' | 'dialog';
+  className?: string;
 }
 
 const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
@@ -25,7 +26,8 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
-  embedded,
+  layout = 'inline',
+  className,
 }) => {
   const { t, i18n } = useTranslation('sales');
   const tRef = useLatestRef(t);
@@ -77,8 +79,6 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
       setConfirmOpen(false);
       await reload();
     } catch (e) {
-      // Restore failures (409 linked-order, 404 missing snapshot reference, etc.) carry
-      // actionable server messages - surface them instead of a generic load error.
       dispatchHistory({
         type: 'setError',
         error:
@@ -94,8 +94,8 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
-        embedded={embedded}
-        persistenceKey="supplierQuotes.versions"
+        layout={layout}
+        className={className}
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -110,6 +110,12 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
           reasonUpdate: t('supplierQuotes.versionHistory.reasonUpdate'),
           backToCurrent: t('supplierQuotes.versionHistory.backToCurrent'),
           restoreButton: t('supplierQuotes.versionHistory.restoreButton'),
+          searchPlaceholder: t('supplierQuotes.versionHistory.searchPlaceholder'),
+          searchAriaLabel: t('supplierQuotes.versionHistory.searchAriaLabel'),
+          noResults: t('supplierQuotes.versionHistory.noResults'),
+          currentBadge: t('supplierQuotes.versionHistory.currentBadge'),
+          previewBadge: t('supplierQuotes.versionHistory.previewBadge'),
+          infoTooltip: t('supplierQuotes.versionHistory.infoTooltip'),
         }}
         onSelect={handleSelect}
         onClearPreview={onClearPreview}

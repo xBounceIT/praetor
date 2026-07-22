@@ -580,6 +580,13 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
   test('a historical version preview stays fully read-only for a confirmed order', async () => {
     versionRows = [
       {
+        id: 'ov-2',
+        orderId: confirmedLinkedOrder.id,
+        reason: 'update',
+        createdByUserId: 'u1',
+        createdAt: 2,
+      },
+      {
         id: 'ov-1',
         orderId: confirmedLinkedOrder.id,
         reason: 'update',
@@ -588,7 +595,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
       },
     ];
     versionPreview = {
-      ...versionRows[0],
+      ...versionRows[1],
       snapshot: {
         schemaVersion: 1,
         order: {
@@ -600,7 +607,10 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     };
     const { dialog } = await openModal(confirmedLinkedOrder);
 
-    fireEvent.click(await screen.findByText('clientsOrders.versionHistory.reasonUpdate'));
+    await waitFor(() => {
+      expect(dialog.querySelector('label[for="history-row-ov-1"]')).not.toBeNull();
+    });
+    fireEvent.click(dialog.querySelector('label[for="history-row-ov-1"]') as HTMLElement);
 
     await waitFor(() => expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(true));
     expect(

@@ -14,7 +14,8 @@ interface QuoteVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedQuote: Quote) => void;
   disabled?: boolean;
-  embedded?: boolean;
+  layout?: 'inline' | 'dialog';
+  className?: string;
 }
 
 const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
@@ -24,7 +25,8 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
-  embedded,
+  layout = 'inline',
+  className,
 }) => {
   const { t, i18n } = useTranslation('sales');
   const [historyState, dispatchHistory] = useReducer(
@@ -72,8 +74,6 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
       setConfirmOpen(false);
       await reload();
     } catch (e) {
-      // Restore failures (409 linked-offer / 409 confirmed / 409 non-draft sale / 404)
-      // carry actionable server messages - surface them instead of a generic load error.
       dispatchHistory({
         type: 'setError',
         error:
@@ -87,8 +87,8 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
-        embedded={embedded}
-        persistenceKey="clientQuotes.versions"
+        layout={layout}
+        className={className}
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -103,6 +103,12 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
           reasonUpdate: t('clientQuotes.versionHistory.reasonUpdate'),
           backToCurrent: t('clientQuotes.versionHistory.backToCurrent'),
           restoreButton: t('clientQuotes.versionHistory.restoreButton'),
+          searchPlaceholder: t('clientQuotes.versionHistory.searchPlaceholder'),
+          searchAriaLabel: t('clientQuotes.versionHistory.searchAriaLabel'),
+          noResults: t('clientQuotes.versionHistory.noResults'),
+          currentBadge: t('clientQuotes.versionHistory.currentBadge'),
+          previewBadge: t('clientQuotes.versionHistory.previewBadge'),
+          infoTooltip: t('clientQuotes.versionHistory.infoTooltip'),
         }}
         onSelect={handleSelect}
         onClearPreview={onClearPreview}

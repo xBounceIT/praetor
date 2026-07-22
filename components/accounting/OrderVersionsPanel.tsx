@@ -14,6 +14,8 @@ interface OrderVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedOrder: ClientsOrder) => void;
   disabled?: boolean;
+  layout?: 'inline' | 'dialog';
+  className?: string;
 }
 
 const OrderVersionsPanel: React.FC<OrderVersionsPanelProps> = ({
@@ -23,6 +25,8 @@ const OrderVersionsPanel: React.FC<OrderVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
+  layout = 'inline',
+  className,
 }) => {
   const { t, i18n } = useTranslation('accounting');
   const [historyState, dispatchHistory] = useReducer(
@@ -85,7 +89,8 @@ const OrderVersionsPanel: React.FC<OrderVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
-        persistenceKey="clientsOrders.versions"
+        layout={layout}
+        className={className}
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -100,6 +105,12 @@ const OrderVersionsPanel: React.FC<OrderVersionsPanelProps> = ({
           reasonUpdate: t('clientsOrders.versionHistory.reasonUpdate'),
           backToCurrent: t('clientsOrders.versionHistory.backToCurrent'),
           restoreButton: t('clientsOrders.versionHistory.restoreButton'),
+          searchPlaceholder: t('clientsOrders.versionHistory.searchPlaceholder'),
+          searchAriaLabel: t('clientsOrders.versionHistory.searchAriaLabel'),
+          noResults: t('clientsOrders.versionHistory.noResults'),
+          currentBadge: t('clientsOrders.versionHistory.currentBadge'),
+          previewBadge: t('clientsOrders.versionHistory.previewBadge'),
+          infoTooltip: t('clientsOrders.versionHistory.infoTooltip'),
         }}
         onSelect={handleSelect}
         onClearPreview={onClearPreview}

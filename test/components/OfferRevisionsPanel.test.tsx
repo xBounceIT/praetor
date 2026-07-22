@@ -58,6 +58,15 @@ const REVISION_ROW: RevisionRow = {
   createdAt: 1_700_000_000_000,
 };
 
+const OLDER_REVISION_ROW: RevisionRow = {
+  id: 'or-1',
+  revisionNumber: 1,
+  revisionCode: 'REV1',
+  createdByUserId: 'u-0',
+  createdByUserName: 'Grace Hopper',
+  createdAt: 1_600_000_000_000,
+};
+
 const FULL_REVISION: OfferRevision = {
   ...REVISION_ROW,
   snapshot: {
@@ -105,7 +114,7 @@ beforeEach(() => {
   listRevisionsMock.mockReset();
   getRevisionMock.mockReset();
   restoreRevisionMock.mockReset();
-  listRevisionsMock.mockImplementation(() => Promise.resolve([REVISION_ROW]));
+  listRevisionsMock.mockImplementation(() => Promise.resolve([REVISION_ROW, OLDER_REVISION_ROW]));
 });
 
 describe('<OfferRevisionsPanel />', () => {
@@ -127,10 +136,12 @@ describe('<OfferRevisionsPanel />', () => {
     render(<OfferRevisionsPanel {...baseProps} onPreview={onPreview} />);
 
     await waitFor(() => expect(screen.getByText('REV2')).toBeInTheDocument());
-    expect(screen.getByText('formatted-1700000000000 · Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByText('REV1')).toBeInTheDocument();
+    expect(screen.getByText(/Ada Lovelace/)).toBeInTheDocument();
+    expect(screen.getByText('formatted-1700000000000')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('REV2'));
-    await waitFor(() => expect(getRevisionMock).toHaveBeenCalledWith('OFF_26_001', 'or-2'));
+    fireEvent.click(screen.getByRole('radio', { name: 'REV1' }));
+    await waitFor(() => expect(getRevisionMock).toHaveBeenCalledWith('OFF_26_001', 'or-1'));
     expect(onPreview).toHaveBeenCalledWith(FULL_REVISION);
   });
 

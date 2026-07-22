@@ -971,17 +971,37 @@ describe('<SupplierQuotesView /> new-quote attachment staging (issue #781)', () 
 
 describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
   test('dialog warning banners avoid light-only amber classes', async () => {
-    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
-    // Read-only + version-preview banners use translucent amber plus an explicit dark-mode
+    const viewSource = await readComponentSource('sales/SupplierQuotesView.tsx');
+    const bannerSource = await readComponentSource('shared/ModalReadOnlyStatusBanner.tsx');
+    // Read-only status uses the shared banner with translucent amber plus an explicit dark-mode
     // text color, matching the dark-mode-compatible accounting orders banners.
-    expectSourceContainsAll(source, [
+    expectSourceContainsAll(viewSource, ["from '../shared/ModalReadOnlyStatusBanner'"]);
+    expectSourceContainsAll(bannerSource, [
       'border border-amber-500/30 bg-amber-500/10',
       'dark:text-amber-300',
     ]);
     // The old light-only banner backgrounds (a pale cream slab on the dark dialog) are gone.
-    expectSourceOmitsAll(source, [
+    expectSourceOmitsAll(viewSource, [
       'border border-amber-200 bg-amber-50',
       'border border-amber-300 bg-amber-50',
+    ]);
+  });
+});
+
+describe('<SupplierQuotesView /> edit modal layout', () => {
+  test('places supplier info beside revision history with 3+3 fields + description', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    expectSourceContainsAll(source, [
+      'lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]',
+      'grid grid-cols-1 gap-3 sm:grid-cols-3',
+      '<SupplierQuoteDescriptionField controller={controller} />',
+    ]);
+    expect((source.match(/grid grid-cols-1 gap-3 sm:grid-cols-3/g) ?? []).length).toBe(2);
+    // Old single-row 6-col packing and top-right-only history placement are gone.
+    expectSourceOmitsAll(source, [
+      'lg:grid-cols-6',
+      'className="flex justify-end"',
+      'w-full max-w-2xl',
     ]);
   });
 });

@@ -47,7 +47,6 @@ import {
   addMonthsToDateOnly,
   formatDateOnlyForLocale,
   formatInsertDate,
-  formatInsertDateTime,
   getLocalDateString,
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
@@ -128,8 +127,8 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
-import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -137,6 +136,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
 import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
 import { QuoteRevisionsPanel } from './QuoteRevisionsPanel';
@@ -2445,6 +2445,7 @@ const ClientQuotesLayout: React.FC<{ controller: ClientQuotesController }> = ({ 
 
 const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = ({ controller }) => {
   const {
+    t,
     isModalOpen,
     closeModal,
     handleSubmit,
@@ -2458,51 +2459,86 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
   const revisionRestoreDisabled = Boolean(baseReadOnly || editingQuote?.status !== 'draft');
+  const {
+    open: versionsDialogOpen,
+    onOpenChange: handleVersionsDialogOpenChange,
+    setOpen: setVersionsDialogOpen,
+    bindPreview,
+  } = useVersionHistoryDialogOpen(selectedVersionId, handleClearPreview);
+  const dismissModal = useCallback(() => {
+    setVersionsDialogOpen(false);
+    closeModal();
+  }, [closeModal, setVersionsDialogOpen]);
 
   return (
-    <Modal isOpen={isModalOpen} onClose={closeModal}>
-      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-        <ModalContent size="full" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <ClientQuoteModalHeader controller={controller} />
-            <ModalBody className="flex-1 space-y-5">
-              <ClientQuoteCandidatesBar controller={controller} />
-              <ClientQuoteModalAlerts controller={controller} />
-              <ClientQuoteClientSection controller={controller} />
-              <ClientQuoteItemsSection controller={controller} />
-              <ClientQuoteNotesSummarySection controller={controller} />
-            </ModalBody>
-            <ClientQuoteModalFooter controller={controller} />
-          </form>
-        </ModalContent>
-        {editingQuote?.id && (
-          <HistoryRail>
-            <QuoteRevisionsPanel
-              quoteId={editingQuote.id}
-              selectedRevisionId={selectedRevisionId}
-              onPreview={(revision) =>
-                handleVersionPreview({
-                  ...revision,
-                  quoteId: editingQuote.id,
-                  reason: 'update',
-                })
-              }
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={revisionRestoreDisabled}
-            />
-            <QuoteVersionsPanel
-              embedded
-              quoteId={editingQuote.id}
-              selectedVersionId={selectedVersionId}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
-            />
-          </HistoryRail>
-        )}
-      </div>
+    <Modal isOpen={isModalOpen} onClose={dismissModal}>
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <ClientQuoteModalHeader controller={{ ...controller, closeModal: dismissModal }} />
+          <ModalBody className="flex-1 space-y-5">
+            {editingQuote?.id ? (
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+                <div className="min-w-0 space-y-5">
+                  <ClientQuoteCandidatesBar controller={controller} />
+                  <ClientQuoteClientSection controller={controller} layout="compact" />
+                </div>
+                <QuoteRevisionsPanel
+                  className="min-w-0 lg:justify-self-stretch"
+                  quoteId={editingQuote.id}
+                  selectedRevisionId={selectedRevisionId}
+                  onPreview={(revision) =>
+                    handleVersionPreview({
+                      ...revision,
+                      quoteId: editingQuote.id,
+                      reason: 'update',
+                    })
+                  }
+                  onClearPreview={handleClearPreview}
+                  onRestored={handleVersionRestored}
+                  disabled={revisionRestoreDisabled}
+                  secondaryAction={{
+                    label: t('sales:clientQuotes.revisionHistory.openVersionHistory', {
+                      defaultValue: 'Open full history',
+                    }),
+                    onClick: () => setVersionsDialogOpen(true),
+                  }}
+                />
+              </div>
+            ) : (
+              <>
+                <ClientQuoteCandidatesBar controller={controller} />
+                <ClientQuoteClientSection controller={controller} layout="create" />
+              </>
+            )}
+            <ClientQuoteModalAlerts controller={controller} />
+            <ClientQuoteItemsSection controller={controller} />
+            <ClientQuoteNotesSummarySection controller={controller} />
+          </ModalBody>
+          <ClientQuoteModalFooter controller={controller} />
+        </form>
+      </ModalContent>
+      {editingQuote?.id ? (
+        <VersionHistoryDialog
+          open={versionsDialogOpen}
+          onOpenChange={handleVersionsDialogOpenChange}
+          title={t('sales:clientQuotes.versionHistory.title', {
+            defaultValue: 'Version History',
+          })}
+          description={t('sales:clientQuotes.versionHistory.infoTooltip', {
+            defaultValue: 'Automatic snapshots created when you save or restore the document.',
+          })}
+        >
+          <QuoteVersionsPanel
+            layout="dialog"
+            quoteId={editingQuote.id}
+            selectedVersionId={selectedVersionId}
+            onPreview={bindPreview(handleVersionPreview)}
+            onClearPreview={handleClearPreview}
+            onRestored={handleVersionRestored}
+            disabled={baseReadOnly}
+          />
+        </VersionHistoryDialog>
+      ) : null}
     </Modal>
   );
 };
@@ -2871,24 +2907,29 @@ const ClientQuotePromotionModal: React.FC<{ controller: ClientQuotesController }
 const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingQuote, isReadOnly } = controller;
+  const { t, closeModal, editingQuote, isReadOnly, baseReadOnly, readOnlyReason } = controller;
 
   return (
     <ModalHeader>
-      <ModalTitle className="gap-3">
-        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-          <i
-            className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}
-            aria-hidden="true"
-          ></i>
-        </span>
-        {isReadOnly
-          ? t('sales:clientQuotes.viewQuote')
-          : editingQuote
-            ? t('sales:clientQuotes.editQuote')
-            : t('sales:clientQuotes.createNewQuote')}
-      </ModalTitle>
-      <ModalCloseButton onClick={closeModal} />
+      <div className="flex w-full items-start justify-between gap-4">
+        <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
+          <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+            <i
+              className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}
+              aria-hidden="true"
+            ></i>
+          </span>
+          {isReadOnly
+            ? t('sales:clientQuotes.viewQuote')
+            : editingQuote
+              ? t('sales:clientQuotes.editQuote')
+              : t('sales:clientQuotes.createNewQuote')}
+          {baseReadOnly ? (
+            <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
+          ) : null}
+        </ModalTitle>
+        <ModalCloseButton onClick={closeModal} />
+      </div>
     </ModalHeader>
   );
 };
@@ -2896,60 +2937,10 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
 const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const {
-    t,
-    i18n,
-    previewVersion,
-    handleClearPreview,
-    baseReadOnly,
-    readOnlyReason,
-    editingQuote,
-    offers,
-    onViewOffers,
-  } = controller;
-  const previewRevisionCode =
-    previewVersion &&
-    'revisionCode' in previewVersion &&
-    typeof previewVersion.revisionCode === 'string'
-      ? previewVersion.revisionCode
-      : null;
+  const { t, editingQuote, offers, onViewOffers } = controller;
 
   return (
     <>
-      {previewVersion && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
-            <i className="fa-solid fa-clock-rotate-left"></i>
-            {previewRevisionCode
-              ? t('sales:clientQuotes.revisionHistory.previewBanner', {
-                  code: previewRevisionCode,
-                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                  defaultValue: 'Previewing {{code}} from {{date}}',
-                })
-              : t('sales:clientQuotes.versionHistory.previewBanner', {
-                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                  defaultValue: 'Previewing version from {{date}}',
-                })}
-          </span>
-          <Button
-            type="button"
-            variant="link"
-            onClick={handleClearPreview}
-            className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
-          >
-            {t('sales:clientQuotes.versionHistory.backToCurrent', {
-              defaultValue: 'Back to current',
-            })}
-          </Button>
-        </div>
-      )}
-      {baseReadOnly && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-            {readOnlyReason}
-          </span>
-        </div>
-      )}
       {editingQuote?.linkedOfferId && (
         <LinkedRecordBanner
           label={t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
@@ -3010,9 +3001,11 @@ const ClientQuoteSectionHeading: React.FC<{
   </h4>
 );
 
-const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }> = ({
-  controller,
-}) => {
+const ClientQuoteClientSection: React.FC<{
+  controller: ClientQuotesController;
+  /** `create` = full-width five-field row; `compact` = 3+2 beside revision history. */
+  layout?: 'create' | 'compact';
+}> = ({ controller, layout = 'create' }) => {
   const { t, readOnlyStatus, statusLabel } = controller;
 
   return (
@@ -3025,14 +3018,33 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <ClientQuoteClientField controller={controller} />
-        <ClientQuoteCodeField controller={controller} />
-        <ClientQuotePaymentTermsField controller={controller} />
-        <ClientQuoteCommunicationField controller={controller} />
-        <ClientQuoteExpirationField controller={controller} />
-      </div>
-      <ClientQuoteDescriptionField controller={controller} />
+      {layout === 'compact' ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ClientQuoteClientField controller={controller} />
+            <ClientQuoteCodeField controller={controller} />
+            <ClientQuotePaymentTermsField controller={controller} />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <ClientQuoteCommunicationField controller={controller} />
+            <ClientQuoteExpirationField controller={controller} />
+            <div className="sm:col-span-2 lg:col-span-2">
+              <ClientQuoteDescriptionField controller={controller} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <ClientQuoteClientField controller={controller} />
+            <ClientQuoteCodeField controller={controller} />
+            <ClientQuotePaymentTermsField controller={controller} />
+            <ClientQuoteCommunicationField controller={controller} />
+            <ClientQuoteExpirationField controller={controller} />
+          </div>
+          <ClientQuoteDescriptionField controller={controller} />
+        </>
+      )}
     </div>
   );
 };
@@ -3076,19 +3088,9 @@ const ClientQuoteCodeField: React.FC<{ controller: ClientQuotesController }> = (
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
-      <div className="relative w-fit">
-        <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
-          {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-        </FieldLabel>
-        {editingQuote?.revisionCode && (
-          <Badge
-            variant="secondary"
-            className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
-          >
-            {editingQuote.revisionCode}
-          </Badge>
-        )}
-      </div>
+      <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
+        {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+      </FieldLabel>
       <Input
         id="client-quote-code"
         type="text"

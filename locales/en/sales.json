@@ -20,9 +20,9 @@
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
   "communicationChannels": {
-    "fieldLabel": "Communication Channel",
+    "fieldLabel": "Channel",
     "placeholder": "Select a channel...",
-    "manageTitle": "Manage Communication Channels",
+    "manageTitle": "Manage Channels",
     "name": "Channel",
     "namePlaceholder": "e.g. Video call",
     "icon": "Icon",
@@ -37,12 +37,12 @@
       "whatsapp": "WhatsApp"
     },
     "usedByQuotes": "Used by quotes",
-    "noChannels": "No communication channels found.",
+    "noChannels": "No channels found.",
     "errors": {
-      "required": "Communication channel is required",
+      "required": "Channel is required",
       "nameRequired": "Channel name is required",
       "deleteBlocked": "Cannot delete {{name}} because it is used by {{count}} quote(s).",
-      "deleteLast": "At least one communication channel is required."
+      "deleteLast": "At least one channel is required."
     }
   },
   "clientsOrders": {
@@ -246,18 +246,22 @@
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
-      "previewBanner": "Previewing version from {{date}}",
       "backToCurrent": "Back to current",
       "restoreButton": "Restore this version",
       "restoreConfirmTitle": "Restore this version?",
       "restoreConfirmDescription": "The current values will be saved as a new version before being replaced. This action can be undone by restoring the version that gets created now.",
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
-      "loadFailed": "Failed to load version history."
+      "loadFailed": "Failed to load version history.",
+      "searchPlaceholder": "Search versions…",
+      "searchAriaLabel": "Search versions",
+      "noResults": "No versions match your search",
+      "currentBadge": "Current",
+      "previewBadge": "Preview",
+      "infoTooltip": "Automatic snapshots created when you save or restore the document."
     },
     "revisionHistory": {
-      "title": "Revisions",
-      "previewBanner": "Previewing {{code}} from {{date}}",
+      "title": "Revision history",
       "empty": "No sent revisions yet.",
       "snapshot": "Sent snapshot",
       "backToCurrent": "Back to current state",
@@ -265,7 +269,14 @@
       "restoreConfirmTitle": "Restore this revision?",
       "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
       "loadFailed": "Failed to load revisions.",
-      "restoreFailed": "Failed to restore the revision."
+      "restoreFailed": "Failed to restore the revision.",
+      "searchPlaceholder": "Search revisions…",
+      "searchAriaLabel": "Search revisions",
+      "noResults": "No revisions match your search",
+      "currentBadge": "Current",
+      "previewBadge": "Preview",
+      "infoTooltip": "Immutable snapshots created when the document is sent. Save history is available from the link below.",
+      "openVersionHistory": "Open full history"
     }
   },
   "clientOffers": {
@@ -353,18 +364,22 @@
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
-      "previewBanner": "Previewing version from {{date}}",
       "backToCurrent": "Back to current",
       "restoreButton": "Restore this version",
       "restoreConfirmTitle": "Restore this version?",
       "restoreConfirmDescription": "The current values will be saved as a new version before being replaced. This action can be undone by restoring the version that gets created now.",
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
-      "loadFailed": "Failed to load version history."
+      "loadFailed": "Failed to load version history.",
+      "searchPlaceholder": "Search versions…",
+      "searchAriaLabel": "Search versions",
+      "noResults": "No versions match your search",
+      "currentBadge": "Current",
+      "previewBadge": "Preview",
+      "infoTooltip": "Automatic snapshots created when you save or restore the document."
     },
     "revisionHistory": {
-      "title": "Revisions",
-      "previewBanner": "Previewing {{code}} from {{date}}",
+      "title": "Revision history",
       "empty": "No sent revisions yet.",
       "snapshot": "Sent snapshot",
       "backToCurrent": "Back to current state",
@@ -372,7 +387,14 @@
       "restoreConfirmTitle": "Restore this revision?",
       "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
       "loadFailed": "Failed to load revisions.",
-      "restoreFailed": "Failed to restore the revision."
+      "restoreFailed": "Failed to restore the revision.",
+      "searchPlaceholder": "Search revisions…",
+      "searchAriaLabel": "Search revisions",
+      "noResults": "No revisions match your search",
+      "currentBadge": "Current",
+      "previewBadge": "Preview",
+      "infoTooltip": "Immutable snapshots created when the document is sent. Save history is available from the link below.",
+      "openVersionHistory": "Open full history"
     }
   },
   "supplierQuotes": {
@@ -457,18 +479,22 @@
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
-      "previewBanner": "Previewing version from {{date}}",
       "backToCurrent": "Back to current",
       "restoreButton": "Restore this version",
       "restoreConfirmTitle": "Restore this version?",
       "restoreConfirmDescription": "The current values will be saved as a new version before being replaced. This action can be undone by restoring the version that gets created now.",
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
-      "loadFailed": "Failed to load version history."
+      "loadFailed": "Failed to load version history.",
+      "searchPlaceholder": "Search versions…",
+      "searchAriaLabel": "Search versions",
+      "noResults": "No versions match your search",
+      "currentBadge": "Current",
+      "previewBadge": "Preview",
+      "infoTooltip": "Automatic snapshots created when you save or restore the document."
     },
     "revisionHistory": {
-      "title": "Revisions",
-      "previewBanner": "Previewing {{code}} from {{date}}",
+      "title": "Revision history",
       "empty": "No sent revisions yet.",
       "snapshot": "Sent snapshot",
       "backToCurrent": "Back to current state",
@@ -476,7 +502,14 @@
       "restoreConfirmTitle": "Restore this revision?",
       "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
       "loadFailed": "Failed to load revisions.",
-      "restoreFailed": "Failed to restore the revision."
+      "restoreFailed": "Failed to restore the revision.",
+      "searchPlaceholder": "Search revisions…",
+      "searchAriaLabel": "Search revisions",
+      "noResults": "No revisions match your search",
+      "currentBadge": "Current",
+      "previewBadge": "Preview",
+      "infoTooltip": "Immutable snapshots created when the document is sent. Save history is available from the link below.",
+      "openVersionHistory": "Open full history"
     },
     "attachments": {
       "title": "Attachments",

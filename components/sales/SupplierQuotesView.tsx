@@ -1,8 +1,7 @@
 import type React from 'react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -78,12 +77,13 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
-import { HistoryRail } from '../shared/RevisionHistoryPanel';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
 import {
   DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
@@ -1331,51 +1331,84 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
   const revisionRestoreDisabled = Boolean(
     controller.baseReadOnly || controller.editingQuote?.linkedOrderId,
   );
+  const {
+    open: versionsDialogOpen,
+    onOpenChange: handleVersionsDialogOpenChange,
+    setOpen: setVersionsDialogOpen,
+    bindPreview,
+  } = useVersionHistoryDialogOpen(selectedVersionId, controller.handleClearPreview);
+  const editingQuoteId = controller.editingQuote?.id;
+  const dismissModal = useCallback(() => {
+    setVersionsDialogOpen(false);
+    controller.closeModal();
+  }, [controller.closeModal, setVersionsDialogOpen]);
 
   return (
-    <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
-      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-        <ModalContent size="full" className="max-h-[90vh]">
-          <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <SupplierQuoteModalHeader controller={controller} />
-            <ModalBody className="flex-1 space-y-5">
-              <SupplierQuoteModalAlerts controller={controller} />
+    <Modal isOpen={controller.isModalOpen} onClose={dismissModal}>
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <SupplierQuoteModalHeader controller={{ ...controller, closeModal: dismissModal }} />
+          <ModalBody className="flex-1 space-y-5">
+            {editingQuoteId ? (
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+                <div className="min-w-0 space-y-5">
+                  <SupplierQuoteDetailsSection controller={controller} />
+                </div>
+                <SupplierQuoteRevisionsPanel
+                  className="min-w-0 lg:justify-self-stretch"
+                  quoteId={editingQuoteId}
+                  selectedRevisionId={selectedRevisionId}
+                  onPreview={(revision) =>
+                    controller.handleVersionPreview({
+                      ...revision,
+                      quoteId: editingQuoteId,
+                      reason: 'update',
+                    })
+                  }
+                  onClearPreview={controller.handleClearPreview}
+                  onRestored={controller.handleVersionRestored}
+                  disabled={revisionRestoreDisabled}
+                  secondaryAction={{
+                    label: controller.t('sales:supplierQuotes.revisionHistory.openVersionHistory', {
+                      defaultValue: 'Open full history',
+                    }),
+                    onClick: () => setVersionsDialogOpen(true),
+                  }}
+                />
+              </div>
+            ) : (
               <SupplierQuoteDetailsSection controller={controller} />
-              <SupplierQuoteItemsSection controller={controller} />
-              <SupplierQuoteAttachmentsArea controller={controller} />
-              <SupplierQuoteNotesSummarySection controller={controller} />
-            </ModalBody>
-            <SupplierQuoteModalFooter controller={controller} />
-          </form>
-        </ModalContent>
-        {controller.editingQuote?.id && (
-          <HistoryRail>
-            <SupplierQuoteRevisionsPanel
-              quoteId={controller.editingQuote.id}
-              selectedRevisionId={selectedRevisionId}
-              onPreview={(revision) =>
-                controller.handleVersionPreview({
-                  ...revision,
-                  quoteId: controller.editingQuote?.id ?? '',
-                  reason: 'update',
-                })
-              }
-              onClearPreview={controller.handleClearPreview}
-              onRestored={controller.handleVersionRestored}
-              disabled={revisionRestoreDisabled}
-            />
-            <SupplierQuoteVersionsPanel
-              embedded
-              quoteId={controller.editingQuote.id}
-              selectedVersionId={selectedVersionId}
-              onPreview={controller.handleVersionPreview}
-              onClearPreview={controller.handleClearPreview}
-              onRestored={controller.handleVersionRestored}
-              disabled={controller.baseReadOnly}
-            />
-          </HistoryRail>
-        )}
-      </div>
+            )}
+            <SupplierQuoteModalAlerts controller={controller} />
+            <SupplierQuoteItemsSection controller={controller} />
+            <SupplierQuoteAttachmentsArea controller={controller} />
+            <SupplierQuoteNotesSummarySection controller={controller} />
+          </ModalBody>
+          <SupplierQuoteModalFooter controller={controller} />
+        </form>
+      </ModalContent>
+      {editingQuoteId ? (
+        <VersionHistoryDialog
+          open={versionsDialogOpen}
+          onOpenChange={handleVersionsDialogOpenChange}
+          title={controller.t('sales:supplierQuotes.versionHistory.title', {
+            defaultValue: 'Version History',
+          })}
+          description={controller.t('sales:supplierQuotes.versionHistory.infoTooltip', {
+            defaultValue: 'Automatic snapshots created when you save or restore the document.',
+          })}
+        >
+          <SupplierQuoteVersionsPanel
+            layout="dialog"
+            quoteId={editingQuoteId}
+            selectedVersionId={selectedVersionId}
+            onPreview={bindPreview(controller.handleVersionPreview)}
+            onClearPreview={controller.handleClearPreview}
+            onRestored={controller.handleVersionRestored}
+            disabled={controller.baseReadOnly}
+          />
+        </VersionHistoryDialog>
+      ) : null}
     </Modal>
   );
 };
@@ -1384,26 +1417,31 @@ const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController 
   controller,
 }) => (
   <ModalHeader>
-    <ModalTitle className="gap-3">
-      <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-        <i
-          className={`fa-solid ${
-            controller.isReadOnly
-              ? 'fa-eye'
-              : controller.editingQuote
-                ? 'fa-pen-to-square'
-                : 'fa-plus'
-          }`}
-          aria-hidden="true"
-        ></i>
-      </span>
-      {controller.isReadOnly
-        ? controller.t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
-        : controller.editingQuote
-          ? controller.t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
-          : controller.t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
-    </ModalTitle>
-    <ModalCloseButton onClick={controller.closeModal} />
+    <div className="flex w-full items-start justify-between gap-4">
+      <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
+        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+          <i
+            className={`fa-solid ${
+              controller.isReadOnly
+                ? 'fa-eye'
+                : controller.editingQuote
+                  ? 'fa-pen-to-square'
+                  : 'fa-plus'
+            }`}
+            aria-hidden="true"
+          ></i>
+        </span>
+        {controller.isReadOnly
+          ? controller.t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
+          : controller.editingQuote
+            ? controller.t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
+            : controller.t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
+        {controller.baseReadOnly ? (
+          <ModalReadOnlyStatusBanner>{controller.readOnlyReason}</ModalReadOnlyStatusBanner>
+        ) : null}
+      </ModalTitle>
+      <ModalCloseButton onClick={controller.closeModal} />
+    </div>
   </ModalHeader>
 );
 
@@ -1411,55 +1449,9 @@ const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController 
   controller,
 }) => {
   const editingQuote = controller.editingQuote;
-  const previewRevisionCode =
-    controller.previewVersion &&
-    'revisionCode' in controller.previewVersion &&
-    typeof controller.previewVersion.revisionCode === 'string'
-      ? controller.previewVersion.revisionCode
-      : null;
 
   return (
     <>
-      {controller.previewVersion && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
-            <i className="fa-solid fa-clock-rotate-left"></i>
-            {previewRevisionCode
-              ? controller.t('sales:supplierQuotes.revisionHistory.previewBanner', {
-                  code: previewRevisionCode,
-                  date: formatInsertDateTime(
-                    controller.previewVersion.createdAt,
-                    controller.i18n.language,
-                  ),
-                  defaultValue: 'Previewing {{code}} from {{date}}',
-                })
-              : controller.t('sales:supplierQuotes.versionHistory.previewBanner', {
-                  date: formatInsertDateTime(
-                    controller.previewVersion.createdAt,
-                    controller.i18n.language,
-                  ),
-                  defaultValue: 'Previewing version from {{date}}',
-                })}
-          </span>
-          <Button
-            type="button"
-            variant="link"
-            onClick={controller.handleClearPreview}
-            className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
-          >
-            {controller.t('sales:supplierQuotes.versionHistory.backToCurrent', {
-              defaultValue: 'Back to current',
-            })}
-          </Button>
-        </div>
-      )}
-      {controller.baseReadOnly && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-            {controller.readOnlyReason}
-          </span>
-        </div>
-      )}
       {editingQuote?.linkedOrderId && (
         <LinkedRecordBanner
           label={controller.t('sales:supplierQuotes.linkedOrderTitle', {
@@ -1518,13 +1510,17 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
         defaultValue: 'Supplier Information',
       })}
     </SupplierQuoteSectionTitle>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-      <SupplierQuoteSupplierField controller={controller} />
-      <SupplierQuoteClientField controller={controller} />
-      <SupplierQuoteCodeField controller={controller} />
-      <SupplierQuotePaymentTermsField controller={controller} />
-      <SupplierQuoteCommunicationField controller={controller} />
-      <SupplierQuoteExpirationField controller={controller} />
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SupplierQuoteSupplierField controller={controller} />
+        <SupplierQuoteClientField controller={controller} />
+        <SupplierQuoteCodeField controller={controller} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SupplierQuotePaymentTermsField controller={controller} />
+        <SupplierQuoteCommunicationField controller={controller} />
+        <SupplierQuoteExpirationField controller={controller} />
+      </div>
     </div>
     <SupplierQuoteDescriptionField controller={controller} />
   </div>
@@ -1580,19 +1576,9 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
   controller,
 }) => (
   <Field data-invalid={Boolean(controller.errors.id)}>
-    <div className="relative w-fit">
-      <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
-        {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-      </FieldLabel>
-      {controller.editingQuote?.revisionCode && (
-        <Badge
-          variant="secondary"
-          className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
-        >
-          {controller.editingQuote.revisionCode}
-        </Badge>
-      )}
-    </div>
+    <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
+      {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+    </FieldLabel>
     <Input
       id="supplier-quote-code"
       type="text"

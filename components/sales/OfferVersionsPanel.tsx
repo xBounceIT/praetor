@@ -19,7 +19,8 @@ interface OfferVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedOffer: ClientOffer) => void;
   disabled?: boolean;
-  embedded?: boolean;
+  layout?: 'inline' | 'dialog';
+  className?: string;
   versionApi?: OfferVersionApi;
 }
 
@@ -30,7 +31,8 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
-  embedded,
+  layout = 'inline',
+  className,
   versionApi = clientOffersApi,
 }) => {
   const { t, i18n } = useTranslation('sales');
@@ -79,8 +81,6 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
       setConfirmOpen(false);
       await reload();
     } catch (e) {
-      // Restore failures (409 non-draft / 409 linked sale / 404) carry actionable server
-      // messages - surface them instead of a generic load error.
       dispatchHistory({
         type: 'setError',
         error:
@@ -94,8 +94,8 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
-        embedded={embedded}
-        persistenceKey="clientOffers.versions"
+        layout={layout}
+        className={className}
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -110,6 +110,12 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
           reasonUpdate: t('clientOffers.versionHistory.reasonUpdate'),
           backToCurrent: t('clientOffers.versionHistory.backToCurrent'),
           restoreButton: t('clientOffers.versionHistory.restoreButton'),
+          searchPlaceholder: t('clientOffers.versionHistory.searchPlaceholder'),
+          searchAriaLabel: t('clientOffers.versionHistory.searchAriaLabel'),
+          noResults: t('clientOffers.versionHistory.noResults'),
+          currentBadge: t('clientOffers.versionHistory.currentBadge'),
+          previewBadge: t('clientOffers.versionHistory.previewBadge'),
+          infoTooltip: t('clientOffers.versionHistory.infoTooltip'),
         }}
         onSelect={handleSelect}
         onClearPreview={onClearPreview}

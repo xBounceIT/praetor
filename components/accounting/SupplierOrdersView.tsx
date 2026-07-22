@@ -53,6 +53,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -830,11 +831,11 @@ const SupplierOrdersHeader: React.FC<{ controller: SupplierOrdersController }> =
 
 const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = ({ controller }) => (
   <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
-    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-      <ModalContent size="full" className="max-h-[90vh]">
-        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
+    <ModalContent size="full" className="max-h-[90vh]">
+      <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <ModalHeader>
+          <div className="flex w-full items-start justify-between gap-4">
+            <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
                 <i
                   className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
@@ -842,36 +843,44 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
                 ></i>
               </span>
               {controller.t('accounting:supplierOrders.editOrder')}
+              {controller.baseReadOnly ? (
+                <ModalReadOnlyStatusBanner>
+                  {controller.t('accounting:supplierOrders.readOnlyStatus')}
+                </ModalReadOnlyStatusBanner>
+              ) : null}
             </ModalTitle>
             <ModalCloseButton onClick={controller.closeEditModal} />
-          </ModalHeader>
-          <ModalBody className="flex-1 space-y-5">
-            <SupplierOrderModalAlerts controller={controller} />
-            <SupplierOrderDetailsSection controller={controller} />
-            <SupplierOrderItemsSection controller={controller} />
-            <SupplierOrderNotesSummarySection controller={controller} />
-          </ModalBody>
-          <ModalFooter>
-            <Button type="button" variant="outline" onClick={controller.closeEditModal}>
-              {controller.t('common:buttons.cancel')}
-            </Button>
-            {!controller.isReadOnly && (
-              <Button type="submit">{controller.t('common:buttons.update')}</Button>
-            )}
-          </ModalFooter>
-        </form>
-      </ModalContent>
-      {controller.editingOrder?.id && (
-        <SupplierOrderVersionsPanel
-          orderId={controller.editingOrder.id}
-          selectedVersionId={controller.previewVersion?.id ?? null}
-          onPreview={controller.handleVersionPreview}
-          onClearPreview={controller.handleClearPreview}
-          onRestored={controller.handleVersionRestored}
-          disabled={controller.baseReadOnly}
-        />
-      )}
-    </div>
+          </div>
+        </ModalHeader>
+        <ModalBody className="flex-1 space-y-5">
+          {controller.editingOrder?.id ? (
+            <div className="flex justify-end">
+              <SupplierOrderVersionsPanel
+                className="w-full max-w-2xl"
+                orderId={controller.editingOrder.id}
+                selectedVersionId={controller.previewVersion?.id ?? null}
+                onPreview={controller.handleVersionPreview}
+                onClearPreview={controller.handleClearPreview}
+                onRestored={controller.handleVersionRestored}
+                disabled={controller.baseReadOnly}
+              />
+            </div>
+          ) : null}
+          <SupplierOrderModalAlerts controller={controller} />
+          <SupplierOrderDetailsSection controller={controller} />
+          <SupplierOrderItemsSection controller={controller} />
+          <SupplierOrderNotesSummarySection controller={controller} />
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={controller.closeEditModal}>
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          {!controller.isReadOnly && (
+            <Button type="submit">{controller.t('common:buttons.update')}</Button>
+          )}
+        </ModalFooter>
+      </form>
+    </ModalContent>
   </Modal>
 );
 
@@ -886,35 +895,6 @@ const SupplierOrderModalAlerts: React.FC<{ controller: SupplierOrdersController 
   controller,
 }) => (
   <>
-    {controller.previewVersion && (
-      <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-          <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-          {controller.t('accounting:supplierOrders.versionHistory.previewBanner', {
-            date: formatInsertDateTime(
-              controller.previewVersion.createdAt,
-              controller.i18n.language,
-            ),
-          })}
-        </span>
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          onClick={controller.handleClearPreview}
-          className="h-auto px-0 text-amber-700 dark:text-amber-300"
-        >
-          {controller.t('accounting:supplierOrders.versionHistory.backToCurrent')}
-        </Button>
-      </div>
-    )}
-    {controller.baseReadOnly && (
-      <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-          {controller.t('accounting:supplierOrders.readOnlyStatus')}
-        </span>
-      </div>
-    )}
     {controller.formData.linkedQuoteId && (
       <LinkedRecordBanner
         label={controller.t('accounting:supplierOrders.linkedQuote')}

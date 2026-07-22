@@ -3,7 +3,6 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -102,8 +101,8 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
-import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -111,6 +110,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import { OfferRevisionsPanel } from './OfferRevisionsPanel';
 import OfferVersionsPanel from './OfferVersionsPanel';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
@@ -1478,6 +1478,7 @@ const ClientOffersLayout: React.FC<{ controller: ClientOffersController }> = ({ 
 
 const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = ({ controller }) => {
   const {
+    t,
     isModalOpen,
     closeModal,
     handleSubmit,
@@ -1491,50 +1492,82 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
   const revisionRestoreDisabled = baseReadOnly;
+  const {
+    open: versionsDialogOpen,
+    onOpenChange: handleVersionsDialogOpenChange,
+    setOpen: setVersionsDialogOpen,
+    bindPreview,
+  } = useVersionHistoryDialogOpen(selectedVersionId, handleClearPreview);
+  const dismissModal = useCallback(() => {
+    setVersionsDialogOpen(false);
+    closeModal();
+  }, [closeModal, setVersionsDialogOpen]);
 
   return (
-    <Modal isOpen={isModalOpen} onClose={closeModal}>
-      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-        <ModalContent size="full" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <ClientOfferModalHeader controller={controller} />
-            <ModalBody className="flex-1 space-y-5">
-              <ClientOfferModalAlerts controller={controller} />
+    <Modal isOpen={isModalOpen} onClose={dismissModal}>
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <ClientOfferModalHeader controller={{ ...controller, closeModal: dismissModal }} />
+          <ModalBody className="flex-1 space-y-5">
+            {editingOffer?.id ? (
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+                <div className="min-w-0 space-y-5">
+                  <ClientOfferClientSection controller={controller} />
+                </div>
+                <OfferRevisionsPanel
+                  className="min-w-0 lg:justify-self-stretch"
+                  offerId={editingOffer.id}
+                  selectedRevisionId={selectedRevisionId}
+                  onPreview={(revision) =>
+                    handleVersionPreview({
+                      ...revision,
+                      offerId: editingOffer.id,
+                      reason: 'update',
+                    })
+                  }
+                  onClearPreview={handleClearPreview}
+                  onRestored={handleVersionRestored}
+                  disabled={revisionRestoreDisabled}
+                  secondaryAction={{
+                    label: t('sales:clientOffers.revisionHistory.openVersionHistory', {
+                      defaultValue: 'Open full history',
+                    }),
+                    onClick: () => setVersionsDialogOpen(true),
+                  }}
+                />
+              </div>
+            ) : (
               <ClientOfferClientSection controller={controller} />
-              <ClientOfferItemsSection controller={controller} />
-              <ClientOfferNotesSummarySection controller={controller} />
-            </ModalBody>
-            <ClientOfferModalFooter controller={controller} />
-          </form>
-        </ModalContent>
-        {editingOffer?.id && (
-          <HistoryRail>
-            <OfferRevisionsPanel
-              offerId={editingOffer.id}
-              selectedRevisionId={selectedRevisionId}
-              onPreview={(revision) =>
-                handleVersionPreview({
-                  ...revision,
-                  offerId: editingOffer.id,
-                  reason: 'update',
-                })
-              }
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={revisionRestoreDisabled}
-            />
-            <OfferVersionsPanel
-              embedded
-              offerId={editingOffer.id}
-              selectedVersionId={selectedVersionId}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
-            />
-          </HistoryRail>
-        )}
-      </div>
+            )}
+            <ClientOfferModalAlerts controller={controller} />
+            <ClientOfferItemsSection controller={controller} />
+            <ClientOfferNotesSummarySection controller={controller} />
+          </ModalBody>
+          <ClientOfferModalFooter controller={controller} />
+        </form>
+      </ModalContent>
+      {editingOffer?.id ? (
+        <VersionHistoryDialog
+          open={versionsDialogOpen}
+          onOpenChange={handleVersionsDialogOpenChange}
+          title={t('sales:clientOffers.versionHistory.title', {
+            defaultValue: 'Version History',
+          })}
+          description={t('sales:clientOffers.versionHistory.infoTooltip', {
+            defaultValue: 'Automatic snapshots created when you save or restore the document.',
+          })}
+        >
+          <OfferVersionsPanel
+            layout="dialog"
+            offerId={editingOffer.id}
+            selectedVersionId={selectedVersionId}
+            onPreview={bindPreview(handleVersionPreview)}
+            onClearPreview={handleClearPreview}
+            onRestored={handleVersionRestored}
+            disabled={baseReadOnly}
+          />
+        </VersionHistoryDialog>
+      ) : null}
     </Modal>
   );
 };
@@ -1542,24 +1575,29 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
 const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingOffer, isReadOnly } = controller;
+  const { t, closeModal, editingOffer, isReadOnly, baseReadOnly, readOnlyReason } = controller;
 
   return (
     <ModalHeader>
-      <ModalTitle className="gap-3">
-        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-          <i
-            className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}
-            aria-hidden="true"
-          ></i>
-        </span>
-        {isReadOnly
-          ? t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })
-          : editingOffer
-            ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
-            : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
-      </ModalTitle>
-      <ModalCloseButton onClick={closeModal} />
+      <div className="flex w-full items-start justify-between gap-4">
+        <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
+          <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+            <i
+              className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}
+              aria-hidden="true"
+            ></i>
+          </span>
+          {isReadOnly
+            ? t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })
+            : editingOffer
+              ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
+              : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
+          {baseReadOnly ? (
+            <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
+          ) : null}
+        </ModalTitle>
+        <ModalCloseButton onClick={closeModal} />
+      </div>
     </ModalHeader>
   );
 };
@@ -1567,44 +1605,10 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
 const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => {
-  const { t, i18n, previewVersion, handleClearPreview, editingOffer, onViewQuote, isReadOnly } =
-    controller;
-  const previewRevisionCode =
-    previewVersion &&
-    'revisionCode' in previewVersion &&
-    typeof previewVersion.revisionCode === 'string'
-      ? previewVersion.revisionCode
-      : null;
+  const { t, editingOffer, onViewQuote } = controller;
 
   return (
     <>
-      {previewVersion && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
-            <i className="fa-solid fa-clock-rotate-left"></i>
-            {previewRevisionCode
-              ? t('sales:clientOffers.revisionHistory.previewBanner', {
-                  code: previewRevisionCode,
-                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                  defaultValue: 'Previewing {{code}} from {{date}}',
-                })
-              : t('sales:clientOffers.versionHistory.previewBanner', {
-                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                  defaultValue: 'Previewing version from {{date}}',
-                })}
-          </span>
-          <Button
-            type="button"
-            variant="link"
-            onClick={handleClearPreview}
-            className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
-          >
-            {t('sales:clientOffers.versionHistory.backToCurrent', {
-              defaultValue: 'Back to current',
-            })}
-          </Button>
-        </div>
-      )}
       {editingOffer?.linkedQuoteId && (
         <LinkedRecordBanner
           label={t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}
@@ -1623,13 +1627,6 @@ const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> =
               : undefined
           }
         />
-      )}
-      {isReadOnly && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-            {controller.readOnlyReason}
-          </span>
-        </div>
       )}
     </>
   );
@@ -1665,7 +1662,7 @@ const ClientOfferClientSection: React.FC<{ controller: ClientOffersController }>
         status={clientStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <ClientOfferClientField controller={controller} />
         <ClientOfferCodeField controller={controller} />
         <ClientOfferPaymentTermsField controller={controller} />
@@ -1716,19 +1713,9 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
-      <div className="relative w-fit">
-        <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
-          {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
-        </FieldLabel>
-        {editingOffer?.revisionCode && (
-          <Badge
-            variant="secondary"
-            className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
-          >
-            {editingOffer.revisionCode}
-          </Badge>
-        )}
-      </div>
+      <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
+        {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
+      </FieldLabel>
       <Input
         id="client-offer-code"
         type="text"

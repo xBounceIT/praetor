@@ -7,15 +7,17 @@ import type {
   Product,
   Quote,
   QuoteMutation,
+  QuoteRevision,
   QuoteVersion,
   QuoteVersionRow,
+  RevisionRow,
   SupplierQuote,
 } from '../../types';
 import { LineDeleteConfirmStub } from '../helpers/lineItemDeleteConfirm';
 import { settleComponentTasks, reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
 
-// Stable `t`/`i18n`: opening the edit modal mounts QuoteVersionsPanel, whose `reload`
+// Stable `t`/`i18n`: opening the edit modal mounts revision/version panels, whose `reload`
 // puts `t` in a useCallback dep. A fresh `t` per render would re-fire that effect
 // forever, so mirror real react-i18next with a stable identity. Assertions check keys.
 const t = (key: string) => key;
@@ -37,8 +39,7 @@ mock.module('sonner', () => ({
   Toaster: () => null,
 }));
 
-// QuoteVersionsPanel fetches version history on mount; stub the API so the modal
-// renders without a real network call.
+// Revision panel mounts with the edit modal; versions load only when the dialog opens.
 const listVersionsMock = mock(async (): Promise<QuoteVersionRow[]> => []);
 const getVersionMock = mock(async (): Promise<QuoteVersion> => {
   throw new Error('not used');
@@ -46,11 +47,21 @@ const getVersionMock = mock(async (): Promise<QuoteVersion> => {
 const restoreVersionMock = mock(async (): Promise<Quote> => {
   throw new Error('not used');
 });
+const listRevisionsMock = mock(async (): Promise<RevisionRow[]> => []);
+const getRevisionMock = mock(async (): Promise<QuoteRevision> => {
+  throw new Error('not used');
+});
+const restoreRevisionMock = mock(async (): Promise<Quote> => {
+  throw new Error('not used');
+});
 mock.module('../../services/api/clientQuotes', () => ({
   clientQuotesApi: {
     listVersions: listVersionsMock,
     getVersion: getVersionMock,
     restoreVersion: restoreVersionMock,
+    listRevisions: listRevisionsMock,
+    getRevision: getRevisionMock,
+    restoreRevision: restoreRevisionMock,
   },
 }));
 
@@ -175,6 +186,12 @@ afterEach(() => {
   getVersionMock.mockRejectedValue(new Error('not used'));
   restoreVersionMock.mockReset();
   restoreVersionMock.mockRejectedValue(new Error('not used'));
+  listRevisionsMock.mockReset();
+  listRevisionsMock.mockResolvedValue([]);
+  getRevisionMock.mockReset();
+  getRevisionMock.mockRejectedValue(new Error('not used'));
+  restoreRevisionMock.mockReset();
+  restoreRevisionMock.mockRejectedValue(new Error('not used'));
 });
 
 describe('<ClientQuotesView /> candidate version previews', () => {
@@ -197,6 +214,13 @@ describe('<ClientQuotesView /> candidate version previews', () => {
     };
     const quote = buildQuote({ id: 'Q-HISTORY', candidates: [currentCandidate] });
     listVersionsMock.mockResolvedValueOnce([
+      {
+        id: 'qv-2',
+        quoteId: 'Q-HISTORY',
+        reason: 'update' as const,
+        createdByUserId: 'u1',
+        createdAt: 1_700_000_002_000,
+      },
       {
         id: 'qv-1',
         quoteId: 'Q-HISTORY',
@@ -230,16 +254,44 @@ describe('<ClientQuotesView /> candidate version previews', () => {
       />,
     );
     fireEvent.click(screen.getByText('Q-HISTORY'));
-    const reason = await screen.findByText('clientQuotes.versionHistory.reasonUpdate');
-    fireEvent.click(reason.closest('button') as HTMLButtonElement);
-
-    expect(await screen.findByRole('tab', { name: /Historical A/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Historical B/ })).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole('button', { name: 'clientQuotes.versionHistory.backToCurrent' }),
+      await screen.findByRole('button', {
+        name: 'sales:clientQuotes.revisionHistory.openVersionHistory',
+      }),
     );
-    expect(screen.getByRole('tab', { name: /Current variant/ })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Historical B/ })).not.toBeInTheDocument();
+    const versionDialog = await waitFor(() => {
+      const dialog = screen.getAllByRole('dialog').find((candidate) =>
+        within(candidate).queryByRole('heading', {
+          name: 'sales:clientQuotes.versionHistory.title',
+        }),
+      );
+      expect(dialog).toBeDefined();
+      return dialog as HTMLElement;
+    });
+    const user = userEvent.setup();
+    await waitFor(() => {
+      expect(within(versionDialog).getAllByRole('radio')).toHaveLength(2);
+    });
+    const historicalRow = versionDialog.querySelector('label[for="history-row-qv-1"]');
+    expect(historicalRow).not.toBeNull();
+    await user.click(historicalRow as HTMLElement);
+    await waitFor(() => {
+      expect(getVersionMock).toHaveBeenCalledWith('Q-HISTORY', 'qv-1');
+    });
+
+    expect(
+      await screen.findByRole('tab', { name: /Historical A/, hidden: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Historical B/, hidden: true })).toBeInTheDocument();
+    fireEvent.click(
+      within(versionDialog).getByRole('button', {
+        name: 'clientQuotes.versionHistory.backToCurrent',
+      }),
+    );
+    expect(screen.getByRole('tab', { name: /Current variant/, hidden: true })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: /Historical B/, hidden: true }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -644,7 +696,7 @@ describe('<ClientQuotesView /> supplier-quote pricing', () => {
       await settleComponentTasks();
     });
     const dialog = await screen.findByRole('dialog');
-    await screen.findByText('clientQuotes.versionHistory.empty');
+    await screen.findByText('clientQuotes.revisionHistory.empty');
 
     expect(within(dialog).getAllByText('8.615,39 EUR').length).toBeGreaterThan(0);
   });

@@ -73,6 +73,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -1038,11 +1039,11 @@ const ClientsOrdersHeader: React.FC<{ controller: ClientsOrdersController }> = (
 
 const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
   <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
-    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-      <ModalContent size="full" className="max-h-[90vh]">
-        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
+    <ModalContent size="full" className="max-h-[90vh]">
+      <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <ModalHeader>
+          <div className="flex w-full items-start justify-between gap-4">
+            <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
                 <i
                   className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
@@ -1052,38 +1053,53 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
               {controller.isReadOnly
                 ? controller.t('common:buttons.view')
                 : controller.t('accounting:clientsOrders.editOrder')}
+              {controller.editingOrder?.status === 'confirmed' ? (
+                <ModalReadOnlyStatusBanner>
+                  {controller.t('accounting:clientsOrders.confirmedIdentityLockedStatus')}
+                </ModalReadOnlyStatusBanner>
+              ) : null}
+              {controller.editingOrder?.status === 'denied' ? (
+                <ModalReadOnlyStatusBanner>
+                  {controller.t('accounting:clientsOrders.readOnlyStatus', {
+                    status: getOrderStatusLabel(controller.editingOrder.status, controller.t),
+                  })}
+                </ModalReadOnlyStatusBanner>
+              ) : null}
             </ModalTitle>
             <ModalCloseButton onClick={controller.closeEditModal} />
-          </ModalHeader>
-          <ModalBody className="flex-1 space-y-5">
-            <ClientsOrderModalAlerts controller={controller} />
-            <OrderDetailsSection controller={controller} />
-            <OrderItemsSection controller={controller} />
-            <OrderNotesSummarySection controller={controller} />
-          </ModalBody>
-          <ModalFooter>
-            <Button type="button" variant="outline" onClick={controller.closeEditModal}>
-              {controller.t('common:buttons.cancel')}
+          </div>
+        </ModalHeader>
+        <ModalBody className="flex-1 space-y-5">
+          {controller.editingOrder?.id ? (
+            <div className="flex justify-end">
+              <OrderVersionsPanel
+                className="w-full max-w-2xl"
+                orderId={controller.editingOrder.id}
+                selectedVersionId={controller.previewVersion?.id ?? null}
+                onPreview={controller.handleVersionPreview}
+                onClearPreview={controller.handleClearPreview}
+                onRestored={controller.handleVersionRestored}
+                disabled={controller.isVersionRestoreLocked}
+              />
+            </div>
+          ) : null}
+          <ClientsOrderModalAlerts controller={controller} />
+          <OrderDetailsSection controller={controller} />
+          <OrderItemsSection controller={controller} />
+          <OrderNotesSummarySection controller={controller} />
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={controller.closeEditModal}>
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          {!controller.previewVersion && (
+            <Button type="submit" disabled={controller.isReadOnly}>
+              {controller.t('accounting:clientsOrders.updateOrder')}
             </Button>
-            {!controller.previewVersion && (
-              <Button type="submit" disabled={controller.isReadOnly}>
-                {controller.t('accounting:clientsOrders.updateOrder')}
-              </Button>
-            )}
-          </ModalFooter>
-        </form>
-      </ModalContent>
-      {controller.editingOrder?.id && (
-        <OrderVersionsPanel
-          orderId={controller.editingOrder.id}
-          selectedVersionId={controller.previewVersion?.id ?? null}
-          onPreview={controller.handleVersionPreview}
-          onClearPreview={controller.handleClearPreview}
-          onRestored={controller.handleVersionRestored}
-          disabled={controller.isVersionRestoreLocked}
-        />
-      )}
-    </div>
+          )}
+        </ModalFooter>
+      </form>
+    </ModalContent>
   </Modal>
 );
 
@@ -1091,47 +1107,6 @@ const ClientsOrderModalAlerts: React.FC<{ controller: ClientsOrdersController }>
   controller,
 }) => (
   <>
-    {controller.previewVersion && (
-      <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-          <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-          {controller.t('accounting:clientsOrders.versionHistory.previewBanner', {
-            date: formatInsertDateTime(
-              controller.previewVersion.createdAt,
-              controller.i18n.language,
-            ),
-            defaultValue: 'Previewing version from {{date}}',
-          })}
-        </span>
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          onClick={controller.handleClearPreview}
-          className="h-auto px-0 text-amber-700 dark:text-amber-300"
-        >
-          {controller.t('accounting:clientsOrders.versionHistory.backToCurrent', {
-            defaultValue: 'Back to current',
-          })}
-        </Button>
-      </div>
-    )}
-    {controller.editingOrder?.status === 'confirmed' && (
-      <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-          {controller.t('accounting:clientsOrders.confirmedIdentityLockedStatus')}
-        </span>
-      </div>
-    )}
-    {controller.editingOrder?.status === 'denied' && (
-      <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-          {controller.t('accounting:clientsOrders.readOnlyStatus', {
-            status: getOrderStatusLabel(controller.editingOrder.status, controller.t),
-          })}
-        </span>
-      </div>
-    )}
     {controller.formData.linkedOfferId && (
       <LinkedRecordBanner
         label={controller.t('accounting:clientsOrders.linkedOffer', {

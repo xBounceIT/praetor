@@ -5,25 +5,56 @@ import { VersionHistoryPanel } from '../../components/shared/VersionHistoryPanel
 import { render } from '../helpers/render';
 
 const labels = {
-  title: 'Version history',
+  title: 'Revision history',
   empty: 'No versions',
   reasonRestore: 'Restored',
   reasonUpdate: 'Saved',
   backToCurrent: 'Back to current',
   restoreButton: 'Restore',
+  searchPlaceholder: 'Search revisions…',
+  searchAriaLabel: 'Search revisions',
+  noResults: 'No revisions match your search',
+  currentBadge: 'Current',
+  previewBadge: 'Preview',
+  infoTooltip: 'Immutable sent snapshots.',
 };
 
-const versionRow = {
-  id: 'version-1',
-  createdAt: 1_700_000_000_000,
-  reason: 'update' as const,
-};
+const versionRows = [
+  {
+    id: 'version-1',
+    createdAt: 1_700_000_000_000,
+    reason: 'update' as const,
+    revisionCode: 'REV 3',
+    createdByUserName: 'Alice',
+  },
+  {
+    id: 'version-2',
+    createdAt: 1_690_000_000_000,
+    reason: 'update' as const,
+    revisionCode: 'REV 2',
+    createdByUserName: 'Bob',
+  },
+  {
+    id: 'version-3',
+    createdAt: 1_680_000_000_000,
+    reason: 'restore' as const,
+    revisionCode: 'REV 1',
+    createdByUserName: 'Carol',
+  },
+  {
+    id: 'version-4',
+    createdAt: 1_670_000_000_000,
+    reason: 'update' as const,
+    revisionCode: 'REV 0',
+    createdByUserName: 'Dave',
+  },
+];
 
 const baseProps = {
-  rows: [],
-  selectedVersionId: null,
+  rows: [] as typeof versionRows,
+  selectedVersionId: null as string | null,
   isLoading: false,
-  error: null,
+  error: null as string | null,
   locale: 'en',
   labels,
   onSelect: mock(() => {}),
@@ -32,99 +63,268 @@ const baseProps = {
 };
 
 describe('<VersionHistoryPanel />', () => {
-  test('delays vertical expansion until the width transition finishes', async () => {
-    const css = await Bun.file(new URL('../../src/index.css', import.meta.url)).text();
+  test('renders an inline section with search toggle and radio selection', async () => {
+    const onSelect = mock(() => {});
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[1].id}
+        onSelect={onSelect}
+      />,
+    );
 
-    expect(css).toMatch(
-      /\.version-history-viewport\s*{[^}]*display: grid;[^}]*grid-template-rows: 0fr;[^}]*grid-template-rows 200ms ease-in-out,/s,
-    );
-    expect(css).toMatch(
-      /\.version-history-content\[data-state="open"\] > \.version-history-viewport\s*{[^}]*grid-template-rows: 1fr;[^}]*transition-delay: 200ms;/s,
-    );
-    expect(css).toMatch(
-      /\.version-history-content\[data-state="closed"\] > \.version-history-viewport\s*{\s*transition-delay: 0ms;/,
-    );
-    expect(css).not.toContain('@keyframes version-history-content');
+    expect(screen.getByRole('region', { name: labels.title })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: labels.title })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBeInTheDocument();
+    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+    expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'REV 2' })).toBeChecked();
+
+    const list = screen.getByRole('radiogroup');
+    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem+0.75rem)]');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'REV 1' }));
+    expect(onSelect).toHaveBeenCalledWith(versionRows[2]);
   });
 
-  test('sequences width and height, reverses the arrow position, and uses a shadcn tooltip', async () => {
-    const { container } = render(
-      <VersionHistoryPanel {...baseProps} rows={[versionRow]} selectedVersionId={versionRow.id} />,
+  test('reserves empty slots so the inline list stays three rows tall', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows.slice(0, 1)}
+        selectedVersionId={null}
+      />,
     );
-    const panel = container.querySelector('[data-slot="collapsible"]');
-    const trigger = screen.getByRole('button', { name: labels.title });
-    const content = container.querySelector('[data-slot="collapsible-content"]');
 
-    expect(panel).toHaveClass('w-72');
-    expect(panel).toHaveClass('delay-0');
-    expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(trigger).not.toHaveAttribute('title');
-    expect(trigger).toHaveClass('h-12', 'w-full');
-    expect(trigger.firstElementChild).toHaveClass('gap-2');
-    expect(trigger.querySelector('.fa-chevron-left')).toBeInTheDocument();
-    expect(content).toHaveClass('version-history-content');
-    expect(content).not.toHaveClass('flex-1');
-    expect(content?.firstElementChild).toHaveClass('version-history-viewport');
-    expect(content?.firstElementChild?.firstElementChild).toHaveClass('min-h-0', 'overflow-hidden');
-    expect(content?.firstElementChild?.firstElementChild?.firstElementChild).toHaveClass(
-      'max-h-[calc(90vh-3rem)]',
-    );
-    expect(content?.firstElementChild?.firstElementChild?.firstElementChild).not.toHaveClass(
-      'h-full',
-    );
-    expect(content).toHaveAttribute('aria-hidden', 'false');
-    expect(content).not.toHaveAttribute('inert');
-    expect(screen.getByText(labels.reasonUpdate)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: labels.restoreButton })).toBeInTheDocument();
-
-    await userEvent.hover(trigger);
-    expect(await screen.findByRole('tooltip')).toHaveTextContent(labels.title);
-    await userEvent.unhover(trigger);
-
-    fireEvent.click(trigger);
-
-    expect(panel).toHaveClass('w-12');
-    expect(panel).toHaveClass('delay-200');
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(trigger).toHaveClass('h-12', 'w-full');
-    expect(trigger.querySelector('.fa-chevron-right')).toBeInTheDocument();
-    expect(content).toHaveAttribute('aria-hidden', 'true');
-    expect(content).toHaveAttribute('inert');
-    expect(screen.queryByRole('button', { name: labels.restoreButton })).not.toBeInTheDocument();
-
-    fireEvent.click(trigger);
-
-    expect(panel).toHaveClass('w-72');
-    expect(panel).toHaveClass('delay-0');
-    expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(trigger.querySelector('.fa-chevron-left')).toBeInTheDocument();
-    expect(content).toHaveAttribute('aria-hidden', 'false');
-    expect(content).not.toHaveAttribute('inert');
-    expect(screen.getByText(labels.reasonUpdate)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: labels.restoreButton })).toBeInTheDocument();
+    const list = screen.getByRole('radiogroup');
+    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem+0.75rem)]');
+    expect(screen.getAllByTestId('version-history-empty-slot')).toHaveLength(2);
   });
 
-  test('restores its persisted open state after navigation remounts the panel', () => {
-    const persistenceKey = 'test.clientQuotes.versions';
-    const storageKey = `praetor.history-panel.${persistenceKey}`;
-    localStorage.removeItem(storageKey);
-
-    const firstRender = render(
-      <VersionHistoryPanel {...baseProps} persistenceKey={persistenceKey} />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: labels.title }));
-    expect(localStorage.getItem(storageKey)).toBe('closed');
-    firstRender.unmount();
-
-    const secondRender = render(
-      <VersionHistoryPanel {...baseProps} persistenceKey={persistenceKey} />,
-    );
-    expect(screen.getByRole('button', { name: labels.title })).toHaveAttribute(
-      'aria-expanded',
-      'false',
+  test('does not preselect a history row when viewing the live document', async () => {
+    const onSelect = mock(() => {});
+    const onClearPreview = mock(() => {});
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={null}
+        onSelect={onSelect}
+        onClearPreview={onClearPreview}
+      />,
     );
 
-    secondRender.unmount();
-    localStorage.removeItem(storageKey);
+    expect(screen.getByRole('radio', { name: 'REV 3' })).not.toBeChecked();
+    expect(screen.queryByRole('button', { name: labels.backToCurrent })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
+    expect(onSelect).toHaveBeenCalledWith(versionRows[0]);
+    expect(onClearPreview).not.toHaveBeenCalled();
+  });
+
+  test('selecting the newest history row previews it instead of clearing', () => {
+    const onSelect = mock(() => {});
+    const onClearPreview = mock(() => {});
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[1].id}
+        onSelect={onSelect}
+        onClearPreview={onClearPreview}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
+    expect(onSelect).toHaveBeenCalledWith(versionRows[0]);
+    expect(onClearPreview).not.toHaveBeenCalled();
+  });
+
+  test('shows a preview badge on the selected historical row', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[1].id}
+      />,
+    );
+
+    expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
+    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+  });
+
+  test('shows a preview badge when the newest snapshot is selected', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[0].id}
+      />,
+    );
+
+    expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
+    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+  });
+
+  test('expands search on the header row and filters the local list', async () => {
+    const user = userEvent.setup();
+    render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
+
+    const header = screen.getByTestId('version-history-inline-header');
+    const restingLayer = screen.getByTestId('version-history-header-resting');
+    const searchLayer = screen.getByTestId('version-history-header-search');
+    const searchToggle = screen.getByRole('button', { name: labels.searchAriaLabel });
+
+    expect(header).toContainElement(restingLayer);
+    expect(header).toContainElement(searchLayer);
+    expect(restingLayer).toContainElement(searchToggle);
+    expect(screen.getByText(labels.title)).toBeVisible();
+    expect(restingLayer).toHaveClass('opacity-100');
+    expect(searchLayer).toHaveClass('opacity-0', 'pointer-events-none');
+
+    await user.click(searchToggle);
+    expect(header).toHaveAttribute('data-search-open', 'true');
+    const input = screen.getByPlaceholderText(labels.searchPlaceholder);
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveFocus();
+    expect(searchLayer).toContainElement(input);
+    expect(restingLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(searchLayer).toHaveClass('opacity-100');
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+
+    await user.type(input, 'bob');
+    expect(screen.getByRole('radio', { name: 'REV 2' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'REV 3' })).not.toBeInTheDocument();
+
+    await user.clear(input);
+    await user.type(input, 'zzz-none');
+    expect(screen.getByText(labels.noResults)).toBeInTheDocument();
+
+    fireEvent.blur(input);
+    expect(header).toHaveAttribute('data-search-open', 'false');
+    expect(restingLayer).toHaveClass('opacity-100');
+    expect(searchLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
+    expect(screen.queryByText(labels.noResults)).not.toBeInTheDocument();
+  });
+
+  test('disables restore when search filters out the selected snapshot', async () => {
+    const user = userEvent.setup();
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[1].id}
+      />,
+    );
+
+    const restoreButton = screen.getByRole('button', { name: labels.restoreButton });
+    expect(restoreButton).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: labels.searchAriaLabel }));
+    await user.type(screen.getByPlaceholderText(labels.searchPlaceholder), 'zzz-none');
+    expect(screen.getByText(labels.noResults)).toBeInTheDocument();
+    expect(restoreButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: labels.backToCurrent })).toBeEnabled();
+  });
+
+  test('keeps timestamps visible for version rows without a revision code', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows.map(({ revisionCode: _revisionCode, ...row }) => row)}
+        selectedVersionId={null}
+      />,
+    );
+
+    const timestamps = screen.getAllByTestId('version-history-timestamp');
+    expect(timestamps.length).toBeGreaterThan(0);
+    for (const stamp of timestamps) {
+      expect(stamp).toHaveClass('inline');
+      expect(stamp).not.toHaveClass('hidden');
+    }
+  });
+
+  test('crossfades resting and search header layers in sync', async () => {
+    const user = userEvent.setup();
+    render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
+
+    const header = screen.getByTestId('version-history-inline-header');
+    const restingLayer = screen.getByTestId('version-history-header-resting');
+    const searchLayer = screen.getByTestId('version-history-header-search');
+    const searchToggle = screen.getByTestId('version-history-search-toggle');
+    const closeToggle = screen.getByTestId('version-history-close-toggle');
+
+    expect(header).toHaveAttribute('data-search-open', 'false');
+    expect(restingLayer).toHaveClass('opacity-100', 'duration-200', 'ease-in-out');
+    expect(searchLayer).toHaveClass(
+      'opacity-0',
+      'pointer-events-none',
+      'duration-200',
+      'ease-in-out',
+    );
+    expect(searchLayer).toHaveAttribute('inert');
+    expect(closeToggle).toHaveAttribute('tabindex', '-1');
+    expect(restingLayer).toContainElement(screen.getByTestId('version-history-search-icon'));
+    expect(searchLayer).toContainElement(screen.getByTestId('version-history-close-icon'));
+
+    await user.click(searchToggle);
+    expect(header).toHaveAttribute('data-search-open', 'true');
+    expect(restingLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(restingLayer).toHaveAttribute('inert');
+    expect(searchLayer).toHaveClass('opacity-100');
+    expect(searchLayer).not.toHaveAttribute('inert');
+    expect(searchToggle).toHaveAttribute('tabindex', '-1');
+    expect(closeToggle).not.toHaveAttribute('tabindex', '-1');
+
+    const input = screen.getByPlaceholderText(labels.searchPlaceholder);
+    fireEvent.blur(input);
+
+    expect(header).toHaveAttribute('data-search-open', 'false');
+    expect(restingLayer).toHaveClass('opacity-100');
+    expect(searchLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(searchLayer).toHaveAttribute('inert');
+    expect(closeToggle).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBe(searchToggle);
+  });
+
+  test('shows restore actions and optional secondary action', async () => {
+    const onSecondary = mock(() => {});
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[0].id}
+        secondaryAction={{ label: 'Open version history', onClick: onSecondary }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: labels.backToCurrent })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: labels.restoreButton })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open version history' }));
+    expect(onSecondary).toHaveBeenCalled();
+  });
+
+  test('uses a taller scroll area in dialog layout without search chrome', () => {
+    render(<VersionHistoryPanel {...baseProps} layout="dialog" rows={versionRows} />);
+
+    const list = screen.getByRole('radiogroup');
+    expect(list.parentElement).toHaveClass('max-h-[min(24rem,50vh)]');
+    expect(screen.queryByRole('button', { name: labels.searchAriaLabel })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(labels.searchPlaceholder)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: labels.infoTooltip })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 4, name: labels.title })).not.toBeInTheDocument();
+    expect(screen.queryByText(String(versionRows.length))).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: labels.title })).not.toHaveClass('border');
+  });
+
+  test('exposes an info tooltip when provided', async () => {
+    render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
+    const infoButton = screen.getByRole('button', { name: labels.infoTooltip });
+    await userEvent.hover(infoButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(labels.infoTooltip);
   });
 });
