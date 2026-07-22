@@ -77,7 +77,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getByRole('region', { name: labels.title })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 4, name: labels.title })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBeInTheDocument();
-    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+    expect(screen.getByText(labels.currentBadge)).toBeInTheDocument();
     expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeChecked();
@@ -103,7 +103,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getAllByTestId('version-history-empty-slot')).toHaveLength(2);
   });
 
-  test('does not preselect a history row when viewing the live document', async () => {
+  test('preselects the newest history row when viewing the live document', async () => {
     const onSelect = mock(() => {});
     const onClearPreview = mock(() => {});
     render(
@@ -116,15 +116,17 @@ describe('<VersionHistoryPanel />', () => {
       />,
     );
 
-    expect(screen.getByRole('radio', { name: 'REV 3' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'REV 3' })).toBeChecked();
+    expect(screen.getByText(labels.currentBadge)).toBeInTheDocument();
+    expect(screen.queryByText(labels.previewBadge)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.backToCurrent })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
-    expect(onSelect).toHaveBeenCalledWith(versionRows[0]);
+    expect(onSelect).not.toHaveBeenCalled();
     expect(onClearPreview).not.toHaveBeenCalled();
   });
 
-  test('selecting the newest history row previews it instead of clearing', () => {
+  test('selecting the newest history row clears preview instead of re-selecting', () => {
     const onSelect = mock(() => {});
     const onClearPreview = mock(() => {});
     render(
@@ -138,11 +140,11 @@ describe('<VersionHistoryPanel />', () => {
     );
 
     fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
-    expect(onSelect).toHaveBeenCalledWith(versionRows[0]);
-    expect(onClearPreview).not.toHaveBeenCalled();
+    expect(onClearPreview).toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
-  test('shows a preview badge on the selected historical row', () => {
+  test('shows a preview badge on the selected historical row and current on newest', () => {
     render(
       <VersionHistoryPanel
         {...baseProps}
@@ -152,20 +154,14 @@ describe('<VersionHistoryPanel />', () => {
     );
 
     expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
-    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+    expect(screen.getByText(labels.currentBadge)).toBeInTheDocument();
   });
 
-  test('shows a preview badge when the newest snapshot is selected', () => {
-    render(
-      <VersionHistoryPanel
-        {...baseProps}
-        rows={versionRows}
-        selectedVersionId={versionRows[0].id}
-      />,
-    );
+  test('shows a current badge when the newest snapshot represents the live document', () => {
+    render(<VersionHistoryPanel {...baseProps} rows={versionRows} selectedVersionId={null} />);
 
-    expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
-    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+    expect(screen.getByText(labels.currentBadge)).toBeInTheDocument();
+    expect(screen.queryByText(labels.previewBadge)).not.toBeInTheDocument();
   });
 
   test('expands search on the header row and filters the local list', async () => {
