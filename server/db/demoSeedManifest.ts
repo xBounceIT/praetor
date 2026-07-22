@@ -27,8 +27,6 @@ const rangeDocumentCodes = (
     id: demoDocumentCode(moduleId, index + 1, seedYear),
   }));
 
-export const DEMO_PASSWORD_HASH = '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy';
-
 type DemoEmployeeType = 'app_user' | 'internal' | 'external';
 
 // Fresh demo users have not signed in yet. The refresh upsert deliberately preserves a non-null

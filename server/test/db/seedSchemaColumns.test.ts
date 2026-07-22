@@ -50,6 +50,12 @@ describe('seed.sql user inserts stay in sync with the users schema', () => {
     expect(seededUserRows.every((row) => row.first_login_at === 'NULL')).toBe(true);
   });
 
+  test('does not publish an authenticatable password hash for compatibility users', () => {
+    expect(seededUserRows.every((row) => String(row.password_hash).startsWith('!set-by-'))).toBe(
+      true,
+    );
+  });
+
   test('every referenced user column exists on the users table', () => {
     const referencedUserColumns = new Set(seededUserRows.flatMap((row) => Object.keys(row)));
     const unknown = [...referencedUserColumns].filter((column) => !userSchemaColumns.has(column));

@@ -65,7 +65,7 @@ official PG18 container layout. Do not point this compose file at an existing Po
 data volume.
 
 The compose setup defaults backend `TRUST_PROXY=1` for the bundled Caddy -> API hop.
-Set `DEMO_SEEDING=true` in `.env` when you want the stack to provision the canonical demo users and demo business data.
+Set `DEMO_SEEDING=true` and a unique `DEMO_USER_PASSWORD` in `.env` when you want the stack to provision the canonical demo users and demo business data. The demo refresh fails before cleaning or reseeding demo data when the password is blank or matches the published legacy default.
 That refresh flow is intended for demo and test stacks, owns the canonical demo namespace,
 refreshes compatibility clients/projects/tasks, deletes financial documents and dependent
 resales backed by demo products, and resets the seeded demo users' assignments, notifications, and time entries so
@@ -75,6 +75,10 @@ only when they use demo data such as demo products or seeded document IDs.
 The demo users include HR profile data such as employee codes, departments, contract status, work locations, emergency contacts, and sample internal/external employee records.
 
 To rerun the same refresh manually against an existing backend database:
+
+For this direct-server command, export `DEMO_USER_PASSWORD` in the shell or copy
+`server/.env.example` to `server/.env` and set it there. The root `.env` above is read by
+Compose, not by a process whose working directory is `server`.
 
 ```bash
 cd server
@@ -117,8 +121,8 @@ values stop the workflow before release creation or registry authentication.
 
 - **Login**:
   - Bootstrap Admin: `admin` / unique value of `ADMIN_DEFAULT_PASSWORD`. It is required before a fresh install can create the account; blank and published legacy defaults are rejected. Existing installations with an `admin` account do not need it during upgrades.
-  - Demo Manager: `manager` / `password` when `DEMO_SEEDING=true`
-  - Demo User: `user` / `password` when `DEMO_SEEDING=true`
+  - Demo Manager: `manager` / the configured `DEMO_USER_PASSWORD` when `DEMO_SEEDING=true`
+  - Demo User: `user` / the configured `DEMO_USER_PASSWORD` when `DEMO_SEEDING=true`
   
 - **Tracking Time**: Navigate to the "Time Tracker" view and log time entries.
 

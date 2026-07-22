@@ -11,6 +11,10 @@ export const INSECURE_DEFAULT_ADMIN_PASSWORDS = [
   'password',
   'change-me-strong-admin-password',
 ] as const;
+export const INSECURE_DEFAULT_DEMO_USER_PASSWORDS = [
+  'password',
+  'change-me-strong-demo-password',
+] as const;
 export const TEST_JWT_SECRET = 'praetor-test-jwt-secret';
 
 type InsecureDefaults = string | readonly string[];

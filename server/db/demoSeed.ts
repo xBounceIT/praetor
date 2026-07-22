@@ -1,9 +1,14 @@
+import bcrypt from 'bcryptjs';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { readFileSync } from 'fs';
 import type { PoolClient } from 'pg';
 import { OWN_COMPANY_CLIENT_ID } from '../repositories/clientsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { createChildLogger, serializeError } from '../utils/logger.ts';
+import {
+  INSECURE_DEFAULT_DEMO_USER_PASSWORDS,
+  readRequiredNonDefaultEnv,
+} from '../utils/runtimeConfig.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
   buildDemoAssignmentTargetIds,
@@ -15,7 +20,6 @@ import {
   DEMO_FIRST_LOGIN_AT,
   DEMO_ITEM_IDS,
   DEMO_NOTIFICATIONS,
-  DEMO_PASSWORD_HASH,
   DEMO_PRICING_SEMANTICS_VERSION,
   DEMO_PRODUCTS,
   DEMO_PROJECTS,
@@ -463,7 +467,11 @@ export const insertCompatibilityDefaults = async (
   incrementCount(counts, 'tasks', tasksResult.rowCount ?? 0);
 };
 
-const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<string, number>) => {
+const insertDemoUsersAndSettings = async (
+  client: PoolClient,
+  counts: Record<string, number>,
+  passwordHash: string,
+) => {
   const userValues: unknown[] = [];
   const userTuples = DEMO_USERS.map((user) => {
     const index = userValues.length + 1;
@@ -471,7 +479,7 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
       user.id,
       user.name,
       user.username,
-      DEMO_PASSWORD_HASH,
+      passwordHash,
       user.role,
       user.avatarInitials,
       user.costPerHour,
@@ -522,6 +530,8 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
        name = EXCLUDED.name,
        username = EXCLUDED.username,
        password_hash = EXCLUDED.password_hash,
+       session_version = users.session_version + 1,
+       token_version = users.token_version + 1,
        role = EXCLUDED.role,
        avatar_initials = EXCLUDED.avatar_initials,
        cost_per_hour = EXCLUDED.cost_per_hour,
@@ -1413,6 +1423,11 @@ export const runDemoSeedRefresh = async ({
 }: {
   source: DemoSeedSource;
 }): Promise<DemoSeedResult> => {
+  const demoUserPassword = readRequiredNonDefaultEnv(
+    'DEMO_USER_PASSWORD',
+    INSECURE_DEFAULT_DEMO_USER_PASSWORDS,
+  );
+  const demoUserPasswordHash = await bcrypt.hash(demoUserPassword, 12);
   const seedYear = getDemoSeedYear();
   const insertCountsByTable: Record<string, number> = {};
   let cleanupCountsByTable: Record<string, number> = {};
@@ -1436,7 +1451,7 @@ export const runDemoSeedRefresh = async ({
 
     cleanupCountsByTable = await cleanupDemoNamespace(client, demoUserIds, seedYear);
     await insertCompatibilityDefaults(client, insertCountsByTable);
-    await insertDemoUsersAndSettings(client, insertCountsByTable);
+    await insertDemoUsersAndSettings(client, insertCountsByTable, demoUserPasswordHash);
 
     failedStatements = await executeDemoStatements(client, insertCountsByTable);
 

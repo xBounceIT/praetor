@@ -11,6 +11,8 @@ Accedi con le credenziali fornite dall'amministratore. Se l'azienda usa LDAP o s
 
 In una nuova installazione, l'operatore deve generare una password univoca e impostarla in `ADMIN_DEFAULT_PASSWORD` prima del primo avvio. Praetor non crea l'account `admin` se il valore è vuoto o corrisponde a una credenziale predefinita pubblicata in precedenza. Negli aggiornamenti, la variabile non è necessaria quando l'account `admin` esiste già.
 
+Se abiliti il dataset dimostrativo con `DEMO_SEEDING=true`, imposta anche una password univoca in `DEMO_USER_PASSWORD`. Il refresh si interrompe prima di pulire o riseminare i dati demo se il valore è vuoto o corrisponde alla vecchia password pubblica. Ogni refresh reimposta gli account demo a questa password senza cambiare le identità e le relazioni deterministiche del dataset.
+
 Se la sessione resta inattiva troppo a lungo, Praetor richiede un nuovo accesso. Questa protezione evita che una sessione lasciata aperta venga usata da altri.
 
 ## Navigazione

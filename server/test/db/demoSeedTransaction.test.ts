@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import * as realBcrypt from 'bcryptjs';
 import type { PoolClient } from 'pg';
 import * as realBootstrapAdmin from '../../db/bootstrapAdmin.ts';
-import { DEMO_EXPECTED_COUNTS, DEMO_PRICING_SEMANTICS_VERSION } from '../../db/demoSeedManifest.ts';
+import {
+  DEMO_EXPECTED_COUNTS,
+  DEMO_PRICING_SEMANTICS_VERSION,
+  DEMO_USERS,
+} from '../../db/demoSeedManifest.ts';
 import * as realDbIndex from '../../db/index.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 
@@ -11,12 +16,14 @@ type VerificationTable = keyof typeof DEMO_EXPECTED_COUNTS;
 const dbIndexSnap = { ...realDbIndex };
 const bootstrapAdminSnap = { ...realBootstrapAdmin };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
+const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 const connectMock = mock();
 const ensureBootstrapAdminMock = mock();
 const syncTopManagerAssignmentsForUserMock = mock();
 const releaseMock = mock();
 const queryMock = mock();
+const bcryptHashMock = mock();
 
 const sqlCalls: string[] = [];
 const events: string[] = [];
@@ -28,6 +35,9 @@ const client = {
 } as unknown as PoolClient;
 
 let demoSeed: DemoSeedModule;
+const DEMO_PASSWORD_ENV = 'DEMO_USER_PASSWORD';
+const SECURE_DEMO_PASSWORD = 'operator-chosen-demo-password';
+const originalDemoPasswordEnv = process.env[DEMO_PASSWORD_ENV];
 
 beforeAll(async () => {
   mock.module('../../db/index.ts', () => ({
@@ -42,6 +52,10 @@ beforeAll(async () => {
     ...userAssignmentsRepoSnap,
     syncTopManagerAssignmentsForUser: syncTopManagerAssignmentsForUserMock,
   }));
+  mock.module('bcryptjs', () => ({
+    default: { hash: bcryptHashMock },
+    hash: bcryptHashMock,
+  }));
 
   demoSeed = await import('../../db/demoSeed.ts');
 });
@@ -50,6 +64,12 @@ afterAll(() => {
   mock.module('../../db/index.ts', () => dbIndexSnap);
   mock.module('../../db/bootstrapAdmin.ts', () => bootstrapAdminSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
+  mock.module('bcryptjs', () => bcryptSnap);
+  if (originalDemoPasswordEnv === undefined) {
+    delete process.env[DEMO_PASSWORD_ENV];
+  } else {
+    process.env[DEMO_PASSWORD_ENV] = originalDemoPasswordEnv;
+  }
 });
 
 beforeEach(() => {
@@ -59,6 +79,7 @@ beforeEach(() => {
     syncTopManagerAssignmentsForUserMock,
     releaseMock,
     queryMock,
+    bcryptHashMock,
   ]) {
     mockedFn.mockReset();
   }
@@ -66,8 +87,10 @@ beforeEach(() => {
   sqlCalls.length = 0;
   events.length = 0;
   mismatchedTable = null;
+  process.env[DEMO_PASSWORD_ENV] = SECURE_DEMO_PASSWORD;
 
   connectMock.mockResolvedValue(client);
+  bcryptHashMock.mockResolvedValue('$2a$operator-demo-password-hash');
   ensureBootstrapAdminMock.mockResolvedValue(undefined);
   syncTopManagerAssignmentsForUserMock.mockImplementation(async () => {
     events.push('sync-assignments');
@@ -99,6 +122,51 @@ beforeEach(() => {
 });
 
 describe('demo seed transaction finalization', () => {
+  test('refuses to seed without an operator-provided demo password', async () => {
+    delete process.env[DEMO_PASSWORD_ENV];
+
+    await expect(demoSeed.runDemoSeedRefresh({ source: 'manual' })).rejects.toThrow(
+      'DEMO_USER_PASSWORD must be set to a non-default value.',
+    );
+
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(ensureBootstrapAdminMock).not.toHaveBeenCalled();
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    'password',
+    'change-me-strong-demo-password',
+  ])('refuses to seed with the known demo password %s', async (knownPassword) => {
+    process.env[DEMO_PASSWORD_ENV] = knownPassword;
+
+    await expect(demoSeed.runDemoSeedRefresh({ source: 'startup' })).rejects.toThrow(
+      'DEMO_USER_PASSWORD must be set to a non-default value.',
+    );
+
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(ensureBootstrapAdminMock).not.toHaveBeenCalled();
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
+  test('applies one password hash to every demo user and revokes existing credentials', async () => {
+    await demoSeed.runDemoSeedRefresh({ source: 'manual' });
+
+    expect(bcryptHashMock).toHaveBeenCalledTimes(1);
+    expect(bcryptHashMock).toHaveBeenCalledWith(SECURE_DEMO_PASSWORD, 12);
+    const userInsert = queryMock.mock.calls.find(([sql]) =>
+      String(sql).trim().startsWith('INSERT INTO users ('),
+    );
+    expect(userInsert).toBeDefined();
+    const params = userInsert?.[1] as unknown[];
+    expect(params.filter((value) => value === '$2a$operator-demo-password-hash')).toHaveLength(
+      DEMO_USERS.length,
+    );
+    const insertSql = String(userInsert?.[0]);
+    expect(insertSql).toContain('session_version = users.session_version + 1');
+    expect(insertSql).toContain('token_version = users.token_version + 1');
+  });
+
   test('rolls back all seed work when dataset verification fails', async () => {
     mismatchedTable = 'users';
 

@@ -11,6 +11,8 @@ Sign in with the credentials provided by your administrator. If your company use
 
 For a new installation, the operator must generate a unique password and set it as `ADMIN_DEFAULT_PASSWORD` before first startup. Praetor does not create the `admin` account when the value is blank or matches a previously published default credential. Upgrades do not need the variable when the `admin` account already exists.
 
+When enabling the demo dataset with `DEMO_SEEDING=true`, also set a unique `DEMO_USER_PASSWORD`. The refresh stops before cleaning or reseeding demo data if the value is blank or matches the former public password. Every refresh resets demo accounts to this password without changing the dataset's deterministic identities and relationships.
+
 If the session stays idle for too long, Praetor asks you to sign in again. This protects open sessions from unauthorized use.
 
 ## Navigation
