@@ -652,6 +652,7 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
   test('200 allows offer → draft (back-to-draft from offer)', async () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'offer' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'offer' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
 
     const res = await putStatus({ status: 'draft' });
@@ -678,6 +679,7 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
   test('200 expired quote can be revalidated by extending the expiration date (no status change)', async () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent', expirationDate: '2027-01-01' }));
 
     const res = await putStatus({ expirationDate: '2027-01-01' });
@@ -705,6 +707,7 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     const revalidatedCandidate = { ...expiredCandidate, expirationDate: '2027-01-01' };
     const revalidatedQuote = updatedQuote({ status: 'sent', expirationDate: '2027-01-01' });
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
     cqUpdateMock.mockResolvedValue(revalidatedQuote);
     cqFindByIdMock.mockResolvedValue(revalidatedQuote);
     qcListForQuoteMock
@@ -811,6 +814,9 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     cqFindCurrentMock.mockResolvedValue(
       gate({ status: 'sent', linkedSupplierQuoteExpiration: '2000-01-01' }),
     );
+    cqLockCurrentByIdMock.mockResolvedValue(
+      gate({ status: 'sent', linkedSupplierQuoteExpiration: '2000-01-01' }),
+    );
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'denied' }));
 
     const res = await putStatus({ status: 'denied' });
@@ -846,8 +852,37 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('rechecks status under lock before a flat update', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'offer' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft', notes: 'stale edit' }));
+
+    const res = await putStatus({ notes: 'stale edit' });
+
+    expect(res.statusCode).toBe(409);
+    expect(cqLockCurrentByIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('rechecks offer linkage under lock before a flat update', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqFindLinkedOfferIdMock.mockImplementation(async (_quoteId: string, exec?: unknown) =>
+      exec ? 'of-1' : null,
+    );
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft', notes: 'stale edit' }));
+
+    const res = await putStatus({ notes: 'stale edit' });
+
+    expect(res.statusCode).toBe(409);
+    expect(cqLockCurrentByIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqFindLinkedOfferIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('200 reverts a valid sent quote to draft', async () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));
 
     const res = await putStatus({ status: 'draft' });
@@ -861,6 +896,7 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
   test('200 a sent quote can renew its expiration date (date carved out of the lock)', async () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent', expirationDate: '2999-12-31' }));
 
     const res = await putStatus({ expirationDate: '2999-12-31' });
@@ -873,6 +909,9 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     // items) must NOT trip the guard even when the current sourced supplier quote is expired —
     // the guard fires only on a status advance or a line re-sourcing (issue #779 follow-up).
     cqFindCurrentMock.mockResolvedValue(
+      gate({ status: 'sent', linkedSupplierQuoteExpiration: '2000-01-01' }),
+    );
+    cqLockCurrentByIdMock.mockResolvedValue(
       gate({ status: 'sent', linkedSupplierQuoteExpiration: '2000-01-01' }),
     );
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent' }));
@@ -916,6 +955,7 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     // The pre-#779 optimistic-restore override is gone: a body carrying only `isExpired` is a
     // no-op update (not a content edit) and the response reports the derived value.
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent', expirationDate: '2000-01-01' }));
 
     const res = await putStatus({ isExpired: false });
@@ -943,7 +983,7 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
 
     const res = await deleteQuote('q-1');
     expect(res.statusCode).toBe(204);
-    expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1');
+    expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1', expect.anything());
   });
 
   test('204 keeps a traversal-shaped legacy quote operable through one encoded segment', async () => {
@@ -953,7 +993,7 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
     const res = await deleteQuote('legacy%2F..%2Fclient-quote');
 
     expect(res.statusCode).toBe(204);
-    expect(cqDeleteByIdMock).toHaveBeenCalledWith('legacy/../client-quote');
+    expect(cqDeleteByIdMock).toHaveBeenCalledWith('legacy/../client-quote', expect.anything());
   });
 
   test('409 when an offer was created from the quote', async () => {
@@ -961,6 +1001,35 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
 
     const res = await deleteQuote('q-1');
     expect(res.statusCode).toBe(409);
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('rechecks offer linkage under lock before deleting a draft quote', async () => {
+    cqFindLinkedOfferIdMock.mockImplementation(async (_quoteId: string, exec?: unknown) =>
+      exec ? 'of-1' : null,
+    );
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+
+    const res = await deleteQuote('q-1');
+
+    expect(res.statusCode).toBe(409);
+    expect(cqLockCurrentByIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqFindLinkedOfferIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('rechecks status under lock before deleting a draft quote', async () => {
+    cqFindStatusAndClientNameMock.mockImplementation(async (_quoteId: string, exec?: unknown) => ({
+      status: exec ? 'accepted' : 'draft',
+      clientName: 'Client',
+      expirationDate: '2999-12-31',
+    }));
+
+    const res = await deleteQuote('q-1');
+
+    expect(res.statusCode).toBe(409);
+    expect(cqLockCurrentByIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqFindStatusAndClientNameMock).toHaveBeenCalledWith('q-1', expect.anything());
     expect(cqDeleteByIdMock).not.toHaveBeenCalled();
   });
 
@@ -2261,6 +2330,20 @@ describe('client quote candidate-family create and update', () => {
     expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('rechecks offer linkage under lock before replacing candidate items', async () => {
+    setupLegacyCandidateUpdate();
+    cqFindLinkedOfferIdMock.mockImplementation(async (_quoteId: string, exec?: unknown) =>
+      exec ? 'of-1' : null,
+    );
+
+    const res = await putCandidateFamily(150);
+
+    expect(res.statusCode).toBe(409);
+    expect(cqLockCurrentByIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqFindLinkedOfferIdMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
   test('rejects a line id that belongs to a different candidate', async () => {
     setupCreate();
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
@@ -2447,6 +2530,7 @@ describe('client quote candidate-family create and update', () => {
     const existingCandidate = activeCandidate();
     const deniedQuote = updatedQuote({ id: 'q-1', status: 'denied' });
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
     cqUpdateMock.mockResolvedValue(deniedQuote);
     cqFindByIdMock.mockResolvedValue(deniedQuote);
     qcListForQuoteMock.mockResolvedValue([existingCandidate]);
@@ -3558,7 +3642,7 @@ describe('DELETE /api/sales/client-quotes/:id expired guard (#812 round 25)', ()
   test('409 when a draft quote is effectively expired (read-only model)', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
     cqFindByIdMock.mockResolvedValue(null);
-    cqLockCurrentByIdMock.mockResolvedValue(null);
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
     cqFindItemsForCandidateMock.mockResolvedValue([]);
     cqFindStatusAndClientNameMock.mockResolvedValue({
       status: 'draft',
@@ -3596,7 +3680,7 @@ describe('DELETE /api/sales/client-quotes/:id expired guard (#812 round 25)', ()
     });
 
     expect(res.statusCode).toBe(204);
-    expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1');
+    expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1', expect.anything());
   });
 
   test('409 when every active candidate is expired even if the parent date is still valid', async () => {
