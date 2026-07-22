@@ -226,6 +226,41 @@ describe('get', () => {
   });
 });
 
+describe('migrateLegacyAiApiKeys', () => {
+  test('encrypts legacy provider keys during startup before any settings read', async () => {
+    exec.enqueue({ rows: [buildRow({ openaiApiKey: 'legacy-openai' })] });
+    exec.enqueue({ rows: [] });
+
+    await expect(generalSettingsRepo.migrateLegacyAiApiKeys(testDb)).resolves.toBe(true);
+
+    const encryptedParams = exec.calls[1].params.filter(
+      (value): value is string => typeof value === 'string' && isEncrypted(value),
+    );
+    expect(encryptedParams.map(decrypt)).toContain('legacy-openai');
+    expect(exec.calls[1].params).toContain('legacy-openai');
+  });
+
+  test('fails closed without exposing legacy plaintext when startup backfill fails', async () => {
+    exec.enqueue({ rows: [buildRow({ openaiApiKey: 'legacy-openai' })] });
+    exec.enqueue(() => {
+      throw new Error('Failed query params: legacy-openai');
+    });
+
+    let thrown: unknown;
+    try {
+      await generalSettingsRepo.migrateLegacyAiApiKeys(testDb);
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(
+      'Failed to encrypt legacy AI provider credentials during startup',
+    );
+    expect((thrown as Error).message).not.toContain('legacy-openai');
+  });
+});
+
 describe('update', () => {
   test('throws the seed-missing guard when UPDATE returns 0 rows', async () => {
     exec.enqueue({ rows: [] });

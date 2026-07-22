@@ -237,7 +237,7 @@ type AiApiKeyColumn =
 const migrateLegacyApiKeysIfNeeded = async (
   row: GeneralSettingsRow,
   exec: DbExecutor,
-): Promise<void> => {
+): Promise<boolean> => {
   const plaintextValues = [
     row.geminiApiKey,
     row.openrouterApiKey,
@@ -245,28 +245,43 @@ const migrateLegacyApiKeysIfNeeded = async (
     row.openaiApiKey,
     row.localApiKey,
   ];
-  if (!plaintextValues.some(isLegacyPlaintext)) return;
+  if (!plaintextValues.some(isLegacyPlaintext)) return false;
 
   const migrateValue = (value: string | null, column: AiApiKeyColumn) => {
     if (!isLegacyPlaintext(value)) return sql`${column}`;
     return sql`CASE WHEN ${column} = ${value} THEN ${encrypt(value)} ELSE ${column} END`;
   };
 
+  await exec
+    .update(generalSettings)
+    .set({
+      geminiApiKey: migrateValue(row.geminiApiKey, generalSettings.geminiApiKey),
+      openrouterApiKey: migrateValue(row.openrouterApiKey, generalSettings.openrouterApiKey),
+      anthropicApiKey: migrateValue(row.anthropicApiKey, generalSettings.anthropicApiKey),
+      openaiApiKey: migrateValue(row.openaiApiKey, generalSettings.openaiApiKey),
+      localApiKey: migrateValue(row.localApiKey, generalSettings.localApiKey),
+    })
+    .where(eq(generalSettings.id, 1));
+  return true;
+};
+
+const selectSingletonRow = async (exec: DbExecutor): Promise<GeneralSettingsRow | undefined> => {
+  const rows = await exec
+    .select(GENERAL_SETTINGS_PROJECTION)
+    .from(generalSettings)
+    .where(eq(generalSettings.id, 1));
+  return rows[0];
+};
+
+export const migrateLegacyAiApiKeys = async (exec: DbExecutor = db): Promise<boolean> => {
+  const row = await selectSingletonRow(exec);
+  if (!row) return false;
   try {
-    await exec
-      .update(generalSettings)
-      .set({
-        geminiApiKey: migrateValue(row.geminiApiKey, generalSettings.geminiApiKey),
-        openrouterApiKey: migrateValue(row.openrouterApiKey, generalSettings.openrouterApiKey),
-        anthropicApiKey: migrateValue(row.anthropicApiKey, generalSettings.anthropicApiKey),
-        openaiApiKey: migrateValue(row.openaiApiKey, generalSettings.openaiApiKey),
-        localApiKey: migrateValue(row.localApiKey, generalSettings.localApiKey),
-      })
-      .where(eq(generalSettings.id, 1));
+    return await migrateLegacyApiKeysIfNeeded(row, exec);
   } catch {
-    // Do not attach the Drizzle error: failed-query messages include bound parameters, and this
-    // one-time compare-and-swap necessarily binds the legacy plaintext it is replacing.
-    logger.warn('failed to migrate legacy plaintext AI provider keys to encrypted form');
+    // Failed-query messages include bound parameters, including the legacy plaintext. Replace the
+    // database error before startup logging handles it, and fail closed before the server listens.
+    throw new Error('Failed to encrypt legacy AI provider credentials during startup');
   }
 };
 
@@ -274,19 +289,21 @@ const read = async (
   exec: DbExecutor,
   decryptProvider?: AiProvider | 'configured',
 ): Promise<GeneralSettings | null> => {
-  const rows = await exec
-    .select(GENERAL_SETTINGS_PROJECTION)
-    .from(generalSettings)
-    .where(eq(generalSettings.id, 1));
-  if (!rows[0]) return null;
-  await migrateLegacyApiKeysIfNeeded(rows[0], exec);
+  const row = await selectSingletonRow(exec);
+  if (!row) return null;
+  try {
+    await migrateLegacyApiKeysIfNeeded(row, exec);
+  } catch {
+    // Do not attach the Drizzle error because it can contain bound legacy plaintext.
+    logger.warn('failed to migrate legacy plaintext AI provider keys to encrypted form');
+  }
   const provider =
     decryptProvider === 'configured'
-      ? isAiProvider(rows[0].aiProvider)
-        ? rows[0].aiProvider
+      ? isAiProvider(row.aiProvider)
+        ? row.aiProvider
         : 'gemini'
       : decryptProvider;
-  return mapRow(rows[0], provider);
+  return mapRow(row, provider);
 };
 
 // Ordinary settings consumers (auth/session policy, time-entry policy, and the masked admin API)
