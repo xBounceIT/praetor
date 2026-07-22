@@ -13,6 +13,8 @@ jobs:
     name: Lint, Typecheck & DB Schema Checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      DB_PASSWORD: ci-schema-check-not-used
     steps:
       - uses: actions/checkout@v4
 

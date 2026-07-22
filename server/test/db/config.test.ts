@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { createDbPoolConfig, getDbConnectionConfig, getDbSslConfig } from '../../db/config.ts';
 
 const DB_ENV_KEYS = [
+  'NODE_ENV',
   'DB_HOST',
   'DB_PORT',
   'DB_NAME',
@@ -26,6 +27,7 @@ beforeEach(() => {
     envSnapshot[key] = process.env[key];
     delete process.env[key];
   }
+  process.env.NODE_ENV = 'test';
 });
 
 afterEach(() => {
@@ -40,7 +42,7 @@ afterEach(() => {
 });
 
 describe('getDbConnectionConfig', () => {
-  test('defaults all credentials to "praetor" / localhost / 5432 when no env vars are set', () => {
+  test('uses local defaults in the explicit test runtime', () => {
     expect(getDbConnectionConfig()).toEqual({
       host: 'localhost',
       port: 5432,
@@ -48,6 +50,27 @@ describe('getDbConnectionConfig', () => {
       user: 'praetor',
       password: 'praetor',
     });
+  });
+
+  test('requires DB_PASSWORD in production', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => getDbConnectionConfig()).toThrow('DB_PASSWORD is required');
+  });
+
+  test('uses an explicit DB_PASSWORD in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DB_PASSWORD = 'production-secret';
+    expect(getDbConnectionConfig().password).toBe('production-secret');
+  });
+
+  test('requires DB_PASSWORD when the runtime mode is unspecified', () => {
+    delete process.env.NODE_ENV;
+    expect(() => getDbConnectionConfig()).toThrow('DB_PASSWORD is required');
+  });
+
+  test('keeps the local fallback in the explicit development runtime', () => {
+    process.env.NODE_ENV = 'development';
+    expect(getDbConnectionConfig().password).toBe('praetor');
   });
 
   test('reads overrides from env vars', () => {

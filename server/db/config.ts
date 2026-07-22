@@ -16,6 +16,19 @@ const envInt = (
 };
 
 const DEFAULT_DB_PORT = 5432;
+const LOCAL_DB_PASSWORD = 'praetor';
+
+const getDbPassword = (): string => {
+  const configured = process.env.DB_PASSWORD;
+  if (configured) return configured;
+
+  const runtime = process.env.NODE_ENV?.trim().toLowerCase();
+  if (runtime === 'development' || runtime === 'test') return LOCAL_DB_PASSWORD;
+
+  throw new Error(
+    'DB_PASSWORD is required outside explicit development or test runtimes. Set NODE_ENV accordingly only for local use.',
+  );
+};
 
 export interface DbConnectionConfig {
   host: string;
@@ -30,7 +43,7 @@ export const getDbConnectionConfig = (): DbConnectionConfig => ({
   port: envInt('DB_PORT', DEFAULT_DB_PORT, { min: 1, max: 65_535 }),
   database: process.env.DB_NAME || 'praetor',
   user: process.env.DB_USER || 'praetor',
-  password: process.env.DB_PASSWORD || 'praetor',
+  password: getDbPassword(),
 });
 
 const invalidSslWarnings = new Set<string>();
