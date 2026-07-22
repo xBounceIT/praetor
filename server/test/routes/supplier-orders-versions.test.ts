@@ -50,6 +50,7 @@ const soUpdateMock = mock();
 const soRenameMock = mock();
 const soRestoreSnapshotOrderMock = mock();
 const soReplaceItemsMock = mock();
+const soDeleteByIdMock = mock();
 
 const suppliersExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
@@ -99,6 +100,7 @@ beforeAll(async () => {
     rename: soRenameMock,
     restoreSnapshotOrder: soRestoreSnapshotOrderMock,
     replaceItems: soReplaceItemsMock,
+    deleteById: soDeleteByIdMock,
   }));
   mock.module('../../repositories/suppliersRepo.ts', () => ({
     ...suppliersRepoSnap,
@@ -232,6 +234,7 @@ const allMocks = [
   soRenameMock,
   soRestoreSnapshotOrderMock,
   soReplaceItemsMock,
+  soDeleteByIdMock,
   suppliersExistsByIdMock,
   productsGetSnapshotsMock,
   sqFindByIdMock,
@@ -262,6 +265,9 @@ beforeEach(async () => {
     items,
   }));
   // Default safe values for repos that PUT calls but most tests don't care about.
+  soFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+  soLockExistingByIdMock.mockResolvedValue(SAMPLE_ORDER);
+  soFindLinkedInvoiceIdMock.mockResolvedValue(null);
   soFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
   soFindIdConflictMock.mockResolvedValue(false);
   soFindExistingByLinkedQuoteMock.mockResolvedValue(null);
@@ -271,6 +277,7 @@ beforeEach(async () => {
   soInsertItemsMock.mockImplementation((orderId: string) =>
     Promise.resolve([{ ...SAMPLE_ITEM, orderId }]),
   );
+  soDeleteByIdMock.mockResolvedValue(true);
   sqFindByIdMock.mockResolvedValue({
     id: 'sq-1',
     supplierId: 's-1',
@@ -298,6 +305,104 @@ afterEach(async () => {
 });
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+
+describe('supplier-order mutation serialization', () => {
+  test('PUT rechecks status under the row lock before editing draft-only fields', async () => {
+    soLockExistingByIdMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'sent' });
+    soUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, notes: 'stale edit' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { notes: 'stale edit' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(soLockExistingByIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT rechecks invoice linkage under the row lock before mutation', async () => {
+    soFindExistingMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'sent' });
+    soLockExistingByIdMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'sent' });
+    soFindLinkedInvoiceIdMock.mockImplementation(async (_orderId: string, exec?: unknown) =>
+      exec ? 'sinv-1' : null,
+    );
+    soUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { status: 'draft' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(soLockExistingByIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soFindLinkedInvoiceIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('DELETE rechecks status under the row lock before deleting', async () => {
+    soLockExistingByIdMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'sent' });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(soLockExistingByIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('DELETE rechecks invoice linkage under the row lock before deleting', async () => {
+    soFindLinkedInvoiceIdMock.mockImplementation(async (_orderId: string, exec?: unknown) =>
+      exec ? 'sinv-1' : null,
+    );
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(soLockExistingByIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soFindLinkedInvoiceIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soDeleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('DELETE locks, checks, and mutates through one transaction', async () => {
+    const callOrder: string[] = [];
+    soLockExistingByIdMock.mockImplementation(async () => {
+      callOrder.push('lock');
+      return SAMPLE_ORDER;
+    });
+    soFindLinkedInvoiceIdMock.mockImplementation(async () => {
+      callOrder.push('check-link');
+      return null;
+    });
+    soDeleteByIdMock.mockImplementation(async () => {
+      callOrder.push('delete');
+      return true;
+    });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(soLockExistingByIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soFindLinkedInvoiceIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(soDeleteByIdMock).toHaveBeenCalledWith('so-1', TX_SENTINEL);
+    expect(callOrder).toEqual(['lock', 'check-link', 'delete']);
+  });
+});
 
 describe('PUT /api/accounting/supplier-orders/:id document discount validation', () => {
   test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
