@@ -825,6 +825,20 @@ export const deleteInternalSubcategoryByCategoryAndName = async (
   return rows[0] ?? null;
 };
 
+export const deleteInternalSubcategoryAndClearProducts = (
+  categoryId: string,
+  name: string,
+  type: string,
+  category: string,
+  exec: DbExecutor = db,
+): Promise<{ id: string } | null> =>
+  runAtomically(exec, async (tx) => {
+    const deleted = await deleteInternalSubcategoryByCategoryAndName(categoryId, name, tx);
+    if (!deleted) return null;
+    await clearProductsSubcategoryByName(name, type, category, tx);
+    return deleted;
+  });
+
 export const countProductsForSubcategory = async (
   name: string,
   type: string,

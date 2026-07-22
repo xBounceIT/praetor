@@ -1197,15 +1197,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      await productsRepo.clearProductsSubcategoryByName(
+      const subDeleted = await productsRepo.deleteInternalSubcategoryAndClearProducts(
+        categoryId,
         nameResult.value,
         typeResult.value,
         categoryResult.value,
-      );
-
-      const subDeleted = await productsRepo.deleteInternalSubcategoryByCategoryAndName(
-        categoryId,
-        nameResult.value,
       );
       if (!subDeleted) {
         return replyError(request, reply, {

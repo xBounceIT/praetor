@@ -730,6 +730,60 @@ describe('propagateSubcategoryNameToProducts / clearProductsSubcategoryByName / 
   });
 });
 
+describe('deleteInternalSubcategoryAndClearProducts', () => {
+  test('does not clear products when the subcategory does not exist', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
+
+    expect(
+      await productsRepo.deleteInternalSubcategoryAndClearProducts(
+        'ipc-1',
+        'sub-a',
+        'good',
+        'cat-a',
+        testDb,
+      ),
+    ).toBeNull();
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from');
+  });
+
+  test('deletes the registry row before clearing matching products', async () => {
+    exec.enqueue({ rows: [['ips-1']], rowCount: 1 });
+    exec.enqueue({ rows: [], rowCount: 2 });
+
+    expect(
+      await productsRepo.deleteInternalSubcategoryAndClearProducts(
+        'ipc-1',
+        'sub-a',
+        'good',
+        'cat-a',
+        testDb,
+      ),
+    ).toEqual({ id: 'ips-1' });
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('update');
+  });
+
+  test('propagates a clear failure so the transaction can roll back the delete', async () => {
+    exec.enqueue({ rows: [['ips-1']], rowCount: 1 });
+    exec.enqueue(() => {
+      throw new Error('simulated product clear failure');
+    });
+
+    await expect(
+      productsRepo.deleteInternalSubcategoryAndClearProducts(
+        'ipc-1',
+        'sub-a',
+        'good',
+        'cat-a',
+        testDb,
+      ),
+    ).rejects.toThrow(/update "products"/i);
+    expect(exec.calls).toHaveLength(2);
+  });
+});
+
 describe('countProductsForSubcategory', () => {
   test('parses count and filters by type/category/subcategory with supplier_id IS NULL', async () => {
     exec.enqueue({ rows: [['3']] });
