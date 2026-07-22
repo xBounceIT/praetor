@@ -135,6 +135,25 @@ describe('findExisting', () => {
   });
 });
 
+describe('lockExistingById', () => {
+  test('locks and returns the fields needed by mutation gates', async () => {
+    exec.enqueue({
+      rows: [['SINV-2026-0001', 'draft', '2026-04-01', '2026-04-30', '120.60', '20.10', 'Acme']],
+    });
+
+    expect(await supplierInvoicesRepo.lockExistingById('SINV-2026-0001', testDb)).toEqual({
+      id: 'SINV-2026-0001',
+      status: 'draft',
+      issueDate: '2026-04-01',
+      dueDate: '2026-04-30',
+      total: 120.6,
+      amountPaid: 20.1,
+      supplierName: 'Acme',
+    });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+  });
+});
+
 describe('maxSequenceForYear', () => {
   test('parses string maxSequence to BigInt', async () => {
     exec.enqueue({ rows: [{ maxSequence: '42' }] });

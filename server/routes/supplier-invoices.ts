@@ -678,6 +678,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
       const hasLockedFieldUpdates =
+        (nextIdValue !== null && nextIdValue !== idResult.value) ||
         supplierId !== undefined ||
         supplierName !== undefined ||
         issueDate !== undefined ||
@@ -697,13 +698,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'non_draft_read_only', fromValue: existingInvoice.status },
           extraBody: { currentStatus: existingInvoice.status },
         });
-      }
-
-      const effectiveIssueDate = patch.issueDate ?? existingInvoice.issueDate;
-      const effectiveDueDate = patch.dueDate ?? existingInvoice.dueDate;
-
-      if (effectiveDueDate < effectiveIssueDate) {
-        return badRequest(reply, 'dueDate must be on or after issueDate');
       }
 
       if (subtotal !== undefined) {
@@ -728,18 +722,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (typeof status === 'string') patch.status = status;
       if (typeof notes === 'string') patch.notes = notes;
 
-      const effectiveTotal = patch.total ?? existingInvoice.total;
-      const effectiveAmountPaid = patch.amountPaid ?? existingInvoice.amountPaid;
-      if (
-        (patch.total !== undefined || patch.amountPaid !== undefined || patch.status === 'paid') &&
-        effectiveAmountPaid > effectiveTotal
-      ) {
-        return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
-      }
-      if (patch.status === 'paid' && effectiveAmountPaid < effectiveTotal) {
-        return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
-      }
-
       let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
       let sourceItemIds: Array<string | undefined> | null = null;
       let itemInputs: SupplierInvoiceItemInput[] | null = null;
@@ -753,50 +735,92 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         sourceItemIds = items.map((item) => item.id);
       }
 
-      let updated: supplierInvoicesRepo.SupplierInvoice | null;
-      let resultItems: supplierInvoicesRepo.SupplierInvoiceItem[];
+      type UpdateTransactionResult =
+        | {
+            kind: 'success';
+            invoice: supplierInvoicesRepo.SupplierInvoice;
+            items: supplierInvoicesRepo.SupplierInvoiceItem[];
+            previousStatus: string;
+          }
+        | { kind: 'not_found' }
+        | { kind: 'non_draft'; currentStatus: string }
+        | { kind: 'bad_request'; message: string };
+
+      let transactionResult: UpdateTransactionResult;
       try {
-        const txResult = await withDbTransaction(async (tx) => {
-          let renamedInvoice: supplierInvoicesRepo.SupplierInvoice | null = null;
-          if (nextIdValue && nextIdValue !== idResult.value) {
-            renamedInvoice = await supplierInvoicesRepo.rename(idResult.value, nextIdValue, tx);
-            if (!renamedInvoice) {
-              return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
+        transactionResult = await withDbTransaction(
+          async (tx): Promise<UpdateTransactionResult> => {
+            const lockedInvoice = await supplierInvoicesRepo.lockExistingById(idResult.value, tx);
+            if (!lockedInvoice) return { kind: 'not_found' };
+            if (lockedInvoice.status !== 'draft' && hasLockedFieldUpdates) {
+              return { kind: 'non_draft', currentStatus: lockedInvoice.status };
             }
-            await reserveDocumentCodeCounterFromCode('supplier_invoice', nextIdValue, tx);
-          }
-          // id-only renames have nothing left to write — reuse the row returned by rename().
-          const invoice =
-            Object.keys(patch).length === 0 && renamedInvoice
-              ? renamedInvoice
-              : await supplierInvoicesRepo.update(renamedInvoice?.id ?? idResult.value, patch, tx);
-          if (!invoice)
-            return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
-          const existingItems = normalizedItems
-            ? await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx)
-            : null;
-          let versionedItems = normalizedItems;
-          if (normalizedItems && existingItems && sourceItemIds?.some((id) => id)) {
-            const sourceMarkers = inheritPricingSemanticsVersions(
-              sourceItemIds.map((id) => ({ id })),
-              existingItems,
-            );
-            versionedItems = normalizedItems.map((item, index) => ({
-              ...item,
-              pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
-            }));
-          }
-          const replacementItems =
-            versionedItems && itemInputs && existingItems
-              ? preserveLegacyDiscountRounding(versionedItems, itemInputs, existingItems)
-              : versionedItems;
-          const finalItems = replacementItems
-            ? await supplierInvoicesRepo.replaceItems(invoice.id, replacementItems, tx)
-            : await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
-          return { invoice, items: finalItems };
-        });
-        updated = txResult.invoice;
-        resultItems = txResult.items;
+
+            const effectiveIssueDate = patch.issueDate ?? lockedInvoice.issueDate;
+            const effectiveDueDate = patch.dueDate ?? lockedInvoice.dueDate;
+            if (effectiveDueDate < effectiveIssueDate) {
+              return { kind: 'bad_request', message: 'dueDate must be on or after issueDate' };
+            }
+
+            const effectiveTotal = patch.total ?? lockedInvoice.total;
+            const effectiveAmountPaid = patch.amountPaid ?? lockedInvoice.amountPaid;
+            if (
+              (patch.total !== undefined ||
+                patch.amountPaid !== undefined ||
+                patch.status === 'paid') &&
+              effectiveAmountPaid > effectiveTotal
+            ) {
+              return { kind: 'bad_request', message: AMOUNT_PAID_EXCEEDS_TOTAL_ERROR };
+            }
+            if (patch.status === 'paid' && effectiveAmountPaid < effectiveTotal) {
+              return { kind: 'bad_request', message: PAID_INVOICE_UNDERPAID_ERROR };
+            }
+
+            let renamedInvoice: supplierInvoicesRepo.SupplierInvoice | null = null;
+            if (nextIdValue && nextIdValue !== idResult.value) {
+              renamedInvoice = await supplierInvoicesRepo.rename(idResult.value, nextIdValue, tx);
+              if (!renamedInvoice) return { kind: 'not_found' };
+              await reserveDocumentCodeCounterFromCode('supplier_invoice', nextIdValue, tx);
+            }
+            // id-only renames have nothing left to write — reuse the row returned by rename().
+            const invoice =
+              Object.keys(patch).length === 0 && renamedInvoice
+                ? renamedInvoice
+                : await supplierInvoicesRepo.update(
+                    renamedInvoice?.id ?? idResult.value,
+                    patch,
+                    tx,
+                  );
+            if (!invoice) return { kind: 'not_found' };
+            const existingItems = normalizedItems
+              ? await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx)
+              : null;
+            let versionedItems = normalizedItems;
+            if (normalizedItems && existingItems && sourceItemIds?.some((id) => id)) {
+              const sourceMarkers = inheritPricingSemanticsVersions(
+                sourceItemIds.map((id) => ({ id })),
+                existingItems,
+              );
+              versionedItems = normalizedItems.map((item, index) => ({
+                ...item,
+                pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
+              }));
+            }
+            const replacementItems =
+              versionedItems && itemInputs && existingItems
+                ? preserveLegacyDiscountRounding(versionedItems, itemInputs, existingItems)
+                : versionedItems;
+            const finalItems = replacementItems
+              ? await supplierInvoicesRepo.replaceItems(invoice.id, replacementItems, tx)
+              : await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
+            return {
+              kind: 'success',
+              invoice,
+              items: finalItems,
+              previousStatus: lockedInvoice.status,
+            };
+          },
+        );
       } catch (error) {
         const dup = getUniqueViolation(error);
         if (dup) {
@@ -812,7 +836,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      if (!updated) {
+      if (transactionResult.kind === 'bad_request') {
+        return badRequest(reply, transactionResult.message);
+      }
+      if (transactionResult.kind === 'non_draft') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Non-draft invoices are read-only',
+          action: 'supplier_invoice.update.conflict',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: 'non_draft_read_only',
+            fromValue: transactionResult.currentStatus,
+          },
+          extraBody: { currentStatus: transactionResult.currentStatus },
+        });
+      }
+      if (transactionResult.kind === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Invoice not found',
@@ -822,8 +863,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const didStatusChange =
-        typeof status === 'string' && existingInvoice.status !== updated.status;
+      const { invoice: updated, items: resultItems, previousStatus } = transactionResult;
+      const didStatusChange = typeof status === 'string' && previousStatus !== updated.status;
       await logAudit({
         request,
         action: 'supplier_invoice.updated',
@@ -832,7 +873,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: updated.id,
           secondaryLabel: updated.supplierName,
-          fromValue: didStatusChange ? existingInvoice.status : undefined,
+          fromValue: didStatusChange ? previousStatus : undefined,
           toValue: didStatusChange ? updated.status : undefined,
         },
       });
@@ -883,7 +924,46 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      await supplierInvoicesRepo.deleteById(idResult.value);
+      type DeleteTransactionResult =
+        | { kind: 'success'; supplierName: string }
+        | { kind: 'not_found' }
+        | { kind: 'non_draft'; currentStatus: string };
+      const transactionResult = await withDbTransaction(
+        async (tx): Promise<DeleteTransactionResult> => {
+          const lockedInvoice = await supplierInvoicesRepo.lockExistingById(idResult.value, tx);
+          if (!lockedInvoice) return { kind: 'not_found' };
+          if (lockedInvoice.status !== 'draft') {
+            return { kind: 'non_draft', currentStatus: lockedInvoice.status };
+          }
+          if (!(await supplierInvoicesRepo.deleteById(idResult.value, tx))) {
+            return { kind: 'not_found' };
+          }
+          return { kind: 'success', supplierName: lockedInvoice.supplierName };
+        },
+      );
+
+      if (transactionResult.kind === 'non_draft') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Only draft invoices can be deleted',
+          action: 'supplier_invoice.delete.conflict',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: 'non_draft_status',
+            fromValue: transactionResult.currentStatus,
+          },
+        });
+      }
+      if (transactionResult.kind === 'not_found') {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Invoice not found',
+          action: 'supplier_invoice.delete.not_found',
+          entityType: 'supplier_invoice',
+          entityId: idResult.value,
+        });
+      }
 
       await logAudit({
         request,
@@ -892,7 +972,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: existing.supplierName,
+          secondaryLabel: transactionResult.supplierName,
         },
       });
       return reply.code(204).send();

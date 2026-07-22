@@ -124,21 +124,38 @@ export const findInvoiceForLinkedSale = async (
   return rows[0]?.id ?? null;
 };
 
-// Reads the minimal set of fields needed to gate updates / restores. Named `findExisting`
-// (not `findExistingForUpdate`) because it does not acquire a row lock - callers run the read,
-// validate, and then issue a separate UPDATE outside any locking scope. If you need true
-// SELECT ... FOR UPDATE semantics, wrap in `withDbTransaction` and add `.for('update')`.
-export const findExisting = async (
-  id: string,
-  exec: DbExecutor = db,
-): Promise<{
+export type ExistingSupplierInvoice = {
   id: string;
   status: string;
   issueDate: string;
   dueDate: string;
   total: number;
   amountPaid: number;
-} | null> => {
+};
+
+const mapExistingSupplierInvoice = (
+  row: Omit<ExistingSupplierInvoice, 'issueDate' | 'dueDate' | 'total' | 'amountPaid'> & {
+    issueDate: string;
+    dueDate: string;
+    total: string;
+    amountPaid: string;
+  },
+): ExistingSupplierInvoice => ({
+  id: row.id,
+  status: row.status,
+  issueDate: requireDateOnly(row.issueDate, 'supplierInvoice.issueDate'),
+  dueDate: requireDateOnly(row.dueDate, 'supplierInvoice.dueDate'),
+  total: parseDbNumber(row.total, 0),
+  amountPaid: parseDbNumber(row.amountPaid, 0),
+});
+
+// Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
+// lock - safe for non-mutating reads, but TOCTOU-prone when a write decision depends on it.
+// For SELECT ... FOR UPDATE semantics call `lockExistingById` inside `withDbTransaction`.
+export const findExisting = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<ExistingSupplierInvoice | null> => {
   const rows = await exec
     .select({
       id: supplierInvoices.id,
@@ -150,15 +167,30 @@ export const findExisting = async (
     })
     .from(supplierInvoices)
     .where(eq(supplierInvoices.id, id));
-  if (!rows[0]) return null;
-  return {
-    id: rows[0].id,
-    status: rows[0].status,
-    issueDate: requireDateOnly(rows[0].issueDate, 'supplierInvoice.issueDate'),
-    dueDate: requireDateOnly(rows[0].dueDate, 'supplierInvoice.dueDate'),
-    total: parseDbNumber(rows[0].total, 0),
-    amountPaid: parseDbNumber(rows[0].amountPaid, 0),
-  };
+  return rows[0] ? mapExistingSupplierInvoice(rows[0]) : null;
+};
+
+// SELECT ... FOR UPDATE variant of `findExisting`. Must be called inside a transaction.
+export const lockExistingById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<(ExistingSupplierInvoice & { supplierName: string }) | null> => {
+  const rows = await exec
+    .select({
+      id: supplierInvoices.id,
+      status: supplierInvoices.status,
+      issueDate: supplierInvoices.issueDate,
+      dueDate: supplierInvoices.dueDate,
+      total: supplierInvoices.total,
+      amountPaid: supplierInvoices.amountPaid,
+      supplierName: supplierInvoices.supplierName,
+    })
+    .from(supplierInvoices)
+    .where(eq(supplierInvoices.id, id))
+    .for('update');
+  return rows[0]
+    ? { ...mapExistingSupplierInvoice(rows[0]), supplierName: rows[0].supplierName }
+    : null;
 };
 
 export const findStatusAndSupplierName = async (
