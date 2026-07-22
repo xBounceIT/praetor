@@ -151,14 +151,40 @@ describe('get', () => {
     expect(exec.calls[0].params).toContain(1);
   });
 
-  test('decrypts encrypted provider keys for internal consumers', async () => {
+  test('decrypts only the requested provider key for internal consumers', async () => {
     const encryptedKey = encrypt('secret-openai-key');
-    exec.enqueue({ rows: [buildRow({ openaiApiKey: encryptedKey })] });
+    const parts = encrypt('unused-anthropic-key').split(':');
+    parts[4] = Buffer.from('tampered-ciphertext').toString('base64');
+    const corruptedUnusedKey = parts.join(':');
+    exec.enqueue({
+      rows: [buildRow({ anthropicApiKey: corruptedUnusedKey, openaiApiKey: encryptedKey })],
+    });
 
-    const result = await generalSettingsRepo.getWithAiApiKeys(testDb);
+    const result = await generalSettingsRepo.getWithAiApiKey('openai', testDb);
 
     expect(result?.openaiApiKey).toBe('secret-openai-key');
+    expect(result?.anthropicApiKey).toBe(corruptedUnusedKey);
     expect(exec.calls).toHaveLength(1);
+  });
+
+  test('decrypts only the configured provider key for AI reporting', async () => {
+    const parts = encrypt('unused-gemini-key').split(':');
+    parts[4] = Buffer.from('tampered-ciphertext').toString('base64');
+    const corruptedUnusedKey = parts.join(':');
+    exec.enqueue({
+      rows: [
+        buildRow({
+          aiProvider: 'openai',
+          geminiApiKey: corruptedUnusedKey,
+          openaiApiKey: encrypt('secret-openai-key'),
+        }),
+      ],
+    });
+
+    const result = await generalSettingsRepo.getWithConfiguredAiApiKey(testDb);
+
+    expect(result?.openaiApiKey).toBe('secret-openai-key');
+    expect(result?.geminiApiKey).toBe(corruptedUnusedKey);
   });
 
   test('ordinary settings reads do not decrypt corrupted AI credentials', async () => {

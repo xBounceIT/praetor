@@ -110,7 +110,7 @@ beforeAll(async () => {
   mock.module('../../repositories/generalSettingsRepo.ts', () => ({
     ...generalSettingsRepoSnap,
     get: getGeneralSettingsMock,
-    getWithAiApiKeys: getGeneralSettingsMock,
+    getWithConfiguredAiApiKey: getGeneralSettingsMock,
   }));
   mock.module('../../repositories/reportsAiChatRepo.ts', () => ({
     ...aiChatSnap,

@@ -165,12 +165,25 @@ const DEFAULT_FALLBACKS = {
   sessionIdleTimeoutMinutes: 30,
 } as const;
 
+export type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai' | 'local';
+
+const AI_API_KEY_FIELDS = {
+  gemini: 'geminiApiKey',
+  openrouter: 'openrouterApiKey',
+  anthropic: 'anthropicApiKey',
+  openai: 'openaiApiKey',
+  local: 'localApiKey',
+} as const satisfies Record<AiProvider, keyof GeneralSettingsRow>;
+
+const isAiProvider = (value: string | null): value is AiProvider =>
+  value !== null && Object.hasOwn(AI_API_KEY_FIELDS, value);
+
 const decodeApiKey = (value: string | null): string | null => {
   if (!value || !isEncrypted(value)) return value;
   return decrypt(value);
 };
 
-const mapRow = (row: GeneralSettingsRow, decryptAiApiKeys = false): GeneralSettings => ({
+const mapRow = (row: GeneralSettingsRow, decryptProvider?: AiProvider): GeneralSettings => ({
   currency: row.currency ?? DEFAULT_FALLBACKS.currency,
   dailyLimit: parseFloat(row.dailyLimit ?? DEFAULT_FALLBACKS.dailyLimit),
   startOfWeek: row.startOfWeek ?? DEFAULT_FALLBACKS.startOfWeek,
@@ -184,12 +197,14 @@ const mapRow = (row: GeneralSettingsRow, decryptAiApiKeys = false): GeneralSetti
   sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(
     row.sessionIdleTimeoutMinutes ?? DEFAULT_FALLBACKS.sessionIdleTimeoutMinutes,
   ),
-  geminiApiKey: decryptAiApiKeys ? decodeApiKey(row.geminiApiKey) : row.geminiApiKey,
+  geminiApiKey: decryptProvider === 'gemini' ? decodeApiKey(row.geminiApiKey) : row.geminiApiKey,
   aiProvider: row.aiProvider,
-  openrouterApiKey: decryptAiApiKeys ? decodeApiKey(row.openrouterApiKey) : row.openrouterApiKey,
-  anthropicApiKey: decryptAiApiKeys ? decodeApiKey(row.anthropicApiKey) : row.anthropicApiKey,
-  openaiApiKey: decryptAiApiKeys ? decodeApiKey(row.openaiApiKey) : row.openaiApiKey,
-  localApiKey: decryptAiApiKeys ? decodeApiKey(row.localApiKey) : row.localApiKey,
+  openrouterApiKey:
+    decryptProvider === 'openrouter' ? decodeApiKey(row.openrouterApiKey) : row.openrouterApiKey,
+  anthropicApiKey:
+    decryptProvider === 'anthropic' ? decodeApiKey(row.anthropicApiKey) : row.anthropicApiKey,
+  openaiApiKey: decryptProvider === 'openai' ? decodeApiKey(row.openaiApiKey) : row.openaiApiKey,
+  localApiKey: decryptProvider === 'local' ? decodeApiKey(row.localApiKey) : row.localApiKey,
   localBaseUrl: row.localBaseUrl,
   geminiModelId: row.geminiModelId,
   openrouterModelId: row.openrouterModelId,
@@ -257,7 +272,7 @@ const migrateLegacyApiKeysIfNeeded = async (
 
 const read = async (
   exec: DbExecutor,
-  decryptAiApiKeys: boolean,
+  decryptProvider?: AiProvider | 'configured',
 ): Promise<GeneralSettings | null> => {
   const rows = await exec
     .select(GENERAL_SETTINGS_PROJECTION)
@@ -265,15 +280,26 @@ const read = async (
     .where(eq(generalSettings.id, 1));
   if (!rows[0]) return null;
   await migrateLegacyApiKeysIfNeeded(rows[0], exec);
-  return mapRow(rows[0], decryptAiApiKeys);
+  const provider =
+    decryptProvider === 'configured'
+      ? isAiProvider(rows[0].aiProvider)
+        ? rows[0].aiProvider
+        : 'gemini'
+      : decryptProvider;
+  return mapRow(rows[0], provider);
 };
 
 // Ordinary settings consumers (auth/session policy, time-entry policy, and the masked admin API)
 // must not depend on decrypting unrelated AI credentials. Only AI execution paths opt in below.
-export const get = (exec: DbExecutor = db): Promise<GeneralSettings | null> => read(exec, false);
+export const get = (exec: DbExecutor = db): Promise<GeneralSettings | null> => read(exec);
 
-export const getWithAiApiKeys = (exec: DbExecutor = db): Promise<GeneralSettings | null> =>
-  read(exec, true);
+export const getWithAiApiKey = (
+  provider: AiProvider,
+  exec: DbExecutor = db,
+): Promise<GeneralSettings | null> => read(exec, provider);
+
+export const getWithConfiguredAiApiKey = (exec: DbExecutor = db): Promise<GeneralSettings | null> =>
+  read(exec, 'configured');
 
 const encryptApiKeyPatch = (value: string | null | undefined): string | null =>
   value == null ? null : value === '' ? '' : encrypt(value);

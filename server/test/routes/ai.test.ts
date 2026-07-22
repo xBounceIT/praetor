@@ -49,7 +49,7 @@ beforeAll(async () => {
   mock.module('../../repositories/generalSettingsRepo.ts', () => ({
     ...generalSettingsRepoSnap,
     get: getGeneralSettingsMock,
-    getWithAiApiKeys: getGeneralSettingsMock,
+    getWithAiApiKey: getGeneralSettingsMock,
   }));
   mock.module('../../utils/local-ai-endpoint.ts', () => ({
     ...localAiEndpointSnap,
@@ -319,6 +319,7 @@ describe('POST /api/ai/validate-model', () => {
       'https://api.openai.com/v1/models/gpt-test',
       expect.objectContaining({ headers: { Authorization: 'Bearer test-openai-key' } }),
     );
+    expect(getGeneralSettingsMock).toHaveBeenCalledWith('openai');
   });
 
   test('200 ok=true uses gemini key from settings when apiKey omitted', async () => {
