@@ -701,18 +701,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount !== undefined ||
         discountType !== undefined ||
         notes !== undefined;
-      if (existingOrder.status !== 'draft' && hasLockedFieldUpdates) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Non-draft orders are read-only',
-          action: 'supplier_order.update.conflict',
-          entityType: 'supplier_order',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'non_draft_read_only', fromValue: existingOrder.status },
-          extraBody: { currentStatus: existingOrder.status },
-        });
-      }
-
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
         if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
@@ -795,19 +783,54 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const shouldSnapshot = hasLockedFieldUpdates || status !== undefined;
 
-      let updated: supplierOrdersRepo.SupplierOrder | null;
-      let resultItems: supplierOrdersRepo.SupplierOrderItem[];
+      type UpdateOutcome =
+        | { kind: 'not_found' }
+        | {
+            kind: 'conflict';
+            message: string;
+            secondaryLabel: string;
+            fromValue?: string;
+            extraBody?: Record<string, unknown>;
+          }
+        | {
+            kind: 'success';
+            order: supplierOrdersRepo.SupplierOrder;
+            items: supplierOrdersRepo.SupplierOrderItem[];
+            previousStatus: string;
+          };
+
+      let result: UpdateOutcome;
       try {
-        const txResult = await withDbTransaction(async (tx) => {
+        result = await withDbTransaction(async (tx): Promise<UpdateOutcome> => {
+          // Supplier-invoice creation takes this same parent-row lock before inserting the
+          // linked invoice. Lock first, then re-run every mutation gate in this transaction.
+          const current = await supplierOrdersRepo.lockExistingById(idResult.value, tx);
+          if (!current) return { kind: 'not_found' };
+          if (current.status !== 'draft' && hasLockedFieldUpdates) {
+            return {
+              kind: 'conflict',
+              message: 'Non-draft orders are read-only',
+              secondaryLabel: 'non_draft_read_only',
+              fromValue: current.status,
+              extraBody: { currentStatus: current.status },
+            };
+          }
+          const linkedInvoiceId = await supplierOrdersRepo.findLinkedInvoiceId(idResult.value, tx);
+          if (linkedInvoiceId) {
+            return {
+              kind: 'conflict',
+              message: 'Cannot update an order once an invoice has been created from it',
+              secondaryLabel: 'invoice_exists',
+            };
+          }
+
           const preState = shouldSnapshot
             ? await snapshotPreState(idResult.value, 'update', request, tx)
             : null;
           let renamedOrder: supplierOrdersRepo.SupplierOrder | null = null;
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedOrder = await supplierOrdersRepo.rename(idResult.value, nextIdValue, tx);
-            if (!renamedOrder) {
-              return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
-            }
+            if (!renamedOrder) return { kind: 'not_found' };
             await reserveDocumentCodeCounterFromCode('supplier_order', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
@@ -815,7 +838,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             Object.keys(patch).length === 0 && renamedOrder
               ? renamedOrder
               : await supplierOrdersRepo.update(renamedOrder?.id ?? idResult.value, patch, tx);
-          if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
+          if (!order) return { kind: 'not_found' };
           let versionedItems = normalizedItems;
           if (normalizedItems && sourceItemIds?.some((id) => id)) {
             const existingItems = await supplierOrdersRepo.findItemsForOrder(order.id, tx);
@@ -835,10 +858,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const finalItems = replacementItems
             ? await supplierOrdersRepo.replaceItems(order.id, replacementItems, tx)
             : await supplierOrdersRepo.findItemsForOrder(order.id, tx);
-          return { order, items: finalItems };
+          return {
+            kind: 'success',
+            order,
+            items: finalItems,
+            previousStatus: current.status,
+          };
         });
-        updated = txResult.order;
-        resultItems = txResult.items;
       } catch (error) {
         const dup = getUniqueViolation(error);
         if (dup && (dup.constraint === 'supplier_sales_pkey' || dup.detail?.includes('(id)'))) {
@@ -854,7 +880,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      if (!updated) {
+      if (result.kind === 'conflict') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: result.message,
+          action: 'supplier_order.update.conflict',
+          entityType: 'supplier_order',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: result.secondaryLabel,
+            fromValue: result.fromValue,
+          },
+          extraBody: result.extraBody,
+        });
+      }
+      if (result.kind === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Order not found',
@@ -864,8 +904,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      const updated = result.order;
       const didStatusChange =
-        statusResult.value !== null && existingOrder.status !== updated.status;
+        statusResult.value !== null && result.previousStatus !== updated.status;
       await logAudit({
         request,
         action: 'supplier_order.updated',
@@ -874,13 +915,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: updated.id,
           secondaryLabel: updated.supplierName,
-          fromValue: didStatusChange ? existingOrder.status : undefined,
+          fromValue: didStatusChange ? result.previousStatus : undefined,
           toValue: didStatusChange ? updated.status : undefined,
         },
       });
       return {
         ...updated,
-        items: resultItems,
+        items: result.items,
       };
     },
   );
@@ -1205,21 +1246,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const [linkedInvoiceId, existing] = await Promise.all([
-        supplierOrdersRepo.findLinkedInvoiceId(idResult.value),
-        supplierOrdersRepo.findStatusAndSupplierName(idResult.value),
-      ]);
-      if (linkedInvoiceId) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Cannot delete an order once an invoice has been created from it',
-          action: 'supplier_order.delete.conflict',
-          entityType: 'supplier_order',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'invoice_exists' },
-        });
-      }
-      if (!existing) {
+      type DeleteOutcome =
+        | { kind: 'not_found' }
+        | {
+            kind: 'conflict';
+            message: string;
+            secondaryLabel: string;
+            fromValue?: string;
+          }
+        | { kind: 'success'; supplierName: string };
+      const result = await withDbTransaction(async (tx): Promise<DeleteOutcome> => {
+        // Serialize with supplier-invoice creation, which locks this row before linking it.
+        const current = await supplierOrdersRepo.lockExistingById(idResult.value, tx);
+        if (!current) return { kind: 'not_found' };
+
+        const linkedInvoiceId = await supplierOrdersRepo.findLinkedInvoiceId(idResult.value, tx);
+        if (linkedInvoiceId) {
+          return {
+            kind: 'conflict',
+            message: 'Cannot delete an order once an invoice has been created from it',
+            secondaryLabel: 'invoice_exists',
+          };
+        }
+        if (current.status !== 'draft') {
+          return {
+            kind: 'conflict',
+            message: 'Only draft orders can be deleted',
+            secondaryLabel: 'non_draft_status',
+            fromValue: current.status,
+          };
+        }
+
+        const deleted = await supplierOrdersRepo.deleteById(idResult.value, tx);
+        return deleted
+          ? { kind: 'success', supplierName: current.supplierName }
+          : { kind: 'not_found' };
+      });
+
+      if (result.kind === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Order not found',
@@ -1228,14 +1292,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (existing.status !== 'draft') {
+      if (result.kind === 'conflict') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Only draft orders can be deleted',
+          message: result.message,
           action: 'supplier_order.delete.conflict',
           entityType: 'supplier_order',
           entityId: idResult.value,
-          details: { secondaryLabel: 'non_draft_status', fromValue: existing.status },
+          details: {
+            secondaryLabel: result.secondaryLabel,
+            fromValue: result.fromValue,
+          },
         });
       }
 
@@ -1246,10 +1313,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: existing.supplierName,
+          secondaryLabel: result.supplierName,
         },
       });
-      await supplierOrdersRepo.deleteById(idResult.value);
       return reply.code(204).send();
     },
   );
