@@ -2,7 +2,7 @@ import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { LinkedRecordHeaderButton } from '@/components/shared/LinkedRecordHeaderButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -2510,7 +2510,17 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
                 <ClientQuoteClientSection controller={controller} layout="create" />
               </>
             )}
-            <ClientQuoteModalAlerts controller={controller} />
+            {editingQuote?.linkedSupplierQuoteExpired ? (
+              <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                <i className="fa-solid fa-triangle-exclamation text-red-600" aria-hidden="true"></i>
+                <span className="text-xs font-bold text-red-700 dark:text-red-300">
+                  {t('sales:clientQuotes.linkedSupplierQuoteExpiredBanner', {
+                    defaultValue:
+                      'The linked supplier quote has expired. Extend its validity before progressing this quote to Sent, Offer, or Accepted.',
+                  })}
+                </span>
+              </div>
+            ) : null}
             <ClientQuoteItemsSection controller={controller} />
             <ClientQuoteNotesSummarySection controller={controller} />
           </ModalBody>
@@ -2907,7 +2917,8 @@ const ClientQuotePromotionModal: React.FC<{ controller: ClientQuotesController }
 const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingQuote, isReadOnly, baseReadOnly, readOnlyReason } = controller;
+  const { t, closeModal, editingQuote, isReadOnly, baseReadOnly, readOnlyReason, onViewOffers } =
+    controller;
 
   return (
     <ModalHeader>
@@ -2928,55 +2939,17 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
             <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
           ) : null}
         </ModalTitle>
-        <ModalCloseButton onClick={closeModal} />
+        <div className="flex shrink-0 items-center gap-2">
+          {editingQuote?.linkedOfferId && onViewOffers ? (
+            <LinkedRecordHeaderButton
+              label={t('sales:clientQuotes.viewLinkedOffer', { defaultValue: 'View linked offer' })}
+              onClick={() => onViewOffers(editingQuote.id)}
+            />
+          ) : null}
+          <ModalCloseButton onClick={closeModal} />
+        </div>
       </div>
     </ModalHeader>
-  );
-};
-
-const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> = ({
-  controller,
-}) => {
-  const { t, editingQuote, offers, onViewOffers } = controller;
-
-  return (
-    <>
-      {editingQuote?.linkedOfferId && (
-        <LinkedRecordBanner
-          label={t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
-          value={t('sales:clientQuotes.linkedOfferInfo', {
-            number: formatDocumentCode(
-              editingQuote.linkedOfferId,
-              editingQuote.linkedOfferRevisionCode ??
-                offers.find((offer) => offer.id === editingQuote.linkedOfferId)?.revisionCode,
-            ),
-            defaultValue: 'Offer #{{number}}',
-          })}
-          note={t('sales:clientQuotes.offerDetailsReadOnly', {
-            defaultValue: '(Quote details are read-only)',
-          })}
-          action={
-            onViewOffers
-              ? {
-                  label: t('sales:clientQuotes.viewOffer', { defaultValue: 'View Offer' }),
-                  onClick: () => onViewOffers(editingQuote.id),
-                }
-              : undefined
-          }
-        />
-      )}
-      {editingQuote?.linkedSupplierQuoteExpired && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10">
-          <i className="fa-solid fa-triangle-exclamation text-red-600" aria-hidden="true"></i>
-          <span className="text-red-700 dark:text-red-300 text-xs font-bold">
-            {t('sales:clientQuotes.linkedSupplierQuoteExpiredBanner', {
-              defaultValue:
-                'The linked supplier quote has expired. Extend its validity before progressing this quote to Sent, Offer, or Accepted.',
-            })}
-          </span>
-        </div>
-      )}
-    </>
   );
 };
 
