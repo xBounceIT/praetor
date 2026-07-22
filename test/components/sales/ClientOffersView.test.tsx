@@ -1138,6 +1138,81 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     expect(screen.queryByRole('button', { name: 'common:buttons.update' })).toBeNull();
     expect(document.getElementById('client-offer-expiration-date')).toBeDisabled();
   });
+
+  test('shows an enabled restore-to-draft button next to the read-only badge for sent offers', async () => {
+    const user = userEvent.setup();
+    const onUpdateOffer = mock(() => Promise.resolve());
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-SENT', status: 'sent', expirationDate: '2999-12-31' })]}
+        onUpdateOffer={onUpdateOffer}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-SENT'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('sales:clientOffers.readOnlyStatus')).toBeTruthy();
+    const restore = within(dialog).getByTestId('client-offer-modal-restore-draft');
+    expect(restore).not.toBeDisabled();
+
+    await user.click(restore);
+    await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledWith('O-SENT', { status: 'draft' }));
+    await waitFor(() => {
+      expect(within(dialog).queryByTestId('client-offer-modal-restore-draft')).toBeNull();
+      expect(within(dialog).queryByText('sales:clientOffers.readOnlyStatus')).toBeNull();
+      expect(within(dialog).getByText('sales:clientOffers.editOffer')).toBeTruthy();
+    });
+  });
+
+  test('disables modal restore-to-draft for terminal offers without elevated role', async () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[terminalAccepted]}
+        canRevertTerminalStatus={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-ACME-ACCEPTED'));
+    const dialog = await screen.findByRole('dialog');
+    const restore = within(dialog).getByTestId('client-offer-modal-restore-draft');
+    expect(restore).toBeDisabled();
+  });
+
+  test('disables modal restore-to-draft when a linked sale order exists', async () => {
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[terminalAccepted]}
+        offerIdsWithOrders={new Set([terminalAccepted.id])}
+        canRevertTerminalStatus
+        onRevertOfferToDraft={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-ACME-ACCEPTED'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('client-offer-modal-restore-draft')).toBeDisabled();
+  });
+
+  test('opens the confirm dialog from the modal restore button for terminal offers', async () => {
+    const user = userEvent.setup();
+    const onRevertOfferToDraft = mock(() => Promise.resolve());
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[terminalAccepted]}
+        canRevertTerminalStatus
+        onRevertOfferToDraft={onRevertOfferToDraft}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-ACME-ACCEPTED'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByTestId('client-offer-modal-restore-draft'));
+    expect(screen.getByText('sales:clientOffers.revertToDraftTitle')).toBeInTheDocument();
+  });
 });
 
 describe('<ClientOffersView /> paginated item validation', () => {

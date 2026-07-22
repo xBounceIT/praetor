@@ -128,6 +128,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
+import { ModalRestoreToDraftButton } from '../shared/ModalRestoreToDraftButton';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
@@ -912,10 +913,26 @@ const useClientQuotesController = ({
     await promoteCandidate(promotionQuote.id, promotionCandidateId);
   };
 
+  const applyQuoteDraftLocally = useCallback(
+    (quote: Quote, clearsLinkedOffer = false) => {
+      const next = {
+        ...quote,
+        status: 'draft' as const,
+        ...(clearsLinkedOffer ? { linkedOfferId: undefined, selectedCandidateId: undefined } : {}),
+      };
+      dispatch({ type: 'setEditingQuote', quote: next });
+      applyQuoteToCandidateForm(next);
+    },
+    [applyQuoteToCandidateForm],
+  );
+
   const rollbackCandidatePromotion = async (quoteId: string) => {
     if (!onRollbackPromotion) return;
     try {
       await onRollbackPromotion(quoteId);
+      if (editingQuote?.id === quoteId) {
+        applyQuoteDraftLocally(editingQuote, true);
+      }
     } catch (error) {
       toastError((error as Error).message || t('sales:clientQuotes.failedToUpdateStatus'));
     }
@@ -1200,6 +1217,9 @@ const useClientQuotesController = ({
         });
       } else {
         await onUpdateQuote(id, updates);
+      }
+      if (editingQuote?.id === id && updates.status === 'draft') {
+        applyQuoteDraftLocally(editingQuote);
       }
     } catch (err) {
       toastError((err as Error).message || t('sales:clientQuotes.failedToUpdateStatus'));
@@ -2420,6 +2440,9 @@ const useClientQuotesController = ({
     openPromotionDialog,
     confirmCandidatePromotion,
     rollbackCandidatePromotion,
+    handleStatusUpdate,
+    hasOfferForQuote,
+    getOfferStatusForQuote,
     columns,
   };
 };
@@ -2907,7 +2930,74 @@ const ClientQuotePromotionModal: React.FC<{ controller: ClientQuotesController }
 const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingQuote, isReadOnly, baseReadOnly, readOnlyReason } = controller;
+  const {
+    t,
+    closeModal,
+    editingQuote,
+    isReadOnly,
+    baseReadOnly,
+    readOnlyReason,
+    isQuoteExpired,
+    isHistoryRow,
+    isPromoting,
+    hasOfferForQuote,
+    getOfferStatusForQuote,
+    handleStatusUpdate,
+    rollbackCandidatePromotion,
+    previewVersion,
+  } = controller;
+
+  const showRestoreToDraft = Boolean(
+    editingQuote && baseReadOnly && editingQuote.status !== 'draft' && previewVersion === null,
+  );
+  const restoreLabel = t('sales:clientQuotes.restoreQuote', {
+    defaultValue: 'Restore quote',
+  });
+  let restoreDisabled = true;
+  let restoreTooltip = restoreLabel;
+  let onRestoreClick: (() => void) | undefined;
+
+  if (editingQuote && showRestoreToDraft) {
+    const expired = isQuoteExpired(editingQuote);
+    const hasOffer = hasOfferForQuote(editingQuote);
+    const offerStatus = getOfferStatusForQuote(editingQuote);
+    const history = isHistoryRow(editingQuote);
+    const canRestore = !hasOffer || offerStatus === 'draft';
+    const canRollbackDraftOffer =
+      editingQuote.status === 'offer' &&
+      Boolean(editingQuote.linkedOfferId) &&
+      offerStatus === 'draft';
+    const transitionAllowed = canTransitionClientQuote(editingQuote.status, 'draft');
+    restoreDisabled =
+      !transitionAllowed ||
+      isPromoting ||
+      !canRestore ||
+      (history && (!canRollbackDraftOffer || expired));
+
+    if (!transitionAllowed) {
+      restoreTooltip = t('sales:clientQuotes.restoreStatusNotCompatible', {
+        defaultValue: 'This status cannot be restored to draft',
+      });
+    } else if (!canRestore) {
+      restoreTooltip = t('sales:clientQuotes.restoreDisabledOfferStatus', {
+        defaultValue: 'Restore is only possible when the linked offer is in draft status.',
+      });
+    } else if (history && (!canRollbackDraftOffer || expired)) {
+      restoreTooltip = t('sales:clientQuotes.historyActionsDisabled', {
+        defaultValue: 'History entries cannot be modified.',
+      });
+    }
+
+    if (!restoreDisabled) {
+      onRestoreClick = () => {
+        if (editingQuote.status === 'offer' && editingQuote.selectedCandidateId) {
+          void rollbackCandidatePromotion(editingQuote.id);
+        } else {
+          void handleStatusUpdate(editingQuote.id, { status: 'draft' });
+        }
+      };
+    }
+  }
 
   return (
     <ModalHeader>
@@ -2926,6 +3016,17 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
               : t('sales:clientQuotes.createNewQuote')}
           {baseReadOnly ? (
             <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
+          ) : null}
+          {showRestoreToDraft ? (
+            <ModalRestoreToDraftButton
+              label={restoreLabel}
+              tooltip={restoreTooltip}
+              disabled={restoreDisabled}
+              testId="client-quote-modal-restore-draft"
+              onClick={() => {
+                onRestoreClick?.();
+              }}
+            />
           ) : null}
         </ModalTitle>
         <ModalCloseButton onClick={closeModal} />
