@@ -16,6 +16,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
@@ -37,6 +38,7 @@ const clientsFindNameMock = mock();
 
 const sqFindByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
+const sqLockEffectiveStatusByIdMock = mock();
 const sqFindIdConflictMock = mock();
 const sqFindFullForSnapshotMock = mock();
 const sqFindItemsForQuoteMock = mock();
@@ -80,6 +82,7 @@ beforeAll(async () => {
     ...supplierQuotesRepoSnap,
     findById: sqFindByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusByIdMock,
     findIdConflict: sqFindIdConflictMock,
     findFullForSnapshot: sqFindFullForSnapshotMock,
     findItemsForQuote: sqFindItemsForQuoteMock,
@@ -204,6 +207,7 @@ const allMocks = [
   clientsFindNameMock,
   sqFindByIdMock,
   sqFindLinkedOrderIdMock,
+  sqLockEffectiveStatusByIdMock,
   sqFindIdConflictMock,
   sqFindFullForSnapshotMock,
   sqFindItemsForQuoteMock,
@@ -231,6 +235,13 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
+  sqLockEffectiveStatusByIdMock.mockResolvedValue({
+    expirationDate: '2999-12-31',
+    linkedClientStatus: null,
+    linkedClientQuoteExpiration: null,
+    linkedOfferStatus: null,
+    linkedOfferExpiration: null,
+  });
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   sqvBuildSnapshotMock.mockImplementation((quote, items) => ({
@@ -570,7 +581,8 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(JSON.parse(res.body)).toEqual({
       error: 'Cannot remove supplier quote items that are used by client quotes, offers or orders',
     });
-    expect(sqFindSourcedItemIdsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqLockEffectiveStatusByIdMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
+    expect(sqFindSourcedItemIdsMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
     expect(sqUpsertItemsMock).not.toHaveBeenCalled();
     expect(sqReplaceItemsMock).not.toHaveBeenCalled();
     expect(sqUpdateMock).not.toHaveBeenCalled();
@@ -675,7 +687,8 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(JSON.parse(res.body).error).toBe(
       'Cannot change the id of a supplier quote whose items are used by client quotes, offers or orders',
     );
-    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1');
+    expect(sqLockEffectiveStatusByIdMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
+    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
     expect(sqRenameMock).not.toHaveBeenCalled();
     expect(sqUpdateMock).not.toHaveBeenCalled();
   });

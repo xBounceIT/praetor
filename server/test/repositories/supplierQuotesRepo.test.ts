@@ -246,28 +246,21 @@ describe('findLinkedOrderId', () => {
 });
 
 describe('isSourcedByClientDocuments', () => {
-  // Three parallel probes in call order: quote_items, customer_offer_items, sale_items — each
-  // matching either the denormalized supplier_quote_id or (legacy rows) the item-id subquery.
   test('true when any client line references the quote', async () => {
-    exec.enqueue({ rows: [['qi-1']] });
-    exec.enqueue({ rows: [] });
-    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [{ exists: true }] });
     expect(await supplierQuotesRepo.isSourcedByClientDocuments('q-1', testDb)).toBe(true);
-    const sqlTexts = exec.calls.map((c) => c.sql.toLowerCase());
-    expect(sqlTexts[0]).toContain('"quote_items"');
-    expect(sqlTexts[1]).toContain('"customer_offer_items"');
-    expect(sqlTexts[2]).toContain('"sale_items"');
-    for (const sqlText of sqlTexts) {
-      expect(sqlText).toContain('"supplier_quote_id" =');
-      expect(sqlText).toContain('"supplier_quote_item_id" in (select');
-    }
+    expect(exec.calls).toHaveLength(1);
+    const sqlText = exec.calls[0].sql.toLowerCase();
+    expect(sqlText).toContain('from quote_items');
+    expect(sqlText).toContain('from customer_offer_items');
+    expect(sqlText).toContain('from sale_items');
+    expect(sqlText).toContain('supplier_quote_id =');
+    expect(sqlText).toContain('supplier_quote_item_id in (select');
     expect(exec.calls[0].params).toContain('q-1');
   });
 
   test('false when nothing references the quote', async () => {
-    exec.enqueue({ rows: [] });
-    exec.enqueue({ rows: [] });
-    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [{ exists: false }] });
     expect(await supplierQuotesRepo.isSourcedByClientDocuments('q-1', testDb)).toBe(false);
   });
 });
@@ -532,28 +525,21 @@ describe('hasClientSyncedCosts', () => {
 });
 
 describe('findSourcedItemIds', () => {
-  // Three parallel DISTINCT probes in call order: quote_items, customer_offer_items, sale_items —
-  // each restricted to supplier_quote_item_id values belonging to this quote's items.
   test('unions the referenced item ids across the three client tables', async () => {
-    exec.enqueue({ rows: [['sqi-1']] });
-    exec.enqueue({ rows: [] });
-    exec.enqueue({ rows: [['sqi-2'], [null]] });
+    exec.enqueue({ rows: [{ itemId: 'sqi-1' }, { itemId: 'sqi-2' }] });
     const result = await supplierQuotesRepo.findSourcedItemIds('q-1', testDb);
     expect(result).toEqual(new Set(['sqi-1', 'sqi-2']));
-    const sqlTexts = exec.calls.map((c) => c.sql.toLowerCase());
-    expect(sqlTexts[0]).toContain('"quote_items"');
-    expect(sqlTexts[1]).toContain('"customer_offer_items"');
-    expect(sqlTexts[2]).toContain('"sale_items"');
-    for (const sqlText of sqlTexts) {
-      expect(sqlText).toContain('distinct');
-      expect(sqlText).toContain('"supplier_quote_item_id" in (select');
-    }
+    expect(exec.calls).toHaveLength(1);
+    const sqlText = exec.calls[0].sql.toLowerCase();
+    expect(sqlText).toContain('from quote_items');
+    expect(sqlText).toContain('from customer_offer_items');
+    expect(sqlText).toContain('from sale_items');
+    expect(sqlText).toContain('select distinct item_id');
+    expect(sqlText).toContain('supplier_quote_item_id in (select');
     expect(exec.calls[0].params).toContain('q-1');
   });
 
   test('empty set when nothing references the items', async () => {
-    exec.enqueue({ rows: [] });
-    exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [] });
     expect(await supplierQuotesRepo.findSourcedItemIds('q-1', testDb)).toEqual(new Set());
   });
@@ -771,6 +757,62 @@ describe('lockEffectiveStatusById', () => {
   test('returns null when row missing', async () => {
     exec.enqueue({ rows: [] });
     expect(await supplierQuotesRepo.lockEffectiveStatusById('q-x', testDb)).toBeNull();
+  });
+});
+
+describe('lockClientDocumentSupplierReferences', () => {
+  test('locks quote rows in deterministic order and revalidates item membership', async () => {
+    exec.enqueue({
+      rows: [
+        ['sqi-1', 'q-2'],
+        ['sqi-2', 'q-1'],
+      ],
+    });
+    exec.enqueue({ rows: [['q-1'], ['q-2']] });
+    exec.enqueue({
+      rows: [
+        ['sqi-1', 'q-2'],
+        ['sqi-2', 'q-1'],
+      ],
+    });
+
+    await supplierQuotesRepo.lockClientDocumentSupplierReferences(
+      [
+        { supplierQuoteId: 'q-2', supplierQuoteItemId: 'sqi-1' },
+        { supplierQuoteId: null, supplierQuoteItemId: 'sqi-2' },
+      ],
+      testDb,
+    );
+
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[1].sql.toLowerCase()).toContain('for key share');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('order by "supplier_quotes"."id"');
+    expect(exec.calls[1].params).toEqual(['q-1', 'q-2']);
+  });
+
+  test('refuses a source item deleted before the client write can lock it', async () => {
+    exec.enqueue({ rows: [] });
+
+    expect(
+      supplierQuotesRepo.lockClientDocumentSupplierReferences(
+        [{ supplierQuoteId: 'q-1', supplierQuoteItemId: 'missing-item' }],
+        testDb,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(exec.calls).toHaveLength(1);
+  });
+
+  test('refuses an item that changes quote membership while waiting for the lock', async () => {
+    exec.enqueue({ rows: [['sqi-1', 'q-1']] });
+    exec.enqueue({ rows: [['q-1']] });
+    exec.enqueue({ rows: [['sqi-1', 'q-2']] });
+
+    expect(
+      supplierQuotesRepo.lockClientDocumentSupplierReferences(
+        [{ supplierQuoteId: 'q-1', supplierQuoteItemId: 'sqi-1' }],
+        testDb,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 });
 

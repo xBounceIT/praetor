@@ -265,6 +265,30 @@ describe('insertItems / replaceItems', () => {
     expect(exec.calls).toHaveLength(0);
   });
 
+  test('locks and revalidates supplier references before inserting order items', async () => {
+    exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
+    exec.enqueue({ rows: [['sq-1']] });
+    exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
+    exec.enqueue({ rows: [itemRow()] });
+
+    await repo.insertItems(
+      'co-1',
+      [
+        {
+          ...sampleItem,
+          supplierQuoteId: 'sq-1',
+          supplierQuoteItemId: 'sqi-1',
+          supplierQuoteSupplierName: 'Vendor',
+          supplierQuoteUnitPrice: 2,
+        },
+      ],
+      testDb,
+    );
+
+    expect(exec.calls[1].sql.toLowerCase()).toContain('for key share');
+    expect(exec.calls[3].sql.toLowerCase()).toContain('insert into "sale_items"');
+  });
+
   test('replaceItems issues DELETE then INSERT', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [itemRow()] });

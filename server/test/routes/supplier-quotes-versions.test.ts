@@ -39,6 +39,7 @@ const getRolePermissionsMock = mock();
 const sqFindByIdMock = mock();
 const sqExistsByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
+const sqLockEffectiveStatusByIdMock = mock();
 const sqFindFullForSnapshotMock = mock();
 const sqFindItemsForQuoteMock = mock();
 const sqFindIdConflictMock = mock();
@@ -90,6 +91,7 @@ beforeAll(async () => {
     findById: sqFindByIdMock,
     existsById: sqExistsByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusByIdMock,
     findFullForSnapshot: sqFindFullForSnapshotMock,
     findItemsForQuote: sqFindItemsForQuoteMock,
     findIdConflict: sqFindIdConflictMock,
@@ -225,6 +227,7 @@ const allMocks = [
   sqFindByIdMock,
   sqExistsByIdMock,
   sqFindLinkedOrderIdMock,
+  sqLockEffectiveStatusByIdMock,
   sqFindFullForSnapshotMock,
   sqFindItemsForQuoteMock,
   sqFindIdConflictMock,
@@ -254,6 +257,13 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
+  sqLockEffectiveStatusByIdMock.mockResolvedValue({
+    expirationDate: '2999-12-31',
+    linkedClientStatus: null,
+    linkedClientQuoteExpiration: null,
+    linkedOfferStatus: null,
+    linkedOfferExpiration: null,
+  });
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   sqvBuildSnapshotMock.mockImplementation((quote, items) => ({
@@ -442,6 +452,9 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     const body = JSON.parse(res.body);
     expect(body.id).toBe('sq-1');
     expect(body.items).toHaveLength(1);
+    expect(sqLockEffectiveStatusByIdMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
+    expect(sqFindLinkedOrderIdMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
+    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
 
     // Pre-restore snapshot inserted with reason='restore'
     expect(sqvInsertMock).toHaveBeenCalledWith(
@@ -460,7 +473,7 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
       }),
       TX_SENTINEL,
     );
-    expect(sqReplaceItemsMock).toHaveBeenCalled();
+    expect(sqReplaceItemsMock).toHaveBeenCalledWith('sq-1', expect.any(Array), TX_SENTINEL);
     expect(withDbTransactionMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({

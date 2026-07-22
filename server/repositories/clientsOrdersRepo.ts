@@ -14,6 +14,7 @@ import {
   preservePricingSemanticsVersions,
 } from '../utils/pricing-semantics.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
+import { lockClientDocumentSupplierReferences } from './supplierQuotesRepo.ts';
 
 export type ClientOrder = {
   id: string;
@@ -517,38 +518,40 @@ export const insertItems = async (
   orderId: string,
   items: NewClientOrderItem[],
   exec: DbExecutor = db,
-): Promise<ClientOrderItem[]> => {
-  if (items.length === 0) return [];
-  const rows = await exec
-    .insert(saleItems)
-    .values(
-      items.map((item) => ({
-        id: item.id,
-        saleId: orderId,
-        productId: item.productId,
-        productName: item.productName,
-        quantity: numericForDb(item.quantity),
-        unitPrice: numericForDb(item.unitPrice),
-        productCost: numericForDb(item.productCost),
-        productMolPercentage: numericForDb(item.productMolPercentage),
-        discount: numericForDb(item.discount),
-        note: item.note,
-        supplierQuoteId: item.supplierQuoteId,
-        supplierQuoteItemId: item.supplierQuoteItemId,
-        supplierQuoteSupplierName: item.supplierQuoteSupplierName,
-        supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
-        supplierSaleId: item.supplierSaleId,
-        supplierSaleItemId: item.supplierSaleItemId,
-        supplierSaleSupplierName: item.supplierSaleSupplierName,
-        unitType: item.unitType,
-        durationMonths: item.durationMonths ?? 1,
-        durationUnit: item.durationUnit ?? 'months',
-        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
-      })),
-    )
-    .returning();
-  return rows.map(mapItem);
-};
+): Promise<ClientOrderItem[]> =>
+  runAtomically(exec, async (tx) => {
+    if (items.length === 0) return [];
+    await lockClientDocumentSupplierReferences(items, tx);
+    const rows = await tx
+      .insert(saleItems)
+      .values(
+        items.map((item) => ({
+          id: item.id,
+          saleId: orderId,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: numericForDb(item.quantity),
+          unitPrice: numericForDb(item.unitPrice),
+          productCost: numericForDb(item.productCost),
+          productMolPercentage: numericForDb(item.productMolPercentage),
+          discount: numericForDb(item.discount),
+          note: item.note,
+          supplierQuoteId: item.supplierQuoteId,
+          supplierQuoteItemId: item.supplierQuoteItemId,
+          supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+          supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
+          supplierSaleId: item.supplierSaleId,
+          supplierSaleItemId: item.supplierSaleItemId,
+          supplierSaleSupplierName: item.supplierSaleSupplierName,
+          unitType: item.unitType,
+          durationMonths: item.durationMonths ?? 1,
+          durationUnit: item.durationUnit ?? 'months',
+          pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
+        })),
+      )
+      .returning();
+    return rows.map(mapItem);
+  });
 
 export const replaceItems = async (
   orderId: string,

@@ -1,12 +1,10 @@
-import { and, asc, desc, eq, getTableColumns, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, ne, notInArray, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
-import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
-import { quoteItems } from '../db/schema/quotes.ts';
-import { saleItems } from '../db/schema/sales.ts';
 import { supplierQuoteItems, supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSales } from '../db/schema/supplierSales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
+import { ConflictError } from '../utils/http-errors.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import {
   normalizeHistoricalPricingSemanticsVersion,
@@ -494,6 +492,90 @@ export const lockEffectiveStatusById = async (
   };
 };
 
+export type ClientDocumentSupplierReference = {
+  supplierQuoteId?: string | null;
+  supplierQuoteItemId?: string | null;
+};
+
+const supplierReferenceConflict = () =>
+  new ConflictError('A referenced supplier quote changed during the request; retry the operation');
+
+/**
+ * Locks and revalidates the supplier quote rows referenced by client-document lines.
+ *
+ * Client line columns are intentionally soft snapshot references, so no FK takes the parent-row
+ * lock that PostgreSQL would normally acquire for us. Every client item insert/replace calls this
+ * inside its write transaction; supplier quote delete/item-replacement paths lock the same rows
+ * before checking their reverse references. Whichever transaction wins is therefore visible to
+ * the waiter: a supplier mutation rechecks and refuses a committed client reference, while a
+ * client write rechecks and refuses a source that was deleted while it waited.
+ */
+export const lockClientDocumentSupplierReferences = async (
+  references: readonly ClientDocumentSupplierReference[],
+  exec: DbExecutor = db,
+): Promise<void> =>
+  runAtomically(exec, async (tx) => {
+    const itemIds = [
+      ...new Set(
+        references
+          .map((reference) => reference.supplierQuoteItemId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    ];
+    const initialItems =
+      itemIds.length > 0
+        ? await tx
+            .select({ id: supplierQuoteItems.id, quoteId: supplierQuoteItems.quoteId })
+            .from(supplierQuoteItems)
+            .where(inArray(supplierQuoteItems.id, itemIds))
+        : [];
+    const initialQuoteByItem = new Map(initialItems.map((item) => [item.id, item.quoteId]));
+    if (initialQuoteByItem.size !== itemIds.length) throw supplierReferenceConflict();
+
+    const quoteIds = [
+      ...new Set(
+        references
+          .flatMap((reference) => {
+            const explicitId = reference.supplierQuoteId;
+            const itemQuoteId = reference.supplierQuoteItemId
+              ? initialQuoteByItem.get(reference.supplierQuoteItemId)
+              : undefined;
+            return [explicitId, itemQuoteId];
+          })
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    ].sort();
+    if (quoteIds.length === 0) return;
+
+    const lockedQuotes = await tx
+      .select({ id: supplierQuotes.id })
+      .from(supplierQuotes)
+      .where(inArray(supplierQuotes.id, quoteIds))
+      .orderBy(asc(supplierQuotes.id))
+      .for('key share');
+    if (lockedQuotes.length !== quoteIds.length) throw supplierReferenceConflict();
+
+    if (itemIds.length === 0) return;
+    const revalidatedItems = await tx
+      .select({ id: supplierQuoteItems.id, quoteId: supplierQuoteItems.quoteId })
+      .from(supplierQuoteItems)
+      .where(inArray(supplierQuoteItems.id, itemIds));
+    const revalidatedQuoteByItem = new Map(revalidatedItems.map((item) => [item.id, item.quoteId]));
+    for (const reference of references) {
+      const itemId = reference.supplierQuoteItemId;
+      if (!itemId) continue;
+      const initialQuoteId = initialQuoteByItem.get(itemId);
+      const revalidatedQuoteId = revalidatedQuoteByItem.get(itemId);
+      if (
+        !initialQuoteId ||
+        revalidatedQuoteId !== initialQuoteId ||
+        (reference.supplierQuoteId && reference.supplierQuoteId !== revalidatedQuoteId)
+      ) {
+        throw supplierReferenceConflict();
+      }
+    }
+  });
+
 export const findItemsForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,
@@ -547,43 +629,28 @@ export const isSourcedByClientDocuments = async (
   quoteId: string,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const itemIdsSubquery = exec
-    .select({ id: supplierQuoteItems.id })
-    .from(supplierQuoteItems)
-    .where(eq(supplierQuoteItems.quoteId, quoteId));
-  const [quoteRefs, offerRefs, orderRefs] = await Promise.all([
-    exec
-      .select({ id: quoteItems.id })
-      .from(quoteItems)
-      .where(
-        or(
-          eq(quoteItems.supplierQuoteId, quoteId),
-          inArray(quoteItems.supplierQuoteItemId, itemIdsSubquery),
-        ),
+  const rows = await executeRows<{ exists: boolean }>(
+    exec,
+    sql`
+      WITH source_items AS (
+        SELECT id FROM supplier_quote_items WHERE quote_id = ${quoteId}
       )
-      .limit(1),
-    exec
-      .select({ id: customerOfferItems.id })
-      .from(customerOfferItems)
-      .where(
-        or(
-          eq(customerOfferItems.supplierQuoteId, quoteId),
-          inArray(customerOfferItems.supplierQuoteItemId, itemIdsSubquery),
-        ),
-      )
-      .limit(1),
-    exec
-      .select({ id: saleItems.id })
-      .from(saleItems)
-      .where(
-        or(
-          eq(saleItems.supplierQuoteId, quoteId),
-          inArray(saleItems.supplierQuoteItemId, itemIdsSubquery),
-        ),
-      )
-      .limit(1),
-  ]);
-  return quoteRefs.length > 0 || offerRefs.length > 0 || orderRefs.length > 0;
+      SELECT EXISTS (
+        SELECT 1 FROM quote_items
+        WHERE supplier_quote_id = ${quoteId}
+           OR supplier_quote_item_id IN (SELECT id FROM source_items)
+        UNION ALL
+        SELECT 1 FROM customer_offer_items
+        WHERE supplier_quote_id = ${quoteId}
+           OR supplier_quote_item_id IN (SELECT id FROM source_items)
+        UNION ALL
+        SELECT 1 FROM sale_items
+        WHERE supplier_quote_id = ${quoteId}
+           OR supplier_quote_item_id IN (SELECT id FROM source_items)
+      ) AS "exists"
+    `,
+  );
+  return rows[0]?.exists === true;
 };
 
 // The subset of this quote's item ids that client document lines (quote, offer, or client-order
@@ -596,29 +663,27 @@ export const findSourcedItemIds = async (
   quoteId: string,
   exec: DbExecutor = db,
 ): Promise<Set<string>> => {
-  const itemIdsSubquery = exec
-    .select({ id: supplierQuoteItems.id })
-    .from(supplierQuoteItems)
-    .where(eq(supplierQuoteItems.quoteId, quoteId));
-  const [quoteRefs, offerRefs, orderRefs] = await Promise.all([
-    exec
-      .selectDistinct({ itemId: quoteItems.supplierQuoteItemId })
-      .from(quoteItems)
-      .where(inArray(quoteItems.supplierQuoteItemId, itemIdsSubquery)),
-    exec
-      .selectDistinct({ itemId: customerOfferItems.supplierQuoteItemId })
-      .from(customerOfferItems)
-      .where(inArray(customerOfferItems.supplierQuoteItemId, itemIdsSubquery)),
-    exec
-      .selectDistinct({ itemId: saleItems.supplierQuoteItemId })
-      .from(saleItems)
-      .where(inArray(saleItems.supplierQuoteItemId, itemIdsSubquery)),
-  ]);
-  const ids = new Set<string>();
-  for (const row of [...quoteRefs, ...offerRefs, ...orderRefs]) {
-    if (row.itemId) ids.add(row.itemId);
-  }
-  return ids;
+  const rows = await executeRows<{ itemId: string }>(
+    exec,
+    sql`
+      WITH source_items AS (
+        SELECT id FROM supplier_quote_items WHERE quote_id = ${quoteId}
+      )
+      SELECT DISTINCT item_id AS "itemId"
+      FROM (
+        SELECT supplier_quote_item_id AS item_id FROM quote_items
+        WHERE supplier_quote_item_id IN (SELECT id FROM source_items)
+        UNION ALL
+        SELECT supplier_quote_item_id AS item_id FROM customer_offer_items
+        WHERE supplier_quote_item_id IN (SELECT id FROM source_items)
+        UNION ALL
+        SELECT supplier_quote_item_id AS item_id FROM sale_items
+        WHERE supplier_quote_item_id IN (SELECT id FROM source_items)
+      ) sourced_refs
+      WHERE item_id IS NOT NULL
+    `,
+  );
+  return new Set(rows.map((row) => row.itemId));
 };
 
 export const findIdConflict = async (
