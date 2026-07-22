@@ -23,12 +23,14 @@ const AUTOFOCUS_SELECTOR = '[data-autofocus]:not([disabled])';
 
 const FOCUSABLE_SELECTOR = [
   AUTOFOCUS_SELECTOR,
-  'button:not([disabled])',
-  '[href]',
+  // Header chrome like restore-to-draft must stay tabbable but must not steal modal open focus,
+  // otherwise Radix tooltips open immediately on the autofocused control.
+  'button:not([disabled]):not([data-modal-skip-autofocus])',
+  '[href]:not([data-modal-skip-autofocus])',
   'input:not([disabled]):not([type="hidden"])',
   'select:not([disabled])',
   'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
+  '[tabindex]:not([tabindex="-1"]):not([data-modal-skip-autofocus])',
 ].join(',');
 
 const TEXT_LIKE_INPUT_TYPES = new Set([

@@ -25,6 +25,7 @@ export function ModalRestoreToDraftButton({
             size="sm"
             disabled={disabled}
             data-testid={testId}
+            data-modal-skip-autofocus=""
             aria-label={label}
             onClick={() => {
               if (disabled) return;

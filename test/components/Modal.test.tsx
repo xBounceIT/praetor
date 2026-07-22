@@ -108,6 +108,24 @@ describe('<Modal />', () => {
     await waitFor(() => expect(screen.getByLabelText('Preferred')).toHaveFocus());
   });
 
+  test('skips data-modal-skip-autofocus controls when choosing the initial focus target', async () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div data-testid="modal-content">
+          <button type="button" data-modal-skip-autofocus="" aria-label="Skip me">
+            Skip me
+          </button>
+          <button type="button" aria-label="Focus me">
+            Focus me
+          </button>
+        </div>
+      </Modal>,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('Focus me')).toHaveFocus());
+    expect(screen.getByLabelText('Skip me')).not.toHaveFocus();
+  });
+
   test('normalizes raw modal form elements through shadcn primitives', () => {
     render(
       <Modal isOpen={true} onClose={() => {}}>
