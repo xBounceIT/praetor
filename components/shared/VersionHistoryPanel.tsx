@@ -349,11 +349,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           <Button
             type="button"
             size="sm"
-            disabled={
-              Boolean(disabled) ||
-              Boolean(restoreInFlight) ||
-              !filteredRows.some((row) => row.id === selectedVersionId)
-            }
+            disabled={Boolean(disabled) || Boolean(restoreInFlight) || !selectedRowVisible}
             onClick={onRestore}
             className="flex-1"
           >
