@@ -443,6 +443,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
         const txResult = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
           let lockedSourceOrder: { id: string; linkedQuoteId: string | null } | null = null;
+          let invoiceSupplierId = supplierIdResult.value;
+          let invoiceSupplierName = supplierNameResult.value;
           let versionedItems = normalizedItems;
           // Lock the linked supplier order so a concurrent supplier-order restore
           // (which gates on "no linked invoice exists") serializes against this insert.
@@ -473,6 +475,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
             lockedSourceOrder = lockedOrder;
+            invoiceSupplierId = lockedOrder.supplierId;
+            invoiceSupplierName = lockedOrder.supplierName;
             const sourceOrderItems = await supplierOrdersRepo.findItemsForOrder(
               linkedSaleIdResult.value,
               tx,
@@ -506,8 +510,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             {
               id: invoiceId,
               linkedSaleId: linkedSaleIdResult.value || null,
-              supplierId: supplierIdResult.value,
-              supplierName: supplierNameResult.value,
+              supplierId: invoiceSupplierId,
+              supplierName: invoiceSupplierName,
               issueDate: issueDateResult.value,
               dueDate: dueDateResult.value,
               status: statusValue,
