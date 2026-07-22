@@ -79,6 +79,7 @@ const updateInternalSubcategoryNameMock = mock();
 const propagateSubcategoryNameToProductsMock = mock();
 const clearProductsSubcategoryByNameMock = mock();
 const deleteInternalSubcategoryByCategoryAndNameMock = mock();
+const deleteInternalSubcategoryAndClearProductsMock = mock();
 const countProductsForSubcategoryMock = mock();
 const checkProductsLinkedToTransactionsMock = mock();
 
@@ -142,6 +143,7 @@ beforeAll(async () => {
     propagateSubcategoryNameToProducts: propagateSubcategoryNameToProductsMock,
     clearProductsSubcategoryByName: clearProductsSubcategoryByNameMock,
     deleteInternalSubcategoryByCategoryAndName: deleteInternalSubcategoryByCategoryAndNameMock,
+    deleteInternalSubcategoryAndClearProducts: deleteInternalSubcategoryAndClearProductsMock,
     countProductsForSubcategory: countProductsForSubcategoryMock,
     checkProductsLinkedToTransactions: checkProductsLinkedToTransactionsMock,
   }));
@@ -270,6 +272,7 @@ const allMocks = [
   propagateSubcategoryNameToProductsMock,
   clearProductsSubcategoryByNameMock,
   deleteInternalSubcategoryByCategoryAndNameMock,
+  deleteInternalSubcategoryAndClearProductsMock,
   countProductsForSubcategoryMock,
   checkProductsLinkedToTransactionsMock,
   findSupplierNameByIdMock,
@@ -1023,8 +1026,7 @@ describe('PUT /api/products/internal-subcategories/:name', () => {
 describe('DELETE /api/products/internal-subcategories/:name', () => {
   test('204 deletes subcategory', async () => {
     findCategoryIdByNameAndTypeMock.mockResolvedValue('ipc-1');
-    clearProductsSubcategoryByNameMock.mockResolvedValue(undefined);
-    deleteInternalSubcategoryByCategoryAndNameMock.mockResolvedValue({ id: 'ips-1' });
+    deleteInternalSubcategoryAndClearProductsMock.mockResolvedValue({ id: 'ips-1' });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1033,6 +1035,12 @@ describe('DELETE /api/products/internal-subcategories/:name', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(deleteInternalSubcategoryAndClearProductsMock).toHaveBeenCalledWith(
+      'ipc-1',
+      'Sub',
+      'goods',
+      'Electronics',
+    );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'internal_subcategory.deleted' }),
     );
@@ -1052,8 +1060,7 @@ describe('DELETE /api/products/internal-subcategories/:name', () => {
 
   test('404 subcategory missing', async () => {
     findCategoryIdByNameAndTypeMock.mockResolvedValue('ipc-1');
-    clearProductsSubcategoryByNameMock.mockResolvedValue(undefined);
-    deleteInternalSubcategoryByCategoryAndNameMock.mockResolvedValue(null);
+    deleteInternalSubcategoryAndClearProductsMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1062,6 +1069,7 @@ describe('DELETE /api/products/internal-subcategories/:name', () => {
     });
 
     expect(res.statusCode).toBe(404);
+    expect(clearProductsSubcategoryByNameMock).not.toHaveBeenCalled();
   });
 
   test('409 linked', async () => {
