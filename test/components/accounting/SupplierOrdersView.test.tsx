@@ -3,6 +3,11 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Product, Supplier, SupplierSaleOrder } from '../../../types';
 import { render } from '../../helpers/render';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from '../modalStylingTestUtils';
 
 // Stable `t`/`i18n` references: opening the edit modal mounts SupplierOrderVersionsPanel, whose
 // `reload` puts `t` in a useCallback dep array. A fresh `t` per render would make that effect
@@ -419,5 +424,22 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
         legacyDiscountRounding: false,
       }),
     );
+  });
+});
+
+describe('<SupplierOrdersView /> edit modal layout', () => {
+  test('places supplier info beside version history with compact 3-col packing', async () => {
+    const source = await readComponentSource('accounting/SupplierOrdersView.tsx');
+    expectSourceContainsAll(source, [
+      'lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]',
+      'grid grid-cols-1 gap-3 sm:grid-cols-3',
+      'id="supplier-order-supplier"',
+    ]);
+    // Old single-row packing and top-right-only history placement are gone.
+    expectSourceOmitsAll(source, [
+      'className="flex justify-end"',
+      'w-full max-w-2xl',
+      'lg:grid-cols-3',
+    ]);
   });
 });

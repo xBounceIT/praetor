@@ -1113,3 +1113,20 @@ describe('<ClientsOrdersView /> paginated item validation', () => {
     expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
   });
 });
+
+describe('<ClientsOrdersView /> edit modal layout', () => {
+  test('places client info beside version history with 2+2 fields then description', async () => {
+    const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
+    expectSourceContainsAll(source, [
+      'lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]',
+      'grid grid-cols-2 gap-3',
+      'id="client-order-description"',
+    ]);
+    // Old single-row 4-col packing and top-right-only history placement are gone.
+    expectSourceOmitsAll(source, [
+      'className="flex justify-end"',
+      'w-full max-w-2xl',
+      'lg:grid-cols-4',
+    ]);
+  });
+});

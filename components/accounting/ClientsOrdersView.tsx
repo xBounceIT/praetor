@@ -1085,9 +1085,12 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
         </ModalHeader>
         <ModalBody className="flex-1 space-y-5">
           {controller.editingOrder?.id ? (
-            <div className="flex justify-end">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+              <div className="min-w-0 space-y-5">
+                <OrderDetailsSection controller={controller} />
+              </div>
               <OrderVersionsPanel
-                className="w-full max-w-2xl"
+                className="min-w-0 lg:justify-self-stretch"
                 orderId={controller.editingOrder.id}
                 selectedVersionId={controller.previewVersion?.id ?? null}
                 onPreview={controller.handleVersionPreview}
@@ -1096,8 +1099,9 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
                 disabled={controller.isVersionRestoreLocked}
               />
             </div>
-          ) : null}
-          <OrderDetailsSection controller={controller} />
+          ) : (
+            <OrderDetailsSection controller={controller} />
+          )}
           <OrderItemsSection controller={controller} />
           <OrderNotesSummarySection controller={controller} />
         </ModalBody>
@@ -1126,7 +1130,7 @@ const OrderSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }
 const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
   <div className="space-y-2">
     <OrderSectionTitle>{controller.t('accounting:clientsOrders.orderDetails')}</OrderSectionTitle>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3">
       <Field data-invalid={Boolean(controller.errors.clientId)}>
         <SelectControl
           id="client-order-client"
