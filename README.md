@@ -76,6 +76,10 @@ The demo users include HR profile data such as employee codes, departments, cont
 
 To rerun the same refresh manually against an existing backend database:
 
+For this direct-server command, export `DEMO_USER_PASSWORD` in the shell or copy
+`server/.env.example` to `server/.env` and set it there. The root `.env` above is read by
+Compose, not by a process whose working directory is `server`.
+
 ```bash
 cd server
 bun run seed:demo

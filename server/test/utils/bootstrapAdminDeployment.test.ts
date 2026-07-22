@@ -64,4 +64,14 @@ describe('deployment password configuration', () => {
     expect(source).toContain('blank and published legacy defaults are rejected');
     expect(source).toContain('the configured <code>DEMO_USER_PASSWORD</code>');
   });
+
+  test('manual demo seed docs point direct server runs at the server environment', () => {
+    const readme = readRepositoryFile('README.md');
+    const frontendDocs = readRepositoryFile('docs/frontend/index.html');
+
+    expect(readme).toContain('For this direct-server command');
+    expect(readme).toContain('`server/.env`');
+    expect(frontendDocs).toContain('For this direct-server command');
+    expect(frontendDocs).toContain('<code>server/.env</code>');
+  });
 });
