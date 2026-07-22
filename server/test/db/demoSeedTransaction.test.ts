@@ -149,7 +149,7 @@ describe('demo seed transaction finalization', () => {
     expect(connectMock).not.toHaveBeenCalled();
   });
 
-  test('hashes the configured password once and applies it to every demo user', async () => {
+  test('applies one password hash to every demo user and revokes existing credentials', async () => {
     await demoSeed.runDemoSeedRefresh({ source: 'manual' });
 
     expect(bcryptHashMock).toHaveBeenCalledTimes(1);
@@ -162,6 +162,9 @@ describe('demo seed transaction finalization', () => {
     expect(params.filter((value) => value === '$2a$operator-demo-password-hash')).toHaveLength(
       DEMO_USERS.length,
     );
+    const insertSql = String(userInsert?.[0]);
+    expect(insertSql).toContain('session_version = users.session_version + 1');
+    expect(insertSql).toContain('token_version = users.token_version + 1');
   });
 
   test('rolls back all seed work when dataset verification fails', async () => {
