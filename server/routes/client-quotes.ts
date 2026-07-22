@@ -3719,7 +3719,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           clientQuotesRepo.findStatusAndClientName(idResult.value, tx),
           quoteCandidatesRepo.listForQuote(idResult.value, tx),
         ]);
-        if (!status) return { kind: 'not_found' };
         if (linkedOfferId) {
           return {
             kind: 'conflict',
@@ -3727,6 +3726,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: 'offer_exists',
           };
         }
+        if (!status) return { kind: 'not_found' };
         if (normalizeQuoteStatus(status.status) !== 'draft') {
           return {
             kind: 'conflict',

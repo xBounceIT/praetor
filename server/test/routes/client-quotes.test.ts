@@ -1466,7 +1466,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
     cqFindLinkedOfferIdMock.mockResolvedValue(null);
     cqFindByIdMock.mockResolvedValue(null);
-    cqLockCurrentByIdMock.mockResolvedValue(null);
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
     cqFindItemsForCandidateMock.mockResolvedValue([]);
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([EXISTING_SNAP]);
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'draft' }));

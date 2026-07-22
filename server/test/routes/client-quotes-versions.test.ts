@@ -991,6 +991,7 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
+      expirationDate: SAMPLE_QUOTE.expirationDate,
     });
     cqFindFullForSnapshotMock.mockResolvedValue({
       quote: SAMPLE_QUOTE,
@@ -1020,6 +1021,7 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
       status: 'draft',
       discount: 0,
       discountType: 'percentage',
+      expirationDate: SAMPLE_QUOTE.expirationDate,
     });
     cqRenameMock.mockResolvedValue({ ...SAMPLE_QUOTE, id: 'q-1-renamed' });
 
