@@ -139,6 +139,21 @@ describe('listAllItems', () => {
 });
 
 describe('listAllWithItems', () => {
+  test('queries items only for the capped invoice ids with deterministic ordering', async () => {
+    exec.enqueue({
+      rows: [invoiceRow({ 0: 'INV-2' }), invoiceRow({ 0: 'INV-1' })],
+    });
+    exec.enqueue({ rows: [] });
+
+    await invoicesRepo.listAllWithItems(testDb);
+
+    const itemQuery = exec.calls[1];
+    expect(itemQuery.sql.toLowerCase()).toContain('where "invoice_items"."invoice_id" in');
+    expect(itemQuery.params).toContain('INV-2');
+    expect(itemQuery.params).toContain('INV-1');
+    expect(itemQuery.sql.toLowerCase()).toMatch(/order by.*"created_at".*,.*"id"/);
+  });
+
   test('groups items by invoiceId and preserves invoice order', async () => {
     exec.enqueue({
       rows: [invoiceRow({ 0: 'INV-1' }), invoiceRow({ 0: 'INV-2' })],
@@ -161,6 +176,12 @@ describe('listAllWithItems', () => {
     exec.enqueue({ rows: [] });
     const result = await invoicesRepo.listAllWithItems(testDb);
     expect(result[0].items).toEqual([]);
+  });
+
+  test('skips the item query when the capped invoice list is empty', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await invoicesRepo.listAllWithItems(testDb)).toEqual([]);
+    expect(exec.calls).toHaveLength(1);
   });
 });
 
