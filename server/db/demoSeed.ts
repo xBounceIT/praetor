@@ -267,13 +267,13 @@ export const insertCompatibilityDefaults = async (
   counts: Record<string, number>,
 ) => {
   // Internal project p3 and demo assignments FK to the own-company singleton. Do not rely only on
-  // migration 0113 — refresh must recreate it when the row is missing (mirrors ensureOwnCompanyClient).
+  // migration 0113 — refresh must recreate it when the row is missing. On conflict keep any branded
+  // company name already synced from app_branding (do not force 'PRAETOR').
   await executeStatement(
     client,
     `INSERT INTO clients (id, name, type, is_disabled, is_own_company, description)
      VALUES ($1, 'PRAETOR', 'company', FALSE, TRUE, 'Company identified by Praetor for internal projects.')
      ON CONFLICT (id) DO UPDATE SET
-       name = EXCLUDED.name,
        is_disabled = FALSE,
        is_own_company = TRUE`,
     [OWN_COMPANY_CLIENT_ID],

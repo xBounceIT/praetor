@@ -135,6 +135,9 @@ describe('insertCompatibilityDefaults', () => {
     expect(calls).toHaveLength(5);
     expect(calls[0]?.sql).toContain('INSERT INTO clients');
     expect(calls[0]?.sql).toContain('is_own_company');
+    expect(calls[0]?.sql).toContain('ON CONFLICT (id) DO UPDATE SET');
+    expect(calls[0]?.sql).toContain('is_disabled = FALSE');
+    expect(calls[0]?.sql).not.toContain('name = EXCLUDED.name');
     expect(calls[0]?.params).toEqual([OWN_COMPANY_CLIENT_ID]);
     expect(calls[1]?.sql).toContain('UPDATE clients');
     expect(calls[1]?.sql).toContain('client_code = NULL');
