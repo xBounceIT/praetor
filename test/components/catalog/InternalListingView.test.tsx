@@ -213,8 +213,12 @@ describe('<InternalListingView /> product type badges', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText('Hardware').closest('[data-slot="badge"]')).not.toBeNull();
-    expect(container.querySelector('[data-status-badge]')).not.toBeNull();
+    const productTypeBadge = screen
+      .getByText('Hardware')
+      .closest('[data-standard-table-preserve-style]');
+    expect(productTypeBadge).toHaveAttribute('data-slot', 'badge');
+    expect(productTypeBadge).not.toHaveAttribute('data-status-badge');
+    expect(container.querySelectorAll('[data-status-badge]')).toHaveLength(1);
   });
 });
 

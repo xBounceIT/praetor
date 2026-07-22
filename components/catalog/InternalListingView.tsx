@@ -2013,7 +2013,11 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     header: controller.t('crm:internalListing.type'),
     accessorKey: 'type' as const,
     cell: ({ row: product }: { row: Product }) => (
-      <Badge variant="secondary" className="text-[10px] font-black uppercase tracking-wider">
+      <Badge
+        data-standard-table-preserve-style
+        variant="secondary"
+        className="text-[10px] font-black uppercase tracking-wider"
+      >
         {getDisplayTypeName(product.type)}
       </Badge>
     ),
