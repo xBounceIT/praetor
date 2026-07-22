@@ -193,9 +193,9 @@ describe('get', () => {
       (value): value is string => typeof value === 'string' && isEncrypted(value),
     );
     expect(migrationParams.map(decrypt).toSorted()).toEqual(['legacy-gemini', 'legacy-openai']);
-    expect(exec.calls[1].params).not.toContain('legacy-gemini');
-    expect(exec.calls[1].params).not.toContain('legacy-openai');
-    expect(exec.calls[1].sql).toContain('sha256');
+    expect(exec.calls[1].params).toContain('legacy-gemini');
+    expect(exec.calls[1].params).toContain('legacy-openai');
+    expect(exec.calls[1].sql).not.toContain('sha256');
     expect(exec.calls[1].sql).not.toContain('md5');
   });
 });

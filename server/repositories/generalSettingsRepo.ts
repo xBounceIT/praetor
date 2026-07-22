@@ -1,10 +1,9 @@
-import crypto from 'crypto';
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import type { StoredRilNoteOption } from '../db/schema/generalSettings.ts';
 import { generalSettings } from '../db/schema/generalSettings.ts';
 import { decrypt, encrypt, isEncrypted } from '../utils/crypto.ts';
-import { createChildLogger, serializeError } from '../utils/logger.ts';
+import { createChildLogger } from '../utils/logger.ts';
 import { normalizeSessionIdleTimeoutMinutes } from '../utils/sessionTimeout.ts';
 
 const logger = createChildLogger({ module: 'generalSettingsRepo' });
@@ -235,10 +234,7 @@ const migrateLegacyApiKeysIfNeeded = async (
 
   const migrateValue = (value: string | null, column: AiApiKeyColumn) => {
     if (!isLegacyPlaintext(value)) return sql`${column}`;
-    // Compare a one-way fingerprint rather than binding the legacy plaintext into the UPDATE;
-    // this keeps query-parameter diagnostics from becoming a second secret-exposure path.
-    const fingerprint = crypto.createHash('sha256').update(value, 'utf8').digest('hex');
-    return sql`CASE WHEN encode(sha256(convert_to(${column}, 'UTF8')), 'hex') = ${fingerprint} AND length(${column}) = ${value.length} THEN ${encrypt(value)} ELSE ${column} END`;
+    return sql`CASE WHEN ${column} = ${value} THEN ${encrypt(value)} ELSE ${column} END`;
   };
 
   try {
@@ -252,11 +248,10 @@ const migrateLegacyApiKeysIfNeeded = async (
         localApiKey: migrateValue(row.localApiKey, generalSettings.localApiKey),
       })
       .where(eq(generalSettings.id, 1));
-  } catch (err) {
-    logger.warn(
-      { err: serializeError(err) },
-      'failed to migrate legacy plaintext AI provider keys to encrypted form',
-    );
+  } catch {
+    // Do not attach the Drizzle error: failed-query messages include bound parameters, and this
+    // one-time compare-and-swap necessarily binds the legacy plaintext it is replacing.
+    logger.warn('failed to migrate legacy plaintext AI provider keys to encrypted form');
   }
 };
 
