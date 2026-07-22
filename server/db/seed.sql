@@ -4,13 +4,15 @@
 -- canonical demo namespace and any demo business-key collisions, then reapplying this file.
 -- This flow is intended for demo/test environments and supports reused Docker volumes.
 
--- Default users (password is 'password' for all, hashed with bcrypt cost 10)
--- To generate: require('bcrypt').hashSync('password', 10)
+-- These pre-marker rows document the compatibility identities parsed by drift tests; the
+-- application never executes them. Their deliberately non-loginable placeholders keep direct
+-- execution from introducing public credentials. Supported startup provisions the admin
+-- separately, and the demo refresh upserts demo users with the DEMO_USER_PASSWORD hash.
 INSERT INTO users (id, name, username, password_hash, role, avatar_initials, first_login_at) VALUES
-    ('u1', 'Admin User', 'admin', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'admin', 'AD', NULL),
-    ('u2', 'Manager User', 'manager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'manager', 'MG', NULL),
-    ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US', NULL),
-    ('u9', 'Top Manager', 'topmanager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'top_manager', 'TM', NULL)
+    ('u1', 'Admin User', 'admin', '!set-by-application-bootstrap!', 'admin', 'AD', NULL),
+    ('u2', 'Manager User', 'manager', '!set-by-demo-seed-refresh!', 'manager', 'MG', NULL),
+    ('u3', 'Standard User', 'user', '!set-by-demo-seed-refresh!', 'user', 'US', NULL),
+    ('u9', 'Top Manager', 'topmanager', '!set-by-demo-seed-refresh!', 'top_manager', 'TM', NULL)
 ON CONFLICT DO NOTHING;
 
 -- Every seeded user must have the required baseline hourly-cost period.

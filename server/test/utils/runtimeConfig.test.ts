@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
   INSECURE_DEFAULT_ADMIN_PASSWORDS,
+  INSECURE_DEFAULT_DEMO_USER_PASSWORDS,
   INSECURE_DEFAULT_JWT_SECRETS,
   readRequiredNonDefaultEnv,
   validateRequiredNonDefaultEnv,
@@ -37,6 +38,13 @@ describe('runtimeConfig', () => {
     expect(INSECURE_DEFAULT_ADMIN_PASSWORDS).toEqual([
       'password',
       'change-me-strong-admin-password',
+    ]);
+  });
+
+  test('maintains the demo user password denylist with every published legacy default', () => {
+    expect(INSECURE_DEFAULT_DEMO_USER_PASSWORDS).toEqual([
+      'password',
+      'change-me-strong-demo-password',
     ]);
   });
 });
