@@ -164,9 +164,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let keyToUse = '';
       let localBaseUrl = '';
       const savedSettings =
-        apiKey === undefined || (providerResult.value === 'local' && baseUrl === undefined)
+        apiKey === undefined
           ? await generalSettingsRepo.getWithAiApiKey(providerResult.value)
-          : null;
+          : providerResult.value === 'local' && baseUrl === undefined
+            ? await generalSettingsRepo.get()
+            : null;
       if (apiKey !== undefined) {
         if (typeof apiKey !== 'string') return badRequest(reply, 'apiKey must be a string');
         keyToUse = apiKey;

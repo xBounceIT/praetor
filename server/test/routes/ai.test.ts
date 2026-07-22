@@ -22,6 +22,7 @@ const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const getGeneralSettingsMock = mock();
+const getGeneralSettingsWithKeyMock = mock();
 
 let routePlugin: FastifyPluginAsync;
 let originalFetch: typeof fetch;
@@ -49,7 +50,7 @@ beforeAll(async () => {
   mock.module('../../repositories/generalSettingsRepo.ts', () => ({
     ...generalSettingsRepoSnap,
     get: getGeneralSettingsMock,
-    getWithAiApiKey: getGeneralSettingsMock,
+    getWithAiApiKey: getGeneralSettingsWithKeyMock,
   }));
   mock.module('../../utils/local-ai-endpoint.ts', () => ({
     ...localAiEndpointSnap,
@@ -91,6 +92,7 @@ beforeEach(async () => {
   userHasRoleMock.mockReset();
   getRolePermissionsMock.mockReset();
   getGeneralSettingsMock.mockReset();
+  getGeneralSettingsWithKeyMock.mockReset();
   fetchMock.mockReset();
   localAiFetchMock.mockClear();
 
@@ -98,6 +100,14 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ADMIN_PERMS);
   getGeneralSettingsMock.mockResolvedValue({
+    geminiApiKey: 'test-gemini-key',
+    openrouterApiKey: 'test-openrouter-key',
+    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
+    localApiKey: 'test-local-key',
+    localBaseUrl: 'http://127.0.0.1:11434/v1',
+  });
+  getGeneralSettingsWithKeyMock.mockResolvedValue({
     geminiApiKey: 'test-gemini-key',
     openrouterApiKey: 'test-openrouter-key',
     anthropicApiKey: 'test-anthropic-key',
@@ -164,7 +174,7 @@ describe('POST /api/ai/validate-model', () => {
   });
 
   test('200 ok=false MISSING_API_KEY when no key in body or settings', async () => {
-    getGeneralSettingsMock.mockResolvedValue({
+    getGeneralSettingsWithKeyMock.mockResolvedValue({
       geminiApiKey: '',
       openrouterApiKey: '',
       anthropicApiKey: '',
@@ -319,7 +329,7 @@ describe('POST /api/ai/validate-model', () => {
       'https://api.openai.com/v1/models/gpt-test',
       expect.objectContaining({ headers: { Authorization: 'Bearer test-openai-key' } }),
     );
-    expect(getGeneralSettingsMock).toHaveBeenCalledWith('openai');
+    expect(getGeneralSettingsWithKeyMock).toHaveBeenCalledWith('openai');
   });
 
   test('200 ok=true uses gemini key from settings when apiKey omitted', async () => {
@@ -430,6 +440,27 @@ describe('POST /api/ai/validate-model', () => {
       'http://127.0.0.1:11434/v1/models',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-local-key' }),
+      }),
+    );
+    expect(getGeneralSettingsWithKeyMock).toHaveBeenCalledWith('local');
+  });
+
+  test('does not decrypt the saved local token when only the saved endpoint is needed', async () => {
+    fetchMock.mockResolvedValue(okResponse({ data: [{ id: 'llama3.2' }] }, 200));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'local', modelId: 'llama3.2', apiKey: 'replacement-key' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(getGeneralSettingsMock).toHaveBeenCalled();
+    expect(getGeneralSettingsWithKeyMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:11434/v1/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer replacement-key' }),
       }),
     );
   });
