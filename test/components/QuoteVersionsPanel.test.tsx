@@ -195,8 +195,10 @@ describe('<QuoteVersionsPanel />', () => {
     );
   });
 
-  test('clicking a row fetches the full version and calls onPreview', async () => {
-    listVersionsMock.mockImplementation(() => Promise.resolve([VERSION_ROW_UPDATE]));
+  test('clicking a historical row fetches the full version and calls onPreview', async () => {
+    listVersionsMock.mockImplementation(() =>
+      Promise.resolve([VERSION_ROW_RESTORE, VERSION_ROW_UPDATE]),
+    );
     getVersionMock.mockImplementation(() => Promise.resolve(FULL_VERSION));
     const onPreview = mock(() => {});
     render(<QuoteVersionsPanel {...baseProps} onPreview={onPreview} />);
