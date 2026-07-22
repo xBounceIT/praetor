@@ -49,6 +49,7 @@ import {
   defaultDurationMonthsForUnit,
   effectiveDurationMultiplier,
 } from '../utils/duration-unit.ts';
+import { ConflictError } from '../utils/http-errors.ts';
 import { getDocumentDiscountAmount } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
@@ -1752,6 +1753,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quoteId: nextIdResult.value ?? 'auto',
         });
         if (autoOfferConflict) return autoOfferConflict;
+        if (err instanceof ConflictError) {
+          return replyError(request, reply, {
+            statusCode: err.statusCode,
+            message: err.message,
+            action: 'client_quote.create.conflict',
+            entityType: 'client_quote',
+            details: { secondaryLabel: 'supplier_quote_changed' },
+          });
+        }
         request.log.error({ err }, 'CRITICAL ERROR creating quote');
         return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
       }
