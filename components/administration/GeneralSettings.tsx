@@ -27,6 +27,7 @@ import type {
   RilNoteOption,
   TimeEntryLocation,
 } from '../../types';
+import { MASKED_SECRET } from '../../utils/maskedSecret';
 import {
   DEFAULT_RIL_EXIT_TIME,
   DEFAULT_RIL_START_TIME,
@@ -1052,7 +1053,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   const modelCheckRequestIdRef = useRef(0);
   const modelCheckTargetRef = useRef<{
     provider: AiProvider;
-    apiKey: string;
+    apiKey?: string;
     baseUrl?: string;
     modelId: string;
   } | null>(null);
@@ -1103,7 +1104,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   useEffect(() => {
     modelCheckTargetRef.current = {
       provider: aiProvider,
-      apiKey: currentApiKey,
+      ...(currentApiKey === MASKED_SECRET ? {} : { apiKey: currentApiKey }),
       baseUrl: aiProvider === 'local' ? currentBaseUrl : undefined,
       modelId: currentModelId,
     };
@@ -1168,7 +1169,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     modelCheckRequestIdRef.current = requestId;
     const target = {
       provider: aiProvider,
-      apiKey: currentApiKey,
+      ...(currentApiKey === MASKED_SECRET ? {} : { apiKey: currentApiKey }),
       ...(aiProvider === 'local' ? { baseUrl: currentBaseUrl } : {}),
       modelId: currentModelId,
     };

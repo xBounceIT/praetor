@@ -6,6 +6,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  text,
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -45,14 +46,16 @@ export const generalSettings = pgTable(
     totpExemptRoleIds: jsonb('totp_exempt_role_ids').$type<string[]>().default(sql`'[]'::jsonb`),
     totpExemptUserIds: jsonb('totp_exempt_user_ids').$type<string[]>().default(sql`'[]'::jsonb`),
     sessionIdleTimeoutMinutes: integer('session_idle_timeout_minutes').notNull().default(30),
-    geminiApiKey: varchar('gemini_api_key', { length: 255 }),
+    // Provider credentials are AES-256-GCM ciphertext (utils/crypto.ts). `text` leaves room for
+    // the versioned envelope and for providers whose plaintext keys already approach 255 bytes.
+    geminiApiKey: text('gemini_api_key'),
     aiProvider: varchar('ai_provider', { length: 20 })
       .$type<'gemini' | 'openrouter' | 'anthropic' | 'openai' | 'local'>()
       .default('gemini'),
-    openrouterApiKey: varchar('openrouter_api_key', { length: 255 }),
-    anthropicApiKey: varchar('anthropic_api_key', { length: 255 }),
-    openaiApiKey: varchar('openai_api_key', { length: 255 }),
-    localApiKey: varchar('local_api_key', { length: 255 }),
+    openrouterApiKey: text('openrouter_api_key'),
+    anthropicApiKey: text('anthropic_api_key'),
+    openaiApiKey: text('openai_api_key'),
+    localApiKey: text('local_api_key'),
     localBaseUrl: varchar('local_base_url', { length: 2048 }),
     geminiModelId: varchar('gemini_model_id', { length: 255 }),
     openrouterModelId: varchar('openrouter_model_id', { length: 255 }),

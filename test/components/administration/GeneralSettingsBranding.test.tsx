@@ -228,6 +228,34 @@ describe('<GeneralSettings /> AI provider settings', () => {
     );
   });
 
+  test('validates a stored write-only API key without sending its mask as a credential', async () => {
+    render(
+      <GeneralSettings
+        settings={{
+          ...baseSettings,
+          enableAiReporting: true,
+          aiProvider: 'openai',
+          openaiApiKey: '********',
+          openaiModelId: 'gpt-test',
+        }}
+        onUpdate={mock(async () => undefined)}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+    fireEvent.click(screen.getByRole('button', { name: 'general.checkModel' }));
+
+    await waitFor(() =>
+      expect(validateModelMock).toHaveBeenCalledWith({
+        provider: 'openai',
+        modelId: 'gpt-test',
+      }),
+    );
+    expect(screen.getByText('general.modelVerified')).toBeDefined();
+  });
+
   test('configures and validates a local endpoint without requiring an API token', async () => {
     const onUpdate = mock(async () => undefined);
     render(

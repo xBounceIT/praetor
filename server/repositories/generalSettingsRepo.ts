@@ -1,8 +1,13 @@
+import crypto from 'crypto';
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import type { StoredRilNoteOption } from '../db/schema/generalSettings.ts';
 import { generalSettings } from '../db/schema/generalSettings.ts';
+import { decrypt, encrypt, isEncrypted } from '../utils/crypto.ts';
+import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { normalizeSessionIdleTimeoutMinutes } from '../utils/sessionTimeout.ts';
+
+const logger = createChildLogger({ module: 'generalSettingsRepo' });
 
 export type GeneralSettings = {
   currency: string;
@@ -161,6 +166,11 @@ const DEFAULT_FALLBACKS = {
   sessionIdleTimeoutMinutes: 30,
 } as const;
 
+const decodeApiKey = (value: string | null): string | null => {
+  if (!value || !isEncrypted(value)) return value;
+  return decrypt(value);
+};
+
 const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   currency: row.currency ?? DEFAULT_FALLBACKS.currency,
   dailyLimit: parseFloat(row.dailyLimit ?? DEFAULT_FALLBACKS.dailyLimit),
@@ -175,12 +185,12 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(
     row.sessionIdleTimeoutMinutes ?? DEFAULT_FALLBACKS.sessionIdleTimeoutMinutes,
   ),
-  geminiApiKey: row.geminiApiKey,
+  geminiApiKey: decodeApiKey(row.geminiApiKey),
   aiProvider: row.aiProvider,
-  openrouterApiKey: row.openrouterApiKey,
-  anthropicApiKey: row.anthropicApiKey,
-  openaiApiKey: row.openaiApiKey,
-  localApiKey: row.localApiKey,
+  openrouterApiKey: decodeApiKey(row.openrouterApiKey),
+  anthropicApiKey: decodeApiKey(row.anthropicApiKey),
+  openaiApiKey: decodeApiKey(row.openaiApiKey),
+  localApiKey: decodeApiKey(row.localApiKey),
   localBaseUrl: row.localBaseUrl,
   geminiModelId: row.geminiModelId,
   openrouterModelId: row.openrouterModelId,
@@ -197,13 +207,71 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   rilTransferOptions: row.rilTransferOptions,
 });
 
+const isLegacyPlaintext = (value: string | null): value is string =>
+  Boolean(value) && !isEncrypted(value as string);
+
+type AiApiKeyColumn =
+  | typeof generalSettings.geminiApiKey
+  | typeof generalSettings.openrouterApiKey
+  | typeof generalSettings.anthropicApiKey
+  | typeof generalSettings.openaiApiKey
+  | typeof generalSettings.localApiKey;
+
+// Encrypts pre-upgrade plaintext in place after a successful read. Each CASE is a compare-and-swap
+// against the exact plaintext that was read, so a concurrent administrator update wins instead of
+// being overwritten by the backfill. The operation is retry-safe: ciphertext is skipped next time.
+const migrateLegacyApiKeysIfNeeded = async (
+  row: GeneralSettingsRow,
+  exec: DbExecutor,
+): Promise<void> => {
+  const plaintextValues = [
+    row.geminiApiKey,
+    row.openrouterApiKey,
+    row.anthropicApiKey,
+    row.openaiApiKey,
+    row.localApiKey,
+  ];
+  if (!plaintextValues.some(isLegacyPlaintext)) return;
+
+  const migrateValue = (value: string | null, column: AiApiKeyColumn) => {
+    if (!isLegacyPlaintext(value)) return sql`${column}`;
+    // Compare a one-way fingerprint rather than binding the legacy plaintext into the UPDATE;
+    // this keeps query-parameter diagnostics from becoming a second secret-exposure path.
+    const fingerprint = crypto.createHash('md5').update(value, 'utf8').digest('hex');
+    return sql`CASE WHEN md5(${column}) = ${fingerprint} AND length(${column}) = ${value.length} THEN ${encrypt(value)} ELSE ${column} END`;
+  };
+
+  try {
+    await exec
+      .update(generalSettings)
+      .set({
+        geminiApiKey: migrateValue(row.geminiApiKey, generalSettings.geminiApiKey),
+        openrouterApiKey: migrateValue(row.openrouterApiKey, generalSettings.openrouterApiKey),
+        anthropicApiKey: migrateValue(row.anthropicApiKey, generalSettings.anthropicApiKey),
+        openaiApiKey: migrateValue(row.openaiApiKey, generalSettings.openaiApiKey),
+        localApiKey: migrateValue(row.localApiKey, generalSettings.localApiKey),
+      })
+      .where(eq(generalSettings.id, 1));
+  } catch (err) {
+    logger.warn(
+      { err: serializeError(err) },
+      'failed to migrate legacy plaintext AI provider keys to encrypted form',
+    );
+  }
+};
+
 export const get = async (exec: DbExecutor = db): Promise<GeneralSettings | null> => {
   const rows = await exec
     .select(GENERAL_SETTINGS_PROJECTION)
     .from(generalSettings)
     .where(eq(generalSettings.id, 1));
-  return rows[0] ? mapRow(rows[0]) : null;
+  if (!rows[0]) return null;
+  await migrateLegacyApiKeysIfNeeded(rows[0], exec);
+  return mapRow(rows[0]);
 };
+
+const encryptApiKeyPatch = (value: string | null | undefined): string | null =>
+  value == null || value === '' ? (value ?? null) : encrypt(value);
 
 export const update = async (
   patch: GeneralSettingsPatch,
@@ -237,12 +305,12 @@ export const update = async (
       totpExemptRoleIds: sql`COALESCE(${totpExemptRoleIdsParam}::jsonb, ${generalSettings.totpExemptRoleIds})`,
       totpExemptUserIds: sql`COALESCE(${totpExemptUserIdsParam}::jsonb, ${generalSettings.totpExemptUserIds})`,
       sessionIdleTimeoutMinutes: sql`COALESCE(${patch.sessionIdleTimeoutMinutes ?? null}, ${generalSettings.sessionIdleTimeoutMinutes})`,
-      geminiApiKey: sql`COALESCE(${patch.geminiApiKey ?? null}, ${generalSettings.geminiApiKey})`,
+      geminiApiKey: sql`COALESCE(${encryptApiKeyPatch(patch.geminiApiKey)}, ${generalSettings.geminiApiKey})`,
       aiProvider: sql`COALESCE(${patch.aiProvider ?? null}, ${generalSettings.aiProvider})`,
-      openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,
-      anthropicApiKey: sql`COALESCE(${patch.anthropicApiKey ?? null}, ${generalSettings.anthropicApiKey})`,
-      openaiApiKey: sql`COALESCE(${patch.openaiApiKey ?? null}, ${generalSettings.openaiApiKey})`,
-      localApiKey: sql`COALESCE(${patch.localApiKey ?? null}, ${generalSettings.localApiKey})`,
+      openrouterApiKey: sql`COALESCE(${encryptApiKeyPatch(patch.openrouterApiKey)}, ${generalSettings.openrouterApiKey})`,
+      anthropicApiKey: sql`COALESCE(${encryptApiKeyPatch(patch.anthropicApiKey)}, ${generalSettings.anthropicApiKey})`,
+      openaiApiKey: sql`COALESCE(${encryptApiKeyPatch(patch.openaiApiKey)}, ${generalSettings.openaiApiKey})`,
+      localApiKey: sql`COALESCE(${encryptApiKeyPatch(patch.localApiKey)}, ${generalSettings.localApiKey})`,
       localBaseUrl: sql`COALESCE(${patch.localBaseUrl ?? null}, ${generalSettings.localBaseUrl})`,
       geminiModelId: sql`COALESCE(${patch.geminiModelId ?? null}, ${generalSettings.geminiModelId})`,
       openrouterModelId: sql`COALESCE(${patch.openrouterModelId ?? null}, ${generalSettings.openrouterModelId})`,

@@ -841,6 +841,13 @@
       "when": 1784674832455,
       "tag": "0119_preserve_historical_pricing_semantics",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1784742082636,
+      "tag": "0120_widen_ai_provider_keys_for_encryption",
+      "breakpoints": true
     }
   ]
 }

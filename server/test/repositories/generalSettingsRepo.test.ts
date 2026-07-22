@@ -3,10 +3,13 @@ import { getTableColumns } from 'drizzle-orm';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import { generalSettings } from '../../db/schema/generalSettings.ts';
 import * as generalSettingsRepo from '../../repositories/generalSettingsRepo.ts';
+import { decrypt, encrypt, isEncrypted } from '../../utils/crypto.ts';
 import { type FakeExecutor, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
+
+process.env.ENCRYPTION_KEY ||= 'general-settings-repo-test-key';
 
 beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
@@ -147,6 +150,40 @@ describe('get', () => {
     expect(exec.calls[0].sql).toMatch(/"id"\s*=\s*\$\d+/);
     expect(exec.calls[0].params).toContain(1);
   });
+
+  test('decrypts encrypted provider keys for internal consumers', async () => {
+    const encryptedKey = encrypt('secret-openai-key');
+    exec.enqueue({ rows: [buildRow({ openaiApiKey: encryptedKey })] });
+
+    const result = await generalSettingsRepo.get(testDb);
+
+    expect(result?.openaiApiKey).toBe('secret-openai-key');
+    expect(exec.calls).toHaveLength(1);
+  });
+
+  test('lazily migrates legacy plaintext provider keys in one retry-safe update', async () => {
+    exec.enqueue({
+      rows: [
+        buildRow({
+          geminiApiKey: 'legacy-gemini',
+          openaiApiKey: 'legacy-openai',
+        }),
+      ],
+    });
+    exec.enqueue({ rows: [] });
+
+    const result = await generalSettingsRepo.get(testDb);
+
+    expect(result?.geminiApiKey).toBe('legacy-gemini');
+    expect(result?.openaiApiKey).toBe('legacy-openai');
+    expect(exec.calls).toHaveLength(2);
+    const migrationParams = exec.calls[1].params.filter(
+      (value): value is string => typeof value === 'string' && isEncrypted(value),
+    );
+    expect(migrationParams.map(decrypt).toSorted()).toEqual(['legacy-gemini', 'legacy-openai']);
+    expect(exec.calls[1].params).not.toContain('legacy-gemini');
+    expect(exec.calls[1].params).not.toContain('legacy-openai');
+  });
 });
 
 describe('update', () => {
@@ -221,12 +258,12 @@ describe('update', () => {
     expect(params).toContain(true);
     expect(params).toContain(false);
     expect(params).toContain(45);
-    expect(params).toContain('g-key');
+    expect(params).not.toContain('g-key');
     expect(params).toContain('anthropic');
-    expect(params).toContain('or-key');
-    expect(params).toContain('a-key');
-    expect(params).toContain('oa-key');
-    expect(params).toContain('local-key');
+    expect(params).not.toContain('or-key');
+    expect(params).not.toContain('a-key');
+    expect(params).not.toContain('oa-key');
+    expect(params).not.toContain('local-key');
     expect(params).toContain('http://inference:11434/v1');
     expect(params).toContain('gemini-2.0');
     expect(params).toContain('or/model');
@@ -254,6 +291,17 @@ describe('update', () => {
     // identifier, not a parameter), the first 31 params must match PROJECTION_KEYS order.
     // Catches column→param wiring bugs where two same-typed booleans (e.g.,
     // treatSaturdayAsHoliday vs allowWeekendSelection) get swapped.
+    const encryptedProviderKeys = [params[11], params[13], params[14], params[15], params[16]];
+    expect(
+      encryptedProviderKeys.every((value) => typeof value === 'string' && isEncrypted(value)),
+    ).toBe(true);
+    expect(encryptedProviderKeys.map((value) => decrypt(value as string))).toEqual([
+      'g-key',
+      'or-key',
+      'a-key',
+      'oa-key',
+      'local-key',
+    ]);
     expect(params.slice(0, 31)).toEqual([
       'USD',
       9,
@@ -266,12 +314,12 @@ describe('update', () => {
       exemptRolesJson,
       exemptUsersJson,
       45,
-      'g-key',
+      params[11],
       'anthropic',
-      'or-key',
-      'a-key',
-      'oa-key',
-      'local-key',
+      params[13],
+      params[14],
+      params[15],
+      params[16],
       'http://inference:11434/v1',
       'gemini-2.0',
       'or/model',
