@@ -1332,7 +1332,7 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
     onOpenChange: handleVersionsDialogOpenChange,
     setOpen: setVersionsDialogOpen,
     bindPreview,
-  } = useVersionHistoryDialogOpen(controller.handleClearPreview);
+  } = useVersionHistoryDialogOpen(selectedVersionId, controller.handleClearPreview);
   const editingQuoteId = controller.editingQuote?.id;
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);

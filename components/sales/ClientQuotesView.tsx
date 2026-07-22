@@ -2454,7 +2454,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
     onOpenChange: handleVersionsDialogOpenChange,
     setOpen: setVersionsDialogOpen,
     bindPreview,
-  } = useVersionHistoryDialogOpen(handleClearPreview);
+  } = useVersionHistoryDialogOpen(selectedVersionId, handleClearPreview);
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);
     closeModal();

@@ -88,21 +88,21 @@ describe('<VersionHistoryDialog />', () => {
     cleanup();
   });
 
-  test('useVersionHistoryDialogOpen clears preview and ignores late results after close', () => {
+  test('useVersionHistoryDialogOpen clears version previews and ignores late results after close', () => {
     const onClearVersionPreview = mock(() => {});
     const onPreview = mock(() => {});
     type DialogOpenApi = ReturnType<typeof useVersionHistoryDialogOpen>;
     const apiRef: { current: DialogOpenApi | null } = { current: null };
 
-    function Probe() {
-      const value = useVersionHistoryDialogOpen(onClearVersionPreview);
+    function Probe({ selectedVersionId }: { selectedVersionId: string | null }) {
+      const value = useVersionHistoryDialogOpen(selectedVersionId, onClearVersionPreview);
       useEffect(() => {
         apiRef.current = value;
       }, [value]);
       return null;
     }
 
-    render(<Probe />);
+    const { rerender } = render(<Probe selectedVersionId="qv-1" />);
     expect(apiRef.current).not.toBeNull();
 
     act(() => {
@@ -118,6 +118,15 @@ describe('<VersionHistoryDialog />', () => {
 
     guardedPreview({ id: 'late-version' });
     expect(onPreview).not.toHaveBeenCalled();
+
+    onClearVersionPreview.mockClear();
+    rerender(<Probe selectedVersionId={null} />);
+    act(() => {
+      apiRef.current?.onOpenChange(true);
+      apiRef.current?.onOpenChange(false);
+    });
+    // Revision-only previews leave selectedVersionId null — closing must not clear them.
+    expect(onClearVersionPreview).not.toHaveBeenCalled();
 
     act(() => {
       apiRef.current?.onOpenChange(true);

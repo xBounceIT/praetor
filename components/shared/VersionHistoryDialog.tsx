@@ -23,10 +23,13 @@ interface VersionHistoryDialogProps {
 
 /**
  * Dialog open state for secondary save-version history.
- * Closing always clears preview and ignores late `getVersion` results so the parent form
- * cannot stay read-only without a visible exit after the dialog is dismissed.
+ * Closing clears an active *version* preview (not inline revision previews) and ignores
+ * late `getVersion` results so the form cannot stay read-only without a visible exit.
  */
-export function useVersionHistoryDialogOpen(onClearVersionPreview: () => void) {
+export function useVersionHistoryDialogOpen(
+  selectedVersionId: string | null,
+  onClearVersionPreview: () => void,
+) {
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
   openRef.current = open;
@@ -35,11 +38,11 @@ export function useVersionHistoryDialogOpen(onClearVersionPreview: () => void) {
     (next: boolean) => {
       setOpen(next);
       openRef.current = next;
-      if (!next) {
+      if (!next && selectedVersionId) {
         onClearVersionPreview();
       }
     },
-    [onClearVersionPreview],
+    [onClearVersionPreview, selectedVersionId],
   );
 
   const bindPreview = useCallback(<T,>(onPreview: (value: T) => void) => {
