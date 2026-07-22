@@ -1611,6 +1611,7 @@ SELECT
         'communicationChannelId', q.communication_channel_id,
         'communicationChannelName', COALESCE((SELECT c.name FROM quote_communication_channels c WHERE c.id = q.communication_channel_id), ''),
         'notes', q.notes,
+        'description', q.description,
         'createdAt', (EXTRACT(EPOCH FROM COALESCE(q.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
         'updatedAt', (EXTRACT(EPOCH FROM COALESCE(q.updated_at, q.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
         'linkedSupplierQuoteId', q.linked_supplier_quote_id,
@@ -1657,7 +1658,8 @@ SELECT
           'note', i.note,
           'unitType', i.unit_type,
           'durationMonths', i.duration_months,
-          'durationUnit', i.duration_unit
+          'durationUnit', i.duration_unit,
+          'pricingSemanticsVersion', i.pricing_semantics_version
         ) ORDER BY i.position, i.id)
         FROM quote_items i WHERE i.quote_id = q.id
       ), '[]'::jsonb)
@@ -1695,6 +1697,7 @@ SELECT
         'deliveryDate', o.delivery_date,
         'expirationDate', o.expiration_date,
         'notes', o.notes,
+        'description', o.description,
         'createdAt', (EXTRACT(EPOCH FROM COALESCE(o.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
         'updatedAt', (EXTRACT(EPOCH FROM COALESCE(o.updated_at, o.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint
       ),
@@ -1716,7 +1719,8 @@ SELECT
           'note', i.note,
           'discount', i.discount,
           'durationMonths', i.duration_months,
-          'durationUnit', i.duration_unit
+          'durationUnit', i.duration_unit,
+          'pricingSemanticsVersion', i.pricing_semantics_version
         ) ORDER BY i.created_at, i.id)
         FROM customer_offer_items i WHERE i.offer_id = o.id
       ), '[]'::jsonb)
@@ -1785,6 +1789,7 @@ SELECT
         'communicationChannelName', COALESCE((SELECT c.name FROM quote_communication_channels c WHERE c.id = sq.communication_channel_id), ''),
         'linkedOrderId', (SELECT s.id FROM supplier_sales s WHERE s.linked_quote_id = sq.id LIMIT 1),
         'notes', sq.notes,
+        'description', sq.description,
         'createdAt', (EXTRACT(EPOCH FROM COALESCE(sq.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
         'updatedAt', (EXTRACT(EPOCH FROM COALESCE(sq.updated_at, sq.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
         'linkedClientQuoteId', NULL,
@@ -1806,7 +1811,8 @@ SELECT
           'note', i.note,
           'unitType', i.unit_type,
           'durationMonths', i.duration_months,
-          'durationUnit', i.duration_unit
+          'durationUnit', i.duration_unit,
+          'pricingSemanticsVersion', i.pricing_semantics_version
         ) ORDER BY i.created_at, i.id)
         FROM supplier_quote_items i WHERE i.quote_id = sq.id
       ), '[]'::jsonb)
@@ -1818,6 +1824,304 @@ ON CONFLICT (quote_id, revision_number) DO UPDATE SET
     revision_code = EXCLUDED.revision_code,
     created_at = EXCLUDED.created_at,
     snapshot = EXCLUDED.snapshot;
+
+-- Showcase multi-revision timelines for the UI (PREV/OFF/FORN #02).
+-- REV1 is rewritten as an older commercial snapshot; REV2 mirrors the current live rows;
+-- document headers advance to REV2 so Code+REV displays a real history.
+
+CREATE OR REPLACE FUNCTION pg_temp.age_demo_revision_snapshot(
+    snapshot jsonb,
+    header_key text,
+    description text,
+    notes text
+)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT jsonb_set(
+        jsonb_set(
+            jsonb_set(
+                snapshot,
+                ARRAY[header_key, 'description'],
+                to_jsonb(COALESCE(description, '') || ' — bozza iniziale')
+            ),
+            ARRAY[header_key, 'notes'],
+            to_jsonb(notes)
+        ),
+        '{items}',
+        COALESCE((
+            SELECT jsonb_agg(
+                CASE
+                    WHEN item ? 'unitPrice'
+                        THEN jsonb_set(
+                            item,
+                            '{unitPrice}',
+                            to_jsonb(ROUND((item->>'unitPrice')::numeric * 0.92, 2))
+                        )
+                    ELSE item
+                END
+                ORDER BY ord
+            )
+            FROM jsonb_array_elements(snapshot->'items') WITH ORDINALITY AS items(item, ord)
+        ), '[]'::jsonb)
+    )
+$$;
+
+UPDATE quote_revisions qr
+SET
+    created_by_user_id = 'u4',
+    created_at = COALESCE(q.created_at, CURRENT_TIMESTAMP) + INTERVAL '1 day',
+    snapshot = pg_temp.age_demo_revision_snapshot(
+        qr.snapshot,
+        'quote',
+        q.description,
+        'Initial sent revision before commercial adjustments.'
+    )
+FROM quotes q
+WHERE qr.quote_id = q.id
+  AND qr.quote_id = pg_temp.demo_document_code('client_quote', 2)
+  AND qr.revision_number = 1;
+
+INSERT INTO quote_revisions (
+    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+)
+SELECT
+    'dm_qr2_' || md5(q.id), 2, 'REV2', 'u4', COALESCE(q.updated_at, q.created_at), q.id,
+    jsonb_build_object(
+      'schemaVersion', 2,
+      'quote', jsonb_build_object(
+        'id', q.id,
+        'linkedOfferId', (SELECT o.id FROM customer_offers o WHERE o.linked_quote_id = q.id LIMIT 1),
+        'clientId', q.client_id,
+        'clientName', q.client_name,
+        'paymentTerms', q.payment_terms,
+        'discount', q.discount,
+        'discountType', q.discount_type,
+        'status', q.status,
+        'expirationDate', q.expiration_date,
+        'communicationChannelId', q.communication_channel_id,
+        'communicationChannelName', COALESCE((SELECT c.name FROM quote_communication_channels c WHERE c.id = q.communication_channel_id), ''),
+        'notes', q.notes,
+        'description', q.description,
+        'createdAt', (EXTRACT(EPOCH FROM COALESCE(q.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'updatedAt', (EXTRACT(EPOCH FROM COALESCE(q.updated_at, q.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'linkedSupplierQuoteId', q.linked_supplier_quote_id,
+        'linkedSupplierQuoteExpiration', NULL
+      ),
+      'candidates', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', c.id,
+          'quoteId', c.quote_id,
+          'name', c.name,
+          'position', c.position,
+          'state', c.state,
+          'paymentTerms', c.payment_terms,
+          'discount', c.discount,
+          'discountType', c.discount_type,
+          'expirationDate', c.expiration_date,
+          'communicationChannelId', c.communication_channel_id,
+          'communicationChannelName', COALESCE((SELECT cc.name FROM quote_communication_channels cc WHERE cc.id = c.communication_channel_id), ''),
+          'notes', c.notes,
+          'createdAt', (EXTRACT(EPOCH FROM COALESCE(c.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+          'updatedAt', (EXTRACT(EPOCH FROM COALESCE(c.updated_at, c.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint
+        ) ORDER BY c.position, c.id)
+        FROM quote_candidates c WHERE c.quote_id = q.id
+      ), '[]'::jsonb),
+      'items', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', i.id,
+          'quoteId', i.quote_id,
+          'candidateId', COALESCE(i.candidate_id, (
+            SELECT dc.id FROM quote_candidates dc
+            WHERE dc.quote_id = i.quote_id ORDER BY dc.position, dc.id LIMIT 1
+          )),
+          'productId', i.product_id,
+          'productName', i.product_name,
+          'quantity', i.quantity,
+          'unitPrice', i.unit_price,
+          'productCost', i.product_cost,
+          'productMolPercentage', i.product_mol_percentage,
+          'supplierQuoteId', i.supplier_quote_id,
+          'supplierQuoteItemId', i.supplier_quote_item_id,
+          'supplierQuoteSupplierName', i.supplier_quote_supplier_name,
+          'supplierQuoteUnitPrice', i.supplier_quote_unit_price,
+          'discount', i.discount,
+          'note', i.note,
+          'unitType', i.unit_type,
+          'durationMonths', i.duration_months,
+          'durationUnit', i.duration_unit,
+          'pricingSemanticsVersion', i.pricing_semantics_version
+        ) ORDER BY i.position, i.id)
+        FROM quote_items i WHERE i.quote_id = q.id
+      ), '[]'::jsonb)
+    )
+FROM quotes q
+WHERE q.id = pg_temp.demo_document_code('client_quote', 2)
+ON CONFLICT (quote_id, revision_number) DO UPDATE SET
+    revision_code = EXCLUDED.revision_code,
+    created_by_user_id = EXCLUDED.created_by_user_id,
+    created_at = EXCLUDED.created_at,
+    snapshot = EXCLUDED.snapshot;
+
+UPDATE quotes
+SET revision_number = 2,
+    revision_code = 'REV2'
+WHERE id = pg_temp.demo_document_code('client_quote', 2);
+
+UPDATE offer_revisions offr
+SET
+    created_by_user_id = 'u4',
+    created_at = COALESCE(o.created_at, CURRENT_TIMESTAMP) + INTERVAL '1 day',
+    snapshot = pg_temp.age_demo_revision_snapshot(
+        offr.snapshot,
+        'offer',
+        o.description,
+        'Initial sent offer before commercial adjustments.'
+    )
+FROM customer_offers o
+WHERE offr.offer_id = o.id
+  AND offr.offer_id = pg_temp.demo_document_code('client_offer', 2)
+  AND offr.revision_number = 1;
+
+INSERT INTO offer_revisions (
+    id, revision_number, revision_code, created_by_user_id, created_at, offer_id, snapshot
+)
+SELECT
+    'dm_or2_' || md5(o.id), 2, 'REV2', 'u4', COALESCE(o.updated_at, o.created_at), o.id,
+    jsonb_build_object(
+      'schemaVersion', 1,
+      'offer', jsonb_build_object(
+        'id', o.id,
+        'linkedQuoteId', o.linked_quote_id,
+        'linkedQuoteCandidateId', o.linked_quote_candidate_id,
+        'clientId', o.client_id,
+        'clientName', o.client_name,
+        'paymentTerms', o.payment_terms,
+        'discount', o.discount,
+        'discountType', o.discount_type,
+        'status', o.status,
+        'deliveryDate', o.delivery_date,
+        'expirationDate', o.expiration_date,
+        'notes', o.notes,
+        'description', o.description,
+        'createdAt', (EXTRACT(EPOCH FROM COALESCE(o.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'updatedAt', (EXTRACT(EPOCH FROM COALESCE(o.updated_at, o.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint
+      ),
+      'items', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', i.id,
+          'offerId', i.offer_id,
+          'productId', i.product_id,
+          'productName', i.product_name,
+          'quantity', i.quantity,
+          'unitPrice', i.unit_price,
+          'productCost', i.product_cost,
+          'productMolPercentage', i.product_mol_percentage,
+          'supplierQuoteId', i.supplier_quote_id,
+          'supplierQuoteItemId', i.supplier_quote_item_id,
+          'supplierQuoteSupplierName', i.supplier_quote_supplier_name,
+          'supplierQuoteUnitPrice', i.supplier_quote_unit_price,
+          'unitType', i.unit_type,
+          'note', i.note,
+          'discount', i.discount,
+          'durationMonths', i.duration_months,
+          'durationUnit', i.duration_unit,
+          'pricingSemanticsVersion', i.pricing_semantics_version
+        ) ORDER BY i.created_at, i.id)
+        FROM customer_offer_items i WHERE i.offer_id = o.id
+      ), '[]'::jsonb)
+    )
+FROM customer_offers o
+WHERE o.id = pg_temp.demo_document_code('client_offer', 2)
+ON CONFLICT (offer_id, revision_number) DO UPDATE SET
+    revision_code = EXCLUDED.revision_code,
+    created_by_user_id = EXCLUDED.created_by_user_id,
+    created_at = EXCLUDED.created_at,
+    snapshot = EXCLUDED.snapshot;
+
+UPDATE customer_offers
+SET revision_number = 2,
+    revision_code = 'REV2'
+WHERE id = pg_temp.demo_document_code('client_offer', 2);
+
+UPDATE supplier_quote_revisions sqr
+SET
+    created_by_user_id = 'u4',
+    created_at = COALESCE(sq.created_at, CURRENT_TIMESTAMP) + INTERVAL '1 day',
+    snapshot = pg_temp.age_demo_revision_snapshot(
+        sqr.snapshot,
+        'quote',
+        sq.description,
+        'Initial sent supplier revision before commercial adjustments.'
+    )
+FROM supplier_quotes sq
+WHERE sqr.quote_id = sq.id
+  AND sqr.quote_id = pg_temp.demo_document_code('supplier_quote', 2)
+  AND sqr.revision_number = 1;
+
+INSERT INTO supplier_quote_revisions (
+    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+)
+SELECT
+    'dm_sqr2_' || md5(sq.id), 2, 'REV2', 'u4', COALESCE(sq.updated_at, sq.created_at), sq.id,
+    jsonb_build_object(
+      'schemaVersion', 1,
+      'quote', jsonb_build_object(
+        'id', sq.id,
+        'supplierId', sq.supplier_id,
+        'supplierName', sq.supplier_name,
+        'clientId', sq.client_id,
+        'clientName', sq.client_name,
+        'paymentTerms', sq.payment_terms,
+        'status', sq.status,
+        'expirationDate', sq.expiration_date,
+        'communicationChannelId', sq.communication_channel_id,
+        'communicationChannelName', COALESCE((SELECT c.name FROM quote_communication_channels c WHERE c.id = sq.communication_channel_id), ''),
+        'linkedOrderId', (SELECT s.id FROM supplier_sales s WHERE s.linked_quote_id = sq.id LIMIT 1),
+        'notes', sq.notes,
+        'description', sq.description,
+        'createdAt', (EXTRACT(EPOCH FROM COALESCE(sq.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'updatedAt', (EXTRACT(EPOCH FROM COALESCE(sq.updated_at, sq.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'linkedClientQuoteId', NULL,
+        'linkedClientQuoteStatus', NULL,
+        'linkedClientQuoteExpiration', NULL,
+        'linkedOfferStatus', NULL,
+        'linkedOfferExpiration', NULL
+      ),
+      'items', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', i.id,
+          'quoteId', i.quote_id,
+          'productId', i.product_id,
+          'productName', i.product_name,
+          'quantity', i.quantity,
+          'listPrice', i.list_price,
+          'discountPercent', i.discount_percent,
+          'unitPrice', i.unit_price,
+          'note', i.note,
+          'unitType', i.unit_type,
+          'durationMonths', i.duration_months,
+          'durationUnit', i.duration_unit,
+          'pricingSemanticsVersion', i.pricing_semantics_version
+        ) ORDER BY i.created_at, i.id)
+        FROM supplier_quote_items i WHERE i.quote_id = sq.id
+      ), '[]'::jsonb)
+    )
+FROM supplier_quotes sq
+WHERE sq.id = pg_temp.demo_document_code('supplier_quote', 2)
+  AND sq.revision_number >= 1
+ON CONFLICT (quote_id, revision_number) DO UPDATE SET
+    revision_code = EXCLUDED.revision_code,
+    created_by_user_id = EXCLUDED.created_by_user_id,
+    created_at = EXCLUDED.created_at,
+    snapshot = EXCLUDED.snapshot;
+
+UPDATE supplier_quotes
+SET revision_number = 2,
+    revision_code = 'REV2'
+WHERE id = pg_temp.demo_document_code('supplier_quote', 2)
+  AND revision_number >= 1;
 
 UPDATE time_entries te
 SET client_id = own_company.id,

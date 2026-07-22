@@ -33,6 +33,7 @@ import {
   LEGACY_DEMO_INVOICE_IDS,
   LEGACY_DEMO_SUPPLIER_INVOICE_IDS,
 } from '../../db/demoSeedManifest.ts';
+import { OWN_COMPANY_CLIENT_ID } from '../../repositories/clientsRepo.ts';
 import {
   DOCUMENT_CODE_MODULES,
   type DocumentCodeModuleId,
@@ -131,32 +132,38 @@ describe('insertCompatibilityDefaults', () => {
 
     await insertCompatibilityDefaults(client, {});
 
-    expect(calls).toHaveLength(4);
-    expect(calls[0]?.sql).toContain('UPDATE clients');
-    expect(calls[0]?.sql).toContain('client_code = NULL');
-    expect(calls[0]?.sql).toContain('fiscal_code = NULL');
-    expect(calls[0]?.sql).toContain('vat_number = NULL');
-    expect(calls[0]?.params).toEqual([[...COMPATIBILITY_DEFAULTS.clients]]);
-    expect(calls[1]?.sql).toContain('ON CONFLICT (id) DO UPDATE SET');
-    expect(calls[1]?.sql).toContain('name = EXCLUDED.name');
-    expect(calls[1]?.sql).toContain('is_disabled = FALSE');
-    expect(calls[1]?.sql).toContain('ACME-001');
-    expect(calls[1]?.sql).toContain('GTECH-001');
-    expect(calls[1]?.sql).toContain('contacts = EXCLUDED.contacts');
-    expect(calls[1]?.sql).toContain('client_code = EXCLUDED.client_code');
-    expect(calls[1]?.sql).toContain('fiscal_code = EXCLUDED.fiscal_code');
-    expect(calls[1]?.sql).toContain('address_line = EXCLUDED.address_line');
-    expect(calls[2]?.sql).toContain('description = EXCLUDED.description');
-    expect(calls[2]?.sql).toContain('tipo_confirmed = EXCLUDED.tipo_confirmed');
-    expect(calls[2]?.sql).toMatch(
+    expect(calls).toHaveLength(5);
+    expect(calls[0]?.sql).toContain('INSERT INTO clients');
+    expect(calls[0]?.sql).toContain('is_own_company');
+    expect(calls[0]?.sql).toContain('ON CONFLICT (id) DO UPDATE SET');
+    expect(calls[0]?.sql).toContain('is_disabled = FALSE');
+    expect(calls[0]?.sql).not.toContain('name = EXCLUDED.name');
+    expect(calls[0]?.params).toEqual([OWN_COMPANY_CLIENT_ID]);
+    expect(calls[1]?.sql).toContain('UPDATE clients');
+    expect(calls[1]?.sql).toContain('client_code = NULL');
+    expect(calls[1]?.sql).toContain('fiscal_code = NULL');
+    expect(calls[1]?.sql).toContain('vat_number = NULL');
+    expect(calls[1]?.params).toEqual([[...COMPATIBILITY_DEFAULTS.clients]]);
+    expect(calls[2]?.sql).toContain('ON CONFLICT (id) DO UPDATE SET');
+    expect(calls[2]?.sql).toContain('name = EXCLUDED.name');
+    expect(calls[2]?.sql).toContain('is_disabled = FALSE');
+    expect(calls[2]?.sql).toContain('ACME-001');
+    expect(calls[2]?.sql).toContain('GTECH-001');
+    expect(calls[2]?.sql).toContain('contacts = EXCLUDED.contacts');
+    expect(calls[2]?.sql).toContain('client_code = EXCLUDED.client_code');
+    expect(calls[2]?.sql).toContain('fiscal_code = EXCLUDED.fiscal_code');
+    expect(calls[2]?.sql).toContain('address_line = EXCLUDED.address_line');
+    expect(calls[3]?.sql).toContain('description = EXCLUDED.description');
+    expect(calls[3]?.sql).toContain('tipo_confirmed = EXCLUDED.tipo_confirmed');
+    expect(calls[3]?.sql).toMatch(
       /\('p3', 'Internal Research', 'praetor-own-company', [^,]+, NULL, NULL, 'interno', TRUE\)/,
     );
-    expect(calls[2]?.sql).toContain('order_id = NULL');
-    expect(calls[2]?.sql).toContain('offer_id = NULL');
-    expect(calls[2]?.sql).toContain('billing_type = DEFAULT');
-    expect(calls[3]?.sql).toContain('project_id = EXCLUDED.project_id');
-    expect(calls[3]?.sql).toContain('is_recurring = DEFAULT');
-    expect(calls[3]?.sql).toContain('monthly_effort = DEFAULT');
+    expect(calls[3]?.sql).toContain('order_id = NULL');
+    expect(calls[3]?.sql).toContain('offer_id = NULL');
+    expect(calls[3]?.sql).toContain('billing_type = DEFAULT');
+    expect(calls[4]?.sql).toContain('project_id = EXCLUDED.project_id');
+    expect(calls[4]?.sql).toContain('is_recurring = DEFAULT');
+    expect(calls[4]?.sql).toContain('monthly_effort = DEFAULT');
   });
 });
 
