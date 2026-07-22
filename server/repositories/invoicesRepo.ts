@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { invoiceItems, invoices } from '../db/schema/invoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
@@ -116,8 +116,26 @@ export const listAllItems = async (exec: DbExecutor = db): Promise<InvoiceItem[]
   return rows.map(mapItem);
 };
 
+const listItemsForInvoices = async (
+  invoiceIds: string[],
+  exec: DbExecutor,
+): Promise<InvoiceItem[]> => {
+  const rows = await exec
+    .select()
+    .from(invoiceItems)
+    .where(inArray(invoiceItems.invoiceId, invoiceIds))
+    .orderBy(asc(invoiceItems.createdAt), asc(invoiceItems.id));
+  return rows.map(mapItem);
+};
+
 export const listAllWithItems = async (exec: DbExecutor = db): Promise<InvoiceWithItems[]> => {
-  const [invoiceList, items] = await Promise.all([listAll(exec), listAllItems(exec)]);
+  const invoiceList = await listAll(exec);
+  if (invoiceList.length === 0) return [];
+
+  const items = await listItemsForInvoices(
+    invoiceList.map((invoice) => invoice.id),
+    exec,
+  );
   const itemsByInvoice = new Map<string, InvoiceItem[]>();
   for (const item of items) {
     const list = itemsByInvoice.get(item.invoiceId);
