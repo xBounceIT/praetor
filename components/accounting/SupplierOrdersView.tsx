@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { LinkedRecordHeaderButton } from '@/components/shared/LinkedRecordHeaderButton';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -849,7 +849,22 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
                 </ModalReadOnlyStatusBanner>
               ) : null}
             </ModalTitle>
-            <ModalCloseButton onClick={controller.closeEditModal} />
+            <div className="flex shrink-0 items-center gap-2">
+              {controller.formData.linkedQuoteId && controller.onViewQuote ? (
+                <LinkedRecordHeaderButton
+                  label={controller.t('accounting:supplierOrders.viewLinkedQuote', {
+                    defaultValue: 'View linked quote',
+                  })}
+                  onClick={() => {
+                    const linkedQuoteId = controller.formData.linkedQuoteId;
+                    if (linkedQuoteId && controller.onViewQuote) {
+                      controller.onViewQuote(linkedQuoteId);
+                    }
+                  }}
+                />
+              ) : null}
+              <ModalCloseButton onClick={controller.closeEditModal} />
+            </div>
           </div>
         </ModalHeader>
         <ModalBody className="flex-1 space-y-5">
@@ -866,7 +881,6 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
               />
             </div>
           ) : null}
-          <SupplierOrderModalAlerts controller={controller} />
           <SupplierOrderDetailsSection controller={controller} />
           <SupplierOrderItemsSection controller={controller} />
           <SupplierOrderNotesSummarySection controller={controller} />
@@ -889,39 +903,6 @@ const SupplierOrderSectionTitle: React.FC<{ children: React.ReactNode }> = ({ ch
     <span className="size-1.5 rounded-full bg-primary"></span>
     {children}
   </h4>
-);
-
-const SupplierOrderModalAlerts: React.FC<{ controller: SupplierOrdersController }> = ({
-  controller,
-}) => (
-  <>
-    {controller.formData.linkedQuoteId && (
-      <LinkedRecordBanner
-        label={controller.t('accounting:supplierOrders.linkedQuote')}
-        value={controller.t('accounting:supplierOrders.linkedQuoteInfo', {
-          number: formatDocumentCode(
-            controller.formData.linkedQuoteId,
-            controller.formData.linkedQuoteRevisionCode ??
-              controller.quotes.find((quote) => quote.id === controller.formData.linkedQuoteId)
-                ?.revisionCode,
-          ),
-        })}
-        note={controller.t('accounting:supplierOrders.quoteDetailsReadOnly')}
-        action={
-          controller.onViewQuote
-            ? {
-                label: controller.t('accounting:supplierOrders.viewQuote'),
-                onClick: () => {
-                  const linkedQuoteId = controller.formData.linkedQuoteId;
-                  if (!linkedQuoteId) return;
-                  controller.onViewQuote?.(linkedQuoteId);
-                },
-              }
-            : undefined
-        }
-      />
-    )}
-  </>
 );
 
 const SupplierOrderDetailsSection: React.FC<{ controller: SupplierOrdersController }> = ({
