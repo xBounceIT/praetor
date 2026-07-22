@@ -183,15 +183,22 @@ describe('cleanupDemoNamespace', () => {
     }
   });
 
-  test('clears demo-user activity that would survive because canonical users are preserved', async () => {
+  test('clears every demo-user entry so noncanonical ids cannot collide with seeded keys', async () => {
     const { calls, client } = buildQueryRecorder();
 
-    await cleanupDemoNamespace(client, {
-      dependentUserIds: ['u2', 'u3'],
-      userIdsToDelete: [],
-    });
+    await cleanupDemoNamespace(
+      client,
+      {
+        dependentUserIds: ['u2', 'u3'],
+        userIdsToDelete: [],
+      },
+      2027,
+    );
 
-    expect(findDelete(calls, 'time_entries')?.sql).toContain('user_id = ANY($2::text[])');
+    const timeEntryDelete = findDelete(calls, 'time_entries');
+    expect(timeEntryDelete?.sql).toContain('id = ANY($1::text[])');
+    expect(timeEntryDelete?.sql).toContain('user_id = ANY($2::text[])');
+    expect(timeEntryDelete?.params).toEqual([buildDemoIds(2027).timeEntries, ['u2', 'u3']]);
     expect(findDelete(calls, 'notifications')?.sql).toContain('user_id = ANY($2::text[])');
     expect(findDelete(calls, 'user_work_units')?.sql).toContain('user_id = ANY($2::text[])');
     expect(findDelete(calls, 'work_unit_managers')?.sql).toContain('user_id = ANY($2::text[])');

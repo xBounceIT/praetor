@@ -25,7 +25,7 @@ When an entry is edited, Praetor uses the API-returned `version` field to preven
 
 The weekly view helps you quickly review hours across days. Use it to find missing days, duplicates, or entries assigned to the wrong project.
 
-Each existing entry occupies its own row. During the upgrade that introduces the unique constraint, any historical duplicates are removed from the active view only after the full row is archived in the audit log so an administrator can recover its data. The "New entry" row at the top is for creating new entries only and follows the duplicate-entry guard.
+Each existing entry occupies its own row. During the upgrade that introduces the unique constraint, historical duplicates are consolidated into one active row: their hours are summed, the hourly cost is recomputed as a duration-weighted rate, and their notes are retained. Every removed original row is also archived in the audit log so an administrator can inspect or recover its exact data. If a duplicate group totals more than 24 hours, the upgrade stops for explicit reconciliation instead of dropping hours. The "New entry" row at the top is for creating new entries only and follows the duplicate-entry guard.
 
 ## RIL
 

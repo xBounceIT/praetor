@@ -25,7 +25,7 @@ Quando una registrazione viene modificata, Praetor usa il campo `version` restit
 
 La vista settimanale aiuta a controllare rapidamente le ore distribuite sui giorni. È utile per individuare giornate mancanti, duplicazioni o attività attribuite al progetto sbagliato.
 
-Ogni registrazione esistente occupa una propria riga. Durante l'aggiornamento che introduce il vincolo univoco, eventuali duplicati storici vengono rimossi dalla vista attiva solo dopo averne archiviato la riga completa nel registro di audit, così un amministratore può recuperarne i dati. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni e rispetta il controllo anti-duplicato.
+Ogni registrazione esistente occupa una propria riga. Durante l'aggiornamento che introduce il vincolo univoco, gli eventuali duplicati storici vengono consolidati in una sola riga attiva: le ore vengono sommate, il costo orario viene ricalcolato in modo ponderato sulla durata e le note vengono conservate. Ogni riga originale rimossa viene inoltre archiviata per intero nel registro di audit, così un amministratore può ispezionarne o recuperarne i dati esatti. Se un gruppo duplicato supera complessivamente 24 ore, l'aggiornamento si interrompe per richiedere una riconciliazione esplicita invece di perdere ore. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni e rispetta il controllo anti-duplicato.
 
 ## RIL
 
