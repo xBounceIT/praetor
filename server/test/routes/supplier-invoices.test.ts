@@ -373,7 +373,12 @@ describe('POST /api/supplier-invoices', () => {
       supplierName: 'Acme Supply',
       status: 'sent',
     });
-    lockOrderExistingByIdMock.mockResolvedValue({ id: 'SORD_26_0045_manual', status: 'sent' });
+    lockOrderExistingByIdMock.mockResolvedValue({
+      id: 'SORD_26_0045_manual',
+      supplierId: 's1',
+      supplierName: 'Acme Supply',
+      status: 'sent',
+    });
     findInvoiceForLinkedSaleMock.mockResolvedValue(null);
     createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'SORD_26_0045_manual' });
     insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
@@ -396,6 +401,42 @@ describe('POST /api/supplier-invoices', () => {
     );
   });
 
+  test('201 derives supplier identity from the locked source order', async () => {
+    const sourceOrder = {
+      id: 'SORD_26_0045_supplier',
+      linkedQuoteId: null,
+      supplierId: 's1',
+      supplierName: 'Acme Supply',
+      status: 'sent',
+    };
+    findOrderByIdMock.mockResolvedValue(sourceOrder);
+    lockOrderExistingByIdMock.mockResolvedValue(sourceOrder);
+    findInvoiceForLinkedSaleMock.mockResolvedValue(null);
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: sourceOrder.id });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        linkedSaleId: sourceOrder.id,
+        supplierId: 's2',
+        supplierName: 'Different Supplier',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supplierId: sourceOrder.supplierId,
+        supplierName: sourceOrder.supplierName,
+      }),
+      expect.anything(),
+    );
+  });
+
   test('201 preserves each source order pricing marker in a mixed supplier invoice', async () => {
     findOrderItemsMock.mockResolvedValue([
       { id: 'supplier-order-item-legacy', pricingSemanticsVersion: 1 },
@@ -407,7 +448,12 @@ describe('POST /api/supplier-invoices', () => {
       supplierName: 'Acme Supply',
       status: 'sent',
     });
-    lockOrderExistingByIdMock.mockResolvedValue({ id: 'SORD_26_0045_mixed', status: 'sent' });
+    lockOrderExistingByIdMock.mockResolvedValue({
+      id: 'SORD_26_0045_mixed',
+      supplierId: 's1',
+      supplierName: 'Acme Supply',
+      status: 'sent',
+    });
     findInvoiceForLinkedSaleMock.mockResolvedValue(null);
     createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'SORD_26_0045_mixed' });
     insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
