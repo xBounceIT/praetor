@@ -285,7 +285,7 @@ describe('insertItems / replaceItems', () => {
       testDb,
     );
 
-    expect(exec.calls[1].sql.toLowerCase()).toContain('for key share');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[3].sql.toLowerCase()).toContain('insert into "sale_items"');
   });
 

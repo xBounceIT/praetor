@@ -552,7 +552,9 @@ export const lockClientDocumentSupplierReferences = async (
       .from(supplierQuotes)
       .where(inArray(supplierQuotes.id, quoteIds))
       .orderBy(asc(supplierQuotes.id))
-      .for('key share');
+      // Some client saves later sync supplier pricing with FOR UPDATE. Lock exclusively from the
+      // outset so two saves cannot both take compatible shared locks and deadlock while upgrading.
+      .for('update');
     if (lockedQuotes.length !== quoteIds.length) throw supplierReferenceConflict();
 
     if (itemIds.length === 0) return;

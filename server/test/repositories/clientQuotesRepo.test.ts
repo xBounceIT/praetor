@@ -494,7 +494,7 @@ describe('replaceItems', () => {
     expect(exec.calls[0].sql.toLowerCase()).toContain('from "quote_candidates"');
     expect(exec.calls[1].sql.toLowerCase()).toContain('delete from "quote_items"');
     expect(exec.calls[1].sql.toLowerCase()).toContain('"candidate_id" is null');
-    expect(exec.calls[3].sql.toLowerCase()).toContain('for key share');
+    expect(exec.calls[3].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[5].sql.toLowerCase()).toContain('insert into "quote_items"');
     expect(exec.calls[5].params).toContain('a');
     expect(exec.calls[5].params).toContain('b');

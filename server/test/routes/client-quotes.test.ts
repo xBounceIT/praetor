@@ -1967,11 +1967,11 @@ describe('client quote candidate-family create and update', () => {
 
   test('409s when a supplier reference changes while creating the quote', async () => {
     setupCreate();
-    cqInsertItemsMock.mockRejectedValueOnce(
-      new ConflictError(
+    cqInsertItemsMock.mockImplementationOnce(async () => {
+      throw new ConflictError(
         'A referenced supplier quote changed during the request; retry the operation',
-      ),
-    );
+      );
+    });
 
     const res = await postQuote([freshLine()]);
 

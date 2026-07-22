@@ -785,7 +785,7 @@ describe('lockClientDocumentSupplierReferences', () => {
     );
 
     expect(exec.calls).toHaveLength(3);
-    expect(exec.calls[1].sql.toLowerCase()).toContain('for key share');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[1].sql.toLowerCase()).toContain('order by "supplier_quotes"."id"');
     expect(exec.calls[1].params).toEqual(['q-1', 'q-2']);
   });
@@ -793,7 +793,7 @@ describe('lockClientDocumentSupplierReferences', () => {
   test('refuses a source item deleted before the client write can lock it', async () => {
     exec.enqueue({ rows: [] });
 
-    expect(
+    await expect(
       supplierQuotesRepo.lockClientDocumentSupplierReferences(
         [{ supplierQuoteId: 'q-1', supplierQuoteItemId: 'missing-item' }],
         testDb,
@@ -807,7 +807,7 @@ describe('lockClientDocumentSupplierReferences', () => {
     exec.enqueue({ rows: [['q-1']] });
     exec.enqueue({ rows: [['sqi-1', 'q-2']] });
 
-    expect(
+    await expect(
       supplierQuotesRepo.lockClientDocumentSupplierReferences(
         [{ supplierQuoteId: 'q-1', supplierQuoteItemId: 'sqi-1' }],
         testDb,
