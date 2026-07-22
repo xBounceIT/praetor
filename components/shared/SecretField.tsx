@@ -21,6 +21,9 @@ export type SecretFieldProps = {
   error?: string;
   testId?: string;
   disabled?: boolean;
+  id?: string;
+  placeholder?: string;
+  required?: boolean;
 };
 
 // Stored secrets arrive from the server pre-masked. Typing into a populated field would silently
@@ -45,6 +48,9 @@ const SecretField: React.FC<SecretFieldProps> = ({
   error,
   testId,
   disabled = false,
+  id,
+  placeholder,
+  required,
 }) => {
   const { t } = useTranslation('common');
   const replaceLabel = t('secretField.replace', 'Replace');
@@ -53,7 +59,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
   if (isStored && !isReplacing) {
     return (
       <Field data-testid={testId}>
-        <FieldLabel>{label}</FieldLabel>
+        <FieldLabel required={required}>{label}</FieldLabel>
         <div className="flex items-center gap-3 rounded-md border border-input bg-muted/50 px-3 py-2">
           <Badge variant="secondary" className="gap-1.5">
             <i className="fa-solid fa-lock" aria-hidden="true"></i>
@@ -82,7 +88,9 @@ const SecretField: React.FC<SecretFieldProps> = ({
   return (
     <Field data-testid={testId} data-invalid={isInvalid}>
       <div className="flex items-center justify-between gap-2">
-        <FieldLabel>{label}</FieldLabel>
+        <FieldLabel htmlFor={id} required={required}>
+          {label}
+        </FieldLabel>
         {isReplacing && (
           <Button
             type="button"
@@ -99,6 +107,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
       </div>
       {multiline ? (
         <Textarea
+          id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={5}
@@ -107,9 +116,11 @@ const SecretField: React.FC<SecretFieldProps> = ({
           className={inputClassName}
           data-testid={testId ? `${testId}-input` : undefined}
           disabled={disabled}
+          placeholder={placeholder}
         />
       ) : (
         <Input
+          id={id}
           type="password"
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -118,6 +129,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
           className={inputClassName}
           data-testid={testId ? `${testId}-input` : undefined}
           disabled={disabled}
+          placeholder={placeholder}
         />
       )}
       {error && <FieldError>{error}</FieldError>}

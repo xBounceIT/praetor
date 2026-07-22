@@ -182,6 +182,8 @@
     "anthropicApiKey": "Anthropic API Key",
     "openaiApiKey": "OpenAI API Key",
     "localApiKey": "Local API token (optional)",
+    "apiKeyStored": "API key stored",
+    "apiKeyStoredHelp": "Leave as-is to keep the stored key, or click Replace to overwrite it.",
     "localizationDisplay": "Localization & Display",
     "localizationDisplayDescription": "Locale and currency defaults applied across reports and the user interface.",
     "trackingPreferences": "Tracking Preferences",

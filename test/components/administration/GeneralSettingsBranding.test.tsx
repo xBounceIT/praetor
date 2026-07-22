@@ -245,6 +245,8 @@ describe('<GeneralSettings /> AI provider settings', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+    expect(screen.queryByLabelText(/general\.openaiApiKey/)).toBeNull();
+    expect(screen.getByText('general.apiKeyStored')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'general.checkModel' }));
 
     await waitFor(() =>
@@ -254,6 +256,64 @@ describe('<GeneralSettings /> AI provider settings', () => {
       }),
     );
     expect(screen.getByText('general.modelVerified')).toBeDefined();
+  });
+
+  test('requires an explicit replace action before editing a stored API key', async () => {
+    const onUpdate = mock(async () => undefined);
+    render(
+      <GeneralSettings
+        settings={{
+          ...baseSettings,
+          enableAiReporting: true,
+          aiProvider: 'openai',
+          openaiApiKey: '********',
+          openaiModelId: 'gpt-test',
+        }}
+        onUpdate={onUpdate}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+    fireEvent.click(screen.getByRole('button', { name: 'secretField.replace' }));
+    const apiKeyInput = screen.getByLabelText(/general\.openaiApiKey/);
+    expect(apiKeyInput).toHaveValue('');
+    fireEvent.change(apiKeyInput, { target: { value: 'sk-openai-replacement' } });
+    fireEvent.click(screen.getByRole('button', { name: /general\.saveConfiguration/ }));
+
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ openaiApiKey: 'sk-openai-replacement' }),
+      ),
+    );
+  });
+
+  test('can leave replace mode without changing a stored API key', () => {
+    render(
+      <GeneralSettings
+        settings={{
+          ...baseSettings,
+          enableAiReporting: true,
+          aiProvider: 'openai',
+          openaiApiKey: '********',
+          openaiModelId: 'gpt-test',
+        }}
+        onUpdate={mock(async () => undefined)}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+    fireEvent.click(screen.getByRole('button', { name: 'secretField.replace' }));
+    fireEvent.change(screen.getByLabelText(/general\.openaiApiKey/), {
+      target: { value: 'not-saved' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'secretField.keepStored' }));
+
+    expect(screen.queryByLabelText(/general\.openaiApiKey/)).toBeNull();
+    expect(screen.getByText('general.apiKeyStored')).toBeDefined();
   });
 
   test('configures and validates a local endpoint without requiring an API token', async () => {

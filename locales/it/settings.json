@@ -182,6 +182,8 @@
     "anthropicApiKey": "Chiave API Anthropic",
     "openaiApiKey": "Chiave API OpenAI",
     "localApiKey": "Token API locale (opzionale)",
+    "apiKeyStored": "Chiave API salvata",
+    "apiKeyStoredHelp": "Lasciala invariata per mantenere la chiave salvata oppure fai clic su Sostituisci per sovrascriverla.",
     "localizationDisplay": "Localizzazione e Visualizzazione",
     "localizationDisplayDescription": "Impostazioni locali e di valuta applicate a report e interfaccia.",
     "trackingPreferences": "Preferenze di Tracciamento",
