@@ -27,6 +27,7 @@ export type ProjectRuleRecipientOptions = {
 
 export type ProjectRuleRecipientValidationOptions = {
   allowedDisabledWebhookIds?: readonly string[];
+  allowedUnassignedRoleIds?: readonly string[];
 };
 
 type UserRecipientRow = {
@@ -127,6 +128,7 @@ export const findInvalidRecipientIds = async (
   const roleIds = uniqueStrings(config.recipientRoleIds);
   const webhookIds = uniqueStrings(config.webhookIds);
   const allowedDisabledWebhookIds = uniqueStrings(options.allowedDisabledWebhookIds ?? []);
+  const allowedUnassignedRoleIds = uniqueStrings(options.allowedUnassignedRoleIds ?? []);
   const [validUserRows, validRoleRows, validWebhookRows] = await Promise.all([
     userIds.length === 0
       ? Promise.resolve([])
@@ -149,7 +151,13 @@ export const findInvalidRecipientIds = async (
             SELECT r.id
             FROM roles r
             WHERE r.id = ANY(${sql.param(roleIds)}::text[])
-              AND ${roleHasEnabledProjectAssignee(projectId)}
+              AND (
+                ${roleHasEnabledProjectAssignee(projectId)}
+                OR (
+                  ${allowedUnassignedRoleIds.length > 0}
+                  AND r.id = ANY(${sql.param(allowedUnassignedRoleIds)}::text[])
+                )
+              )
           `,
         ),
     webhookIds.length === 0

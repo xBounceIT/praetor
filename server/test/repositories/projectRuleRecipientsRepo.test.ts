@@ -88,6 +88,31 @@ describe('projectRuleRecipientsRepo', () => {
     expect(exec.calls[0].sql).toContain('id = ANY');
   });
 
+  test('allows existing unassigned role ids while a rule is being disabled', async () => {
+    exec.enqueue({ rows: [{ id: 'manager' }] });
+
+    const result = await recipientsRepo.findInvalidRecipientIds(
+      'p1',
+      {
+        recipientUserIds: [],
+        recipientRoleIds: ['manager', 'ghost'],
+        webhookIds: [],
+        actions: [],
+      },
+      testDb,
+      { allowedUnassignedRoleIds: ['manager'] },
+    );
+
+    expect(result).toEqual({
+      userIds: [],
+      roleIds: ['ghost'],
+      webhookIds: [],
+    });
+    expect(exec.calls[0].sql).toContain('INNER JOIN user_projects');
+    expect(exec.calls[0].sql).toContain('r.id = ANY');
+    expect(exec.calls[0].params).toContainEqual(['manager']);
+  });
+
   test('resolves explicit users plus project-assigned primary and secondary role users', async () => {
     exec.enqueue({ rows: [{ id: 'u1' }, { id: 'u2' }] });
 
