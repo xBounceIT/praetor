@@ -45,6 +45,18 @@ const ITEM_BASE: readonly unknown[] = [
 
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
 
+// lockExistingById select({...}) returns array-mode rows in Drizzle's node-postgres driver.
+// Order: [id, status, issueDate, dueDate, total, amountPaid, supplierName]
+const LOCK_ROW: unknown[] = [
+  'SINV-2026-0001',
+  'draft',
+  '2026-04-01',
+  '2026-04-30',
+  '120.60',
+  '0',
+  'Acme',
+];
+
 describe('listAll mapInvoice', () => {
   test('coerces numeric subtotal/total/amountPaid', async () => {
     exec.enqueue({ rows: [invoiceRow()] });
@@ -191,9 +203,6 @@ describe('maxSequenceForYear', () => {
 
 describe('create', () => {
   test('does NOT swallow unique-violation errors (propagates with cause preserved)', async () => {
-    // Drizzle wraps thrown driver errors in DrizzleQueryError("Failed query: ...") with the
-    // original error available via `.cause`. The repo doesn't catch - verify propagation by
-    // unwrapping the cause and inspecting the original code/constraint.
     exec.enqueue(() => {
       const err = new Error('duplicate key') as Error & { code?: string; constraint?: string };
       err.code = '23505';
@@ -253,6 +262,8 @@ describe('create', () => {
 
 describe('update', () => {
   test('binds patch values via COALESCE, WHERE id last - no id in SET (issue #621)', async () => {
+    // lockExistingById inside runAtomically — array-mode select({...})
+    exec.enqueue({ rows: [LOCK_ROW] });
     exec.enqueue({ rows: [invoiceRow()] });
     await supplierInvoicesRepo.update(
       'SINV-2026-0001',
@@ -260,19 +271,22 @@ describe('update', () => {
       testDb,
     );
     const sql = exec.calls[0].sql;
-    expect(sql).toContain('update "supplier_invoices"');
-    expect(sql).toContain('COALESCE');
-    expect(sql).toContain('CURRENT_TIMESTAMP');
-    // The SET clause must NOT touch the primary key column.
-    expect(sql).not.toMatch(/set[^"]*"id"\s*=/i);
-    expect(sql).toContain('"id" = $10');
-    expect(exec.calls[0].params).toHaveLength(10);
-    expect(exec.calls[0].params[4]).toBe('paid'); // status
-    expect(exec.calls[0].params[7]).toBe('100'); // amountPaid via numericForDb
-    expect(exec.calls[0].params[9]).toBe('SINV-2026-0001'); // where id
+    expect(sql).toContain('select');
+    expect(sql).toContain('for update');
+    // The UPDATE is the second call (call index 1)
+    const updateSql = exec.calls[1].sql;
+    expect(updateSql).toContain('update "supplier_invoices"');
+    expect(updateSql).toContain('COALESCE');
+    expect(updateSql).toContain('CURRENT_TIMESTAMP');
+    expect(updateSql).not.toMatch(/set[^"]*"id"\s*=/i);
+    expect(updateSql).toContain('"id" = $10');
+    expect(exec.calls[1].params).toHaveLength(10);
+    expect(exec.calls[1].params[4]).toBe('paid');
+    expect(exec.calls[1].params[7]).toBe('100');
+    expect(exec.calls[1].params[9]).toBe('SINV-2026-0001');
   });
 
-  test('returns null when no row updated', async () => {
+  test('returns null when lock finds no row', async () => {
     exec.enqueue({ rows: [] });
     expect(await supplierInvoicesRepo.update('SINV-X', { status: 'paid' }, testDb)).toBeNull();
   });
@@ -299,14 +313,19 @@ describe('update', () => {
 
 describe('rename', () => {
   test('issues a dedicated UPDATE that sets the id column and returns the mapped invoice', async () => {
+    // lockExistingById inside runAtomically
+    exec.enqueue({ rows: [LOCK_ROW] });
     exec.enqueue({ rows: [invoiceRow({ 0: 'SINV-2026-0002' })] });
     const result = await supplierInvoicesRepo.rename('SINV-2026-0001', 'SINV-2026-0002', testDb);
-    const sql = exec.calls[0].sql.toLowerCase();
-    expect(sql).toContain('update "supplier_invoices"');
-    expect(sql).toMatch(/set[^"]*"id"\s*=/);
-    expect(sql).toContain('current_timestamp');
-    expect(exec.calls[0].params).toContain('SINV-2026-0002'); // new id
-    expect(exec.calls[0].params).toContain('SINV-2026-0001'); // where current id
+    // Call 0 is the lock query
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+    // Call 1 is the rename UPDATE
+    const renameSql = exec.calls[1].sql.toLowerCase();
+    expect(renameSql).toContain('update "supplier_invoices"');
+    expect(renameSql).toMatch(/set[^"]*"id"\s*=/);
+    expect(renameSql).toContain('current_timestamp');
+    expect(exec.calls[1].params).toContain('SINV-2026-0002');
+    expect(exec.calls[1].params).toContain('SINV-2026-0001');
     expect(result?.id).toBe('SINV-2026-0002');
   });
 
@@ -354,12 +373,15 @@ describe('replaceItems', () => {
 
 describe('deleteById', () => {
   test('returns true when row deleted', async () => {
+    // lockExistingById inside runAtomically
+    exec.enqueue({ rows: [LOCK_ROW] });
     exec.enqueue({ rows: [], rowCount: 1 });
     expect(await supplierInvoicesRepo.deleteById('SINV-2026-0001', testDb)).toBe(true);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
   });
 
-  test('returns false when nothing deleted', async () => {
-    exec.enqueue({ rows: [], rowCount: 0 });
+  test('returns false when lock finds no row', async () => {
+    exec.enqueue({ rows: [] });
     expect(await supplierInvoicesRepo.deleteById('SINV-2026-9999', testDb)).toBe(false);
   });
 });
