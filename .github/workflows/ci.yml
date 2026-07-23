@@ -406,6 +406,7 @@ jobs:
         run: |
           cp .env.example .env
           sed -i \
+            -e 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-docker-stack-postgres-password/' \
             -e 's/^JWT_SECRET=.*/JWT_SECRET=ci-docker-stack-jwt-secret/' \
             -e 's/^ENCRYPTION_KEY=.*/ENCRYPTION_KEY=ci-docker-stack-encryption-key/' \
             -e 's/^ADMIN_DEFAULT_PASSWORD=.*/ADMIN_DEFAULT_PASSWORD=ci-docker-stack-admin-password/' \

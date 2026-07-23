@@ -43,6 +43,9 @@ describe('deployment password configuration', () => {
       expect(source).not.toContain(`DB_PASSWORD: ${knownPassword}`);
       expect(source).not.toContain(`PGPASSWORD: ${knownPassword}`);
     }
+    expect(source).toContain(
+      's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-docker-stack-postgres-password/',
+    );
   });
 
   test.each([
