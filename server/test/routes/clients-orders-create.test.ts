@@ -219,12 +219,15 @@ beforeEach(async () => {
     id: 'OFF_26_0045_manual',
     linkedQuoteId: 'legacy-quote-id',
     clientId: 'c1',
+    clientName: 'Acme',
     status: 'accepted',
   });
   coFindExistingForOfferMock.mockResolvedValue(null);
   clientOfferLockExistingByIdMock.mockResolvedValue({
     id: 'OFF_26_0045_manual',
     linkedQuoteId: 'legacy-quote-id',
+    clientId: 'c1',
+    clientName: 'Acme',
     status: 'accepted',
   });
   clientOfferFindItemsForOfferMock.mockResolvedValue([]);
@@ -543,6 +546,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       id: 'OFF_26_0045_manual',
       linkedQuoteId: 'legacy-quote-id',
       clientId: 'c-other',
+      clientName: 'Other Client',
       status: 'accepted',
     });
 
@@ -563,6 +567,52 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(JSON.parse(res.body).error).toContain('clientId must match');
     expect(coCreateMock).not.toHaveBeenCalled();
     expect(clientOfferFindItemsForOfferMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the submitted client name does not match the accepted source offer', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Other Client',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('clientName must match');
+    expect(coCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the source offer client changes before the transaction lock', async () => {
+    clientOfferLockExistingByIdMock.mockResolvedValue({
+      id: 'OFF_26_0045_manual',
+      linkedQuoteId: 'legacy-quote-id',
+      clientId: 'c-other',
+      clientName: 'Other Client',
+      status: 'accepted',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('clientId must match');
+    expect(coCreateMock).not.toHaveBeenCalled();
   });
 
   test('201 creates an order from a supplier-quote line with no productId', async () => {

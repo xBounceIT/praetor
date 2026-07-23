@@ -304,6 +304,7 @@ export type OfferLink = {
   id: string;
   linkedQuoteId: string | null;
   clientId: string;
+  clientName: string;
   status: string;
 };
 
@@ -316,6 +317,7 @@ export const findOfferDetails = async (
       id: customerOffers.id,
       linkedQuoteId: customerOffers.linkedQuoteId,
       clientId: customerOffers.clientId,
+      clientName: customerOffers.clientName,
       status: customerOffers.status,
     })
     .from(customerOffers)

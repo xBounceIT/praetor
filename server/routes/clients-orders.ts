@@ -66,6 +66,21 @@ const isAllowedClientOrderStatusTransition = (
   requestedStatus: ClientOrderStatus,
 ) => currentStatus === requestedStatus || currentStatus === 'draft';
 
+type OfferClientMismatch = 'clientId' | 'clientName';
+
+const getOfferClientMismatch = (
+  offer: Pick<clientsOrdersRepo.OfferLink, 'clientId' | 'clientName'>,
+  clientId: string,
+  clientName: string,
+): OfferClientMismatch | null => {
+  if (offer.clientId !== clientId) return 'clientId';
+  if (offer.clientName !== clientName) return 'clientName';
+  return null;
+};
+
+const offerClientMismatchMessage = (field: OfferClientMismatch) =>
+  `${field} must match the source offer client`;
+
 const replyInvalidClientOrderStatusTransition = (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -829,14 +844,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             details: { secondaryLabel: 'source_offer_not_accepted', fromValue: offer.status },
           });
         }
-        if (offer.clientId !== clientIdResult.value) {
+        const clientMismatch = getOfferClientMismatch(
+          offer,
+          clientIdResult.value,
+          clientNameResult.value,
+        );
+        if (clientMismatch) {
           return replyError(request, reply, {
             statusCode: 409,
-            message: 'clientId must match the source offer client',
+            message: offerClientMismatchMessage(clientMismatch),
             action: 'client_order.create.conflict',
             entityType: 'client_offer',
             entityId: linkedOfferIdResult.value,
-            details: { secondaryLabel: 'client_mismatch' },
+            details: { secondaryLabel: 'client_mismatch', changedFields: [clientMismatch] },
           });
         }
 
@@ -921,6 +941,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 ok: false,
                 status: 409,
                 body: { error: 'Sale orders can only be created from accepted offers' },
+              };
+            }
+            if (lockedOffer.linkedQuoteId !== linkedQuoteIdValue) {
+              return {
+                ok: false,
+                status: 409,
+                body: { error: 'linkedQuoteId must match the source offer quote' },
+              };
+            }
+            const clientMismatch = getOfferClientMismatch(
+              lockedOffer,
+              clientIdResult.value,
+              clientNameResult.value,
+            );
+            if (clientMismatch) {
+              return {
+                ok: false,
+                status: 409,
+                body: { error: offerClientMismatchMessage(clientMismatch) },
               };
             }
             const existing = await clientsOrdersRepo.findExistingForOffer(
@@ -1381,27 +1420,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      const effectiveClientId = clientIdValue ?? existingOrder.clientId;
+      const effectiveClientName = clientNameValue ?? existingOrder.clientName;
       let linkedQuoteIdValue: string | null = null;
-      if (nextLinkedOfferId !== null) {
-        if (existingOrder.linkedOfferId && existingOrder.linkedOfferId !== nextLinkedOfferId) {
-          return replyError(request, reply, {
-            statusCode: 409,
-            message: 'Orders cannot be relinked to a different offer',
-            action: 'client_order.update.conflict',
-            entityType: 'client_order',
-            entityId: idResult.value,
-            details: { secondaryLabel: 'cannot_relink_offer' },
-          });
-        }
-
-        const offer = await clientsOrdersRepo.findOfferDetails(nextLinkedOfferId);
+      if (
+        nextLinkedOfferId !== null &&
+        existingOrder.linkedOfferId &&
+        existingOrder.linkedOfferId !== nextLinkedOfferId
+      ) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Orders cannot be relinked to a different offer',
+          action: 'client_order.update.conflict',
+          entityType: 'client_order',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_relink_offer' },
+        });
+      }
+      const offerLinkIdToValidate =
+        nextLinkedOfferId ??
+        (existingOrder.linkedOfferId &&
+        (clientIdValue !== undefined || clientNameValue !== undefined)
+          ? existingOrder.linkedOfferId
+          : null);
+      if (offerLinkIdToValidate !== null) {
+        const offer = await clientsOrdersRepo.findOfferDetails(offerLinkIdToValidate);
         if (!offer) {
           return replyError(request, reply, {
             statusCode: 404,
             message: 'Source offer not found',
             action: 'client_order.update.not_found',
             entityType: 'client_offer',
-            entityId: nextLinkedOfferId,
+            entityId: offerLinkIdToValidate,
           });
         }
         if (offer.status !== 'accepted') {
@@ -1410,8 +1460,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             message: 'Sale orders can only be created from accepted offers',
             action: 'client_order.update.conflict',
             entityType: 'client_offer',
-            entityId: nextLinkedOfferId,
+            entityId: offerLinkIdToValidate,
             details: { secondaryLabel: 'source_offer_not_accepted', fromValue: offer.status },
+          });
+        }
+        const clientMismatch = getOfferClientMismatch(
+          offer,
+          effectiveClientId,
+          effectiveClientName,
+        );
+        if (clientMismatch) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: offerClientMismatchMessage(clientMismatch),
+            action: 'client_order.update.conflict',
+            entityType: 'client_offer',
+            entityId: offerLinkIdToValidate,
+            details: { secondaryLabel: 'client_mismatch', changedFields: [clientMismatch] },
           });
         }
         if (existingOrder.linkedQuoteId && existingOrder.linkedQuoteId !== offer.linkedQuoteId) {
@@ -1425,7 +1490,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
         }
 
-        if (await clientsOrdersRepo.findExistingForOffer(nextLinkedOfferId, idResult.value)) {
+        if (
+          nextLinkedOfferId !== null &&
+          (await clientsOrdersRepo.findExistingForOffer(nextLinkedOfferId, idResult.value))
+        ) {
           return replyError(request, reply, {
             statusCode: 409,
             message: 'A sale order already exists for this offer',
@@ -1436,7 +1504,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
         }
 
-        linkedQuoteIdValue = offer.linkedQuoteId || null;
+        if (nextLinkedOfferId !== null) {
+          linkedQuoteIdValue = offer.linkedQuoteId || null;
+        }
       }
 
       const willReplaceItems =
@@ -1479,9 +1549,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         order: clientsOrdersRepo.ClientOrder | null;
         items: clientsOrdersRepo.ClientOrderItem[];
         transitionConflictStatus?: string;
+        offerClientMismatch?: OfferClientMismatch;
+        offerLinkConflict?: 'not_found' | 'not_accepted' | 'quote_mismatch';
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          let orderForClientValidation = existingOrder;
           if (requiresStatusLock) {
             const lockedOrder = await clientsOrdersRepo.lockExistingById(idResult.value, tx);
             if (!lockedOrder) return { order: null, items: [] };
@@ -1491,6 +1564,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 items: [],
                 transitionConflictStatus: lockedOrder.status,
               };
+            }
+            orderForClientValidation = lockedOrder;
+          }
+          if (offerLinkIdToValidate !== null) {
+            const lockedOffer = await clientOffersRepo.lockExistingById(offerLinkIdToValidate, tx);
+            if (!lockedOffer) {
+              return { order: null, items: [], offerLinkConflict: 'not_found' };
+            }
+            if (lockedOffer.status !== 'accepted') {
+              return { order: null, items: [], offerLinkConflict: 'not_accepted' };
+            }
+            if (
+              orderForClientValidation.linkedQuoteId &&
+              orderForClientValidation.linkedQuoteId !== lockedOffer.linkedQuoteId
+            ) {
+              return { order: null, items: [], offerLinkConflict: 'quote_mismatch' };
+            }
+            if (nextLinkedOfferId !== null) {
+              linkedQuoteIdValue = lockedOffer.linkedQuoteId;
+            }
+            const clientMismatch = getOfferClientMismatch(
+              lockedOffer,
+              clientIdValue ?? orderForClientValidation.clientId,
+              clientNameValue ?? orderForClientValidation.clientName,
+            );
+            if (clientMismatch) {
+              return { order: null, items: [], offerClientMismatch: clientMismatch };
             }
           }
           if (shouldSnapshot) {
@@ -1575,6 +1675,40 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOrder = result.order;
       const updatedItems = result.items;
+      if (result.offerLinkConflict) {
+        const conflict = result.offerLinkConflict;
+        return replyError(request, reply, {
+          statusCode: conflict === 'not_found' ? 404 : 409,
+          message:
+            conflict === 'not_found'
+              ? 'Source offer not found'
+              : conflict === 'not_accepted'
+                ? 'Sale orders can only be created from accepted offers'
+                : 'The selected offer does not match the order quote link',
+          action:
+            conflict === 'not_found'
+              ? 'client_order.update.not_found'
+              : 'client_order.update.conflict',
+          entityType: 'client_offer',
+          entityId: offerLinkIdToValidate ?? undefined,
+          details: {
+            secondaryLabel: conflict === 'not_accepted' ? 'source_offer_not_accepted' : conflict,
+          },
+        });
+      }
+      if (result.offerClientMismatch) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: offerClientMismatchMessage(result.offerClientMismatch),
+          action: 'client_order.update.conflict',
+          entityType: 'client_offer',
+          entityId: offerLinkIdToValidate ?? undefined,
+          details: {
+            secondaryLabel: 'client_mismatch',
+            changedFields: [result.offerClientMismatch],
+          },
+        });
+      }
       if (result.transitionConflictStatus !== undefined) {
         if (statusChanged && requestedStatus !== undefined) {
           return replyInvalidClientOrderStatusTransition(

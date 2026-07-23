@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realOrderVersionsRepo from '../../repositories/orderVersionsRepo.ts';
@@ -23,6 +24,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const clientsRepoSnap = { ...realClientsRepo };
+const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const orderVersionsRepoSnap = { ...realOrderVersionsRepo };
@@ -48,6 +50,7 @@ const coRenameMock = mock();
 const coRestoreSnapshotOrderMock = mock();
 const coReplaceItemsMock = mock();
 const coDeleteDraftByIdMock = mock();
+const clientOfferLockExistingByIdMock = mock();
 
 const clientsExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
@@ -81,6 +84,10 @@ beforeAll(async () => {
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
     existsById: clientsExistsByIdMock,
+  }));
+  mock.module('../../repositories/clientOffersRepo.ts', () => ({
+    ...clientOffersRepoSnap,
+    lockExistingById: clientOfferLockExistingByIdMock,
   }));
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
@@ -132,6 +139,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/orderVersionsRepo.ts', () => orderVersionsRepoSnap);
@@ -240,6 +248,7 @@ const allMocks = [
   coRestoreSnapshotOrderMock,
   coReplaceItemsMock,
   coDeleteDraftByIdMock,
+  clientOfferLockExistingByIdMock,
   clientsExistsByIdMock,
   productsGetSnapshotsMock,
   sqGetQuoteItemSnapshotsMock,
@@ -278,6 +287,18 @@ beforeEach(async () => {
   coFindExistingForOfferMock.mockResolvedValue(null);
   coFindStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
   coDeleteDraftByIdMock.mockResolvedValue({ clientName: 'Client' });
+  clientOfferLockExistingByIdMock.mockResolvedValue({
+    id: 'off-1',
+    linkedQuoteId: null,
+    linkedQuoteCandidateId: null,
+    clientId: 'c1',
+    clientName: 'Client',
+    discount: 0,
+    discountType: 'percentage',
+    status: 'accepted',
+    deliveryDate: null,
+    expirationDate: '2099-01-01',
+  });
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(
     new Map([
       [
@@ -1800,6 +1821,156 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 });
 
+describe('PUT /api/clients-orders/:id offer tenant validation', () => {
+  test('409 rejects linking an accepted offer owned by another client', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindOfferDetailsMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: null,
+      clientId: 'c-other',
+      clientName: 'Other Client',
+      status: 'accepted',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { linkedOfferId: 'off-1' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('clientId must match');
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects linking an accepted offer with a different client name', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindOfferDetailsMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: null,
+      clientId: 'c1',
+      clientName: 'Other Client',
+      status: 'accepted',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { linkedOfferId: 'off-1' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('clientName must match');
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects changing the client of an order already linked to an offer', async () => {
+    coFindExistingMock.mockResolvedValue({ ...SAMPLE_ORDER, linkedOfferId: 'off-1' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { clientId: 'c-other' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('clientId must match');
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 revalidates the source offer client after locking it', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    clientOfferLockExistingByIdMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: null,
+      linkedQuoteCandidateId: null,
+      clientId: 'c-other',
+      clientName: 'Other Client',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'accepted',
+      deliveryDate: null,
+      expirationDate: '2099-01-01',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { linkedOfferId: 'off-1' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(clientOfferLockExistingByIdMock).toHaveBeenCalledWith('off-1', TX_SENTINEL);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 revalidates the order client after locking it', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coLockExistingByIdMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      clientId: 'c-other',
+      clientName: 'Other Client',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { linkedOfferId: 'off-1' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('o-1', TX_SENTINEL);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('uses the source offer quote resolved under lock', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindOfferDetailsMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: 'q-preflight',
+      clientId: 'c1',
+      clientName: 'Client',
+      status: 'accepted',
+    });
+    clientOfferLockExistingByIdMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: 'q-locked',
+      linkedQuoteCandidateId: null,
+      clientId: 'c1',
+      clientName: 'Client',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'accepted',
+      deliveryDate: null,
+      expirationDate: '2099-01-01',
+    });
+    coUpdateMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      linkedOfferId: 'off-1',
+      linkedQuoteId: 'q-locked',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { linkedOfferId: 'off-1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'o-1',
+      expect.objectContaining({ linkedOfferId: 'off-1', linkedQuoteId: 'q-locked' }),
+      TX_SENTINEL,
+    );
+  });
+});
+
 describe('PUT /api/clients-orders/:id source-linked editability', () => {
   test('200 allows editing a DRAFT order linked to an offer (content + items)', async () => {
     coFindExistingMock.mockResolvedValue({
@@ -1923,7 +2094,8 @@ describe('PUT /api/clients-orders/:id source-linked editability', () => {
       TX_SENTINEL,
     );
     expect(coReplaceItemsMock).toHaveBeenCalled();
-    expect(coFindOfferDetailsMock).not.toHaveBeenCalled();
+    expect(coFindOfferDetailsMock).toHaveBeenCalledWith('off-1');
+    expect(clientOfferLockExistingByIdMock).toHaveBeenCalledWith('off-1', TX_SENTINEL);
     expect(ovInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: 'o-1', reason: 'update' }),
       TX_SENTINEL,
