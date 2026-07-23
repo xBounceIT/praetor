@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import type { PoolConfig } from 'pg';
 import { createChildLogger } from '../utils/logger.ts';
+import {
+  INSECURE_DEFAULT_DB_PASSWORDS,
+  readRequiredNonDefaultEnv,
+} from '../utils/runtimeConfig.ts';
 
 const logger = createChildLogger({ module: 'db/config' });
 
@@ -16,18 +20,18 @@ const envInt = (
 };
 
 const DEFAULT_DB_PORT = 5432;
-const LOCAL_DB_PASSWORD = 'praetor';
 
 const getDbPassword = (): string => {
-  const configured = process.env.DB_PASSWORD;
-  if (configured) return configured;
-
   const runtime = process.env.NODE_ENV?.trim().toLowerCase();
-  if (runtime === 'development' || runtime === 'test') return LOCAL_DB_PASSWORD;
+  if (runtime === 'development' || runtime === 'test') {
+    const password = process.env.DB_PASSWORD?.trim();
+    if (!password) throw new Error('DB_PASSWORD is required.');
+    return password;
+  }
 
-  throw new Error(
-    'DB_PASSWORD is required outside explicit development or test runtimes. Set NODE_ENV accordingly only for local use.',
-  );
+  return readRequiredNonDefaultEnv('DB_PASSWORD', INSECURE_DEFAULT_DB_PASSWORDS, {
+    missing: 'DB_PASSWORD is required.',
+  });
 };
 
 export interface DbConnectionConfig {

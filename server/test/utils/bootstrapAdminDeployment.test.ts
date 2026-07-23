@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   INSECURE_DEFAULT_ADMIN_PASSWORDS,
+  INSECURE_DEFAULT_DB_PASSWORDS,
   INSECURE_DEFAULT_DEMO_USER_PASSWORDS,
 } from '../../utils/runtimeConfig.ts';
 
@@ -11,6 +12,42 @@ const readRepositoryFile = (path: string): string =>
   readFileSync(join(repositoryRoot, path), 'utf8');
 
 describe('deployment password configuration', () => {
+  test.each([
+    '.env.example',
+    'server/.env.example',
+    'deploy/.env.customer.example',
+  ])('%s uses a database placeholder that runtime validation rejects', (path) => {
+    const source = readRepositoryFile(path);
+    const configuredValue = source.match(/^(?:POSTGRES|DB)_PASSWORD=(.*)$/m)?.[1].trim();
+
+    expect(configuredValue).toBeDefined();
+    expect(INSECURE_DEFAULT_DB_PASSWORDS.some((password) => password === configuredValue)).toBe(
+      true,
+    );
+  });
+
+  test.each([
+    'docker-compose.yml',
+    'deploy/docker-compose.customer.yml',
+  ])('%s requires POSTGRES_PASSWORD instead of using a fallback', (path) => {
+    const source = readRepositoryFile(path);
+
+    expect(source).toContain(`\${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}`);
+    expect(source).not.toContain(`\${POSTGRES_PASSWORD:-`);
+  });
+
+  test('CI database services do not use a published database password', () => {
+    const source = readRepositoryFile('.github/workflows/ci.yml');
+
+    for (const knownPassword of INSECURE_DEFAULT_DB_PASSWORDS) {
+      expect(source).not.toContain(`DB_PASSWORD: ${knownPassword}`);
+      expect(source).not.toContain(`PGPASSWORD: ${knownPassword}`);
+    }
+    expect(source).toContain(
+      's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-docker-stack-postgres-password/',
+    );
+  });
+
   test.each([
     '.env.example',
     'server/.env.example',

@@ -60,6 +60,11 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Before startup, replace `POSTGRES_PASSWORD` in `.env` with a unique generated value.
+Compose refuses an unset value, and the backend always requires an explicit database password.
+Outside explicit local development or test runtimes, it also rejects published defaults and
+placeholders.
+
 The bundled database now targets fresh PostgreSQL 18 installs and pins `PGDATA` to the
 official PG18 container layout. Do not point this compose file at an existing PostgreSQL 17
 data volume.

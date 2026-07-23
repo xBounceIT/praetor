@@ -88,7 +88,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: praetor
-          POSTGRES_PASSWORD: praetor
+          POSTGRES_PASSWORD: ci-postgres-password
           POSTGRES_DB: praetor_test
         ports:
           - 5432:5432
@@ -121,7 +121,7 @@ jobs:
           DB_PORT: '5432'
           DB_NAME: praetor_test
           DB_USER: praetor
-          DB_PASSWORD: praetor
+          DB_PASSWORD: ci-postgres-password
         run: bun run db:migrate
 
       # Re-uses the existing readiness probe (db/readiness.ts): connects, asserts every
@@ -135,7 +135,7 @@ jobs:
           DB_PORT: '5432'
           DB_NAME: praetor_test
           DB_USER: praetor
-          DB_PASSWORD: praetor
+          DB_PASSWORD: ci-postgres-password
         run: bun run db:ready
 
       - name: Verify legacy time-entry duplicate upgrade
@@ -145,7 +145,7 @@ jobs:
           DB_PORT: '5432'
           DB_NAME: praetor_test
           DB_USER: praetor
-          DB_PASSWORD: praetor
+          DB_PASSWORD: ci-postgres-password
           RUN_TIME_ENTRY_KEY_MIGRATION_TEST: '1'
         run: bun test ./test/db/migration0121TimeEntryKeys.postgres.test.ts
 
@@ -155,7 +155,7 @@ jobs:
           PGPORT: '5432'
           PGDATABASE: praetor_test
           PGUSER: praetor
-          PGPASSWORD: praetor
+          PGPASSWORD: ci-postgres-password
         run: |
           psql --set=ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (id, name, is_system, is_admin)
@@ -174,7 +174,7 @@ jobs:
           DB_PORT: '5432'
           DB_NAME: praetor_test
           DB_USER: praetor
-          DB_PASSWORD: praetor
+          DB_PASSWORD: ci-postgres-password
           ADMIN_DEFAULT_PASSWORD: ci-migration-admin-password
           DEMO_USER_PASSWORD: ci-migration-demo-password
         run: bun run seed:demo
@@ -406,6 +406,7 @@ jobs:
         run: |
           cp .env.example .env
           sed -i \
+            -e 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-docker-stack-postgres-password/' \
             -e 's/^JWT_SECRET=.*/JWT_SECRET=ci-docker-stack-jwt-secret/' \
             -e 's/^ENCRYPTION_KEY=.*/ENCRYPTION_KEY=ci-docker-stack-encryption-key/' \
             -e 's/^ADMIN_DEFAULT_PASSWORD=.*/ADMIN_DEFAULT_PASSWORD=ci-docker-stack-admin-password/' \

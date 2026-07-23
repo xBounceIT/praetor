@@ -7,6 +7,11 @@ export const INSECURE_DEFAULT_ENCRYPTION_KEYS = [
   'praetor-encryption-key-change-in-production',
   'change-me-long-random-encryption-key',
 ] as const;
+export const INSECURE_DEFAULT_DB_PASSWORDS = [
+  'praetor',
+  'tempo',
+  'change-me-strong-password',
+] as const;
 export const INSECURE_DEFAULT_ADMIN_PASSWORDS = [
   'password',
   'change-me-strong-admin-password',

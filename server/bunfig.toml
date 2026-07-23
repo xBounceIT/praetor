@@ -2,3 +2,4 @@
 # exists so Bun's bunfig.toml lookup stops here instead of inheriting the
 # project-root preload, which registers happy-dom for the frontend suite.
 [test]
+preload = ["./test/setup.ts"]

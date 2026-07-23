@@ -9,7 +9,7 @@ x-backend-db-env: &backend-db-env
   DB_PORT: 5432
   DB_NAME: ${POSTGRES_DB:-praetor}
   DB_USER: ${POSTGRES_USER:-praetor}
-  DB_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
 
 services:
   # Developer compose (builds images from local source).
@@ -19,7 +19,7 @@ services:
     container_name: praetor-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-praetor}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-praetor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-praetor}
       PGDATA: /var/lib/postgresql/18/docker
     volumes:

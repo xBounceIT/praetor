@@ -9,6 +9,8 @@ sidebar:
 
 Sign in with the credentials provided by your administrator. If your company uses LDAP or single sign-on, you may be redirected to the company identity provider before entering the platform.
 
+Before starting an installation, the operator must generate a unique database password and set it as `POSTGRES_PASSWORD` (or `DB_PASSWORD` when starting the backend directly). Praetor always requires an explicit database password; outside local runtimes configured for development or testing, it also rejects default and published placeholder values.
+
 For a new installation, the operator must generate a unique password and set it as `ADMIN_DEFAULT_PASSWORD` before first startup. Praetor does not create the `admin` account when the value is blank or matches a previously published default credential. Upgrades do not need the variable when the `admin` account already exists.
 
 When enabling the demo dataset with `DEMO_SEEDING=true`, also set a unique `DEMO_USER_PASSWORD`. The refresh stops before cleaning or reseeding demo data if the value is blank or matches the former public password. Every refresh resets demo accounts to this password without changing the dataset's deterministic identities and relationships.

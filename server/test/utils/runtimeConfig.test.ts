@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
   INSECURE_DEFAULT_ADMIN_PASSWORDS,
+  INSECURE_DEFAULT_DB_PASSWORDS,
   INSECURE_DEFAULT_DEMO_USER_PASSWORDS,
   INSECURE_DEFAULT_JWT_SECRETS,
   readRequiredNonDefaultEnv,
@@ -38,6 +39,14 @@ describe('runtimeConfig', () => {
     expect(INSECURE_DEFAULT_ADMIN_PASSWORDS).toEqual([
       'password',
       'change-me-strong-admin-password',
+    ]);
+  });
+
+  test('maintains the database password denylist with every published default', () => {
+    expect(INSECURE_DEFAULT_DB_PASSWORDS).toEqual([
+      'praetor',
+      'tempo',
+      'change-me-strong-password',
     ]);
   });
 
