@@ -13,6 +13,7 @@ import { NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { makeAccessChecker } from '../utils/permissions.ts';
 import {
+  canViewProjectRule,
   getProjectRuleFieldDefinition,
   isProjectRuleConditionValueType,
   validateProjectRuleCondition,
@@ -704,6 +705,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['projects'],
         summary: 'List project rules',
+        description:
+          'Omits rules whose condition fields require permissions the caller does not have.',
         params: projectIdParamSchema,
         response: {
           200: { type: 'array', items: projectRuleSchema },
@@ -718,9 +721,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await ensureProjectAccess(request, reply, id.value, 'project_rule.list.denied')))
         return;
       const rules = await projectRulesRepo.listByProject(id.value);
-      return canUseRuleWebhooks(request.user?.permissions ?? [])
-        ? rules
-        : rules.map(redactRuleWebhooks);
+      const permissions = request.user?.permissions ?? [];
+      const visibleRules = rules.filter((rule) => canViewProjectRule(rule, permissions));
+      return canUseRuleWebhooks(permissions) ? visibleRules : visibleRules.map(redactRuleWebhooks);
     },
   );
 

@@ -1,4 +1,4 @@
-import type { Permission, ProjectRuleConditionValueType } from '../../types';
+import type { Permission, ProjectRule, ProjectRuleConditionValueType } from '../../types';
 import { PROJECT_STATUSES } from '../../types';
 
 const PROJECT_RULE_NUMBER_OPERATORS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
@@ -55,6 +55,29 @@ export const getAvailableProjectRuleFields = (permissions: readonly string[]) =>
     (definition) =>
       !definition.requiresPermission || permissions.includes(definition.requiresPermission),
   );
+
+export const canViewProjectRule = (
+  rule: Pick<ProjectRule, 'field' | 'value' | 'conditions'>,
+  permissions: readonly string[],
+): boolean => {
+  const permissionSet = new Set(permissions);
+  const conditions =
+    rule.conditions?.length > 0
+      ? rule.conditions
+      : [{ field: rule.field, value: rule.value, valueType: 'literal' as const }];
+
+  return conditions.every((condition) => {
+    const fieldPermission = getProjectRuleFieldDefinition(condition.field)?.requiresPermission;
+    const valuePermission =
+      condition.valueType === 'field'
+        ? getProjectRuleFieldDefinition(condition.value)?.requiresPermission
+        : undefined;
+    return (
+      (!fieldPermission || permissionSet.has(fieldPermission)) &&
+      (!valuePermission || permissionSet.has(valuePermission))
+    );
+  });
+};
 
 const enumValuesMatch = (
   leftValues: readonly string[] | undefined,
