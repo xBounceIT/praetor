@@ -1,11 +1,11 @@
 # STAGE 1: Install dependencies
-FROM oven/bun:1.3.14 AS install
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS install
 WORKDIR /temp
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # STAGE 2: Build
-FROM oven/bun:1.3.14 AS builder
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS builder
 WORKDIR /app
 COPY --from=install /temp/node_modules node_modules
 COPY . .
@@ -20,7 +20,7 @@ ENV NODE_ENV=production
 RUN bun run build
 
 # STAGE 3: Production with Caddy
-FROM caddy:alpine
+FROM caddy:alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
 
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /app/dist /srv
