@@ -33,6 +33,8 @@ Il toggle **Info tecniche** in alto a destra mostra il provider e il modello usa
 
 Il composer fluttua sopra la conversazione: resta compatto su una riga e cresce automaticamente quando il testo va su più righe. Premi **Invio** per inviare oppure **Shift+Invio** per andare a capo.
 
+L'invio e la rigenerazione delle risposte AI condividono un limite di 10 richieste al minuto per utente autenticato e indirizzo IP. Se il limite viene superato, Praetor restituisce una risposta 429: attendi la fine della finestra indicata prima di riprovare.
+
 Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting. Il loro contenuto diventa una fonte dati esplicita per analisi, calcoli e visualizzazioni, ma viene sempre trattato come dato e mai come istruzione per l'AI.
 
 ## Dataset aziendali disponibili

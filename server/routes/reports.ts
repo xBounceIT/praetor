@@ -22,7 +22,7 @@ import {
   requestHasPermission as hasPermission,
   canViewProjectDetails as hasProjectDetailsAccess,
 } from '../utils/permissions.ts';
-import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import { AI_REPORTING_CHAT_RATE_LIMIT, STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
@@ -2375,6 +2375,7 @@ const createSseStreamHandlers = (
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
+  const aiReportingChatRateLimit = fastify.rateLimit(AI_REPORTING_CHAT_RATE_LIMIT);
 
   const sessionSummarySchema = {
     type: 'object',
@@ -2677,7 +2678,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/chat/stream',
     {
-      onRequest: [requirePermission('reports.ai_reporting.create')],
+      onRequest: [aiReportingChatRateLimit, requirePermission('reports.ai_reporting.create')],
       schema: {
         tags: ['reports'],
         summary: 'Send a message to AI Reporting and stream progress',
@@ -2691,7 +2692,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           required: ['message'],
         },
         response: {
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -2922,7 +2923,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/chat/edit-stream',
     {
-      onRequest: [requirePermission('reports.ai_reporting.create')],
+      onRequest: [aiReportingChatRateLimit, requirePermission('reports.ai_reporting.create')],
       schema: {
         tags: ['reports'],
         summary: 'Edit a user message and regenerate the assistant response via streaming',
@@ -2937,7 +2938,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           required: ['sessionId', 'messageId', 'content'],
         },
         response: {
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -3164,7 +3165,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/chat',
     {
-      onRequest: [requirePermission('reports.ai_reporting.create')],
+      onRequest: [aiReportingChatRateLimit, requirePermission('reports.ai_reporting.create')],
       schema: {
         tags: ['reports'],
         summary: 'Send a message to AI Reporting and store history',
@@ -3188,7 +3189,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             required: ['sessionId', 'text'],
           },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

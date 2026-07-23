@@ -33,6 +33,8 @@ The **Technical info** toggle in the top-right corner shows the provider and mod
 
 The composer floats over the conversation: it stays compact on one line and grows automatically when the text wraps onto additional lines. Press **Enter** to send or **Shift+Enter** to insert a new line.
 
+Sending and regenerating AI answers share a limit of 10 requests per minute for each authenticated user and IP address. If the limit is exceeded, Praetor returns a 429 response; wait for the indicated window to end before retrying.
+
 Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting. Their contents become an explicit data source for analysis, calculations, and visualizations, while remaining data rather than instructions for the AI.
 
 ## Available business datasets

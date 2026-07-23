@@ -44,6 +44,8 @@ const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 const getGeneralSettingsMock = mock();
+const aiReportingRateLimitHookMock = mock(async () => {});
+const rateLimitMock = mock((_options: unknown) => aiReportingRateLimitHookMock);
 
 const listSessionsForUserMock = mock();
 const createSessionMock = mock();
@@ -242,6 +244,8 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   getGeneralSettingsMock,
+  aiReportingRateLimitHookMock,
+  rateLimitMock,
   listSessionsForUserMock,
   createSessionMock,
   archiveSessionMock,
@@ -284,6 +288,8 @@ let testApp: FastifyInstance;
 
 beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
+  aiReportingRateLimitHookMock.mockImplementation(async () => {});
+  rateLimitMock.mockImplementation((_options: unknown) => aiReportingRateLimitHookMock);
   localAiFetchMock.mockClear();
   resetWithDbTransactionMock();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
@@ -293,7 +299,9 @@ beforeEach(async () => {
   listManagedUserIdsMock.mockResolvedValue([]);
   listSupplierOptionsMock.mockResolvedValue([]);
 
-  testApp = await buildRouteTestApp(routePlugin, '/api/reports');
+  testApp = await buildRouteTestApp(routePlugin, '/api/reports', (app) => {
+    app.rateLimit = rateLimitMock as typeof app.rateLimit;
+  });
 });
 
 afterEach(async () => {
@@ -349,6 +357,44 @@ const openAiStreamResponse = (events: Array<Record<string, unknown>>) =>
       },
     }),
   }) as unknown as Response;
+
+describe('AI reporting chat rate limiting', () => {
+  test('shares a strict user-and-IP limit across all paid generation routes', async () => {
+    type RateLimitOptions = {
+      keyGenerator?: (request: { ip: string; user?: { id?: string } }) => string;
+      max?: number;
+      timeWindow?: string;
+    };
+    const matchingCalls = rateLimitMock.mock.calls.filter(([options]) => {
+      const config = options as RateLimitOptions;
+      return config.max === 10 && config.timeWindow === '1 minute';
+    });
+
+    expect(matchingCalls).toHaveLength(1);
+    const config = matchingCalls[0]?.[0] as RateLimitOptions;
+    expect(config.keyGenerator?.({ ip: '203.0.113.5', user: { id: 'user-1' } })).toBe(
+      'user:user-1:ip:203.0.113.5',
+    );
+
+    aiReportingRateLimitHookMock.mockClear();
+    for (const request of [
+      { url: '/api/reports/ai-reporting/chat', payload: { message: '' } },
+      { url: '/api/reports/ai-reporting/chat/stream', payload: { message: '' } },
+      {
+        url: '/api/reports/ai-reporting/chat/edit-stream',
+        payload: { sessionId: 's', messageId: 'm', content: '' },
+      },
+    ]) {
+      await testApp.inject({
+        method: 'POST',
+        url: request.url,
+        headers: authHeader(),
+        payload: request.payload,
+      });
+    }
+    expect(aiReportingRateLimitHookMock).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe('determineRequestedSections', () => {
   test('does not select business datasets from attachment contents', () => {
