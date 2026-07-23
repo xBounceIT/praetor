@@ -449,6 +449,33 @@ describe('determineRequestedSections', () => {
 });
 
 describe('buildBusinessDataset modern sections', () => {
+  test('passes client commercial permissions into catalog aggregation', async () => {
+    await buildBusinessDataset(
+      {
+        user: {
+          id: 'u1',
+          permissions: ['catalog.internal_listing.view', 'accounting.clients_invoices.view'],
+        },
+      } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+      new Set(['catalog']),
+    );
+
+    expect(getCatalogSectionMock).toHaveBeenCalledWith(
+      {
+        fromDate: '2026-04-01',
+        toDate: '2026-07-31',
+        topLimit: 20,
+        canViewQuotes: false,
+        canViewOrders: false,
+        canViewInvoices: true,
+      },
+      expect.anything(),
+    );
+  });
+
   test('marks client details unavailable for non-CRM workflow viewers', async () => {
     await buildBusinessDataset(
       { user: { id: 'u1', permissions: ['timesheets.tracker.view'] } } as never,

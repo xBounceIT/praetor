@@ -47,7 +47,7 @@ For every request, AI Reporting builds a fresh dataset restricted to the view pe
 - **Client orders** and **client invoices** — values, statuses, payments, outstanding amounts, and aging.
 - **Suppliers** and **supplier quotes** — master data, activity, and amounts.
 - **Supplier orders** and **supplier invoices** — purchasing, payments, outstanding amounts, and aging.
-- **Catalog** — products, types, categories, suppliers, and document usage.
+- **Catalog** — products, types, categories, suppliers, and authorized document usage.
 - **Resales** — costs, revenue, margin, billing frequencies, categories, and activity release state.
 
 Unauthorized sections are never added to the AI context. When a question targets one area, Praetor loads only the relevant sections; an overview request uses every available section. Document totals for duration-based lines use the displayed value as their multiplier without converting months and years; historical documents retain the calculation contract that was active when they were saved. For quotes with multiple candidates, reporting analyzes the selected candidate or the first active candidate.
@@ -55,6 +55,8 @@ Unauthorized sections are never added to the AI context. When a question targets
 Within the client dataset, contact name, email, phone, and address are included only with `crm.clients.view`. Other permissions that make the client section available, such as timesheet, project, or commercial-document permissions, preserve the already authorized client row scope without exposing these master-data details.
 
 Within the supplier dataset, master-data details are included only with `crm.suppliers_all.view`. With a base supplier permission or supplier-document view permission alone, AI Reporting and the `praetor_list_suppliers` MCP tool receive only the supplier identifier, name, and status.
+
+Within the catalog dataset, product counts and classifications follow catalog permissions. Usage metrics include only client documents the role can view: quotes with `sales.client_quotes.view`, orders and their revenue with `accounting.clients_orders.view`, and invoices with `accounting.clients_invoices.view`.
 
 ## Interactive visualizations
 

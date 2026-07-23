@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { toDbNumber, toDbText } from '../utils/parse.ts';
 import { supplierQuoteNetValueSql } from './reportsCommercialSql.ts';
@@ -347,6 +347,9 @@ export type CatalogSectionOptions = {
   fromDate: string;
   toDate: string;
   topLimit: number;
+  canViewQuotes: boolean;
+  canViewOrders: boolean;
+  canViewInvoices: boolean;
 };
 
 export type CatalogSection = {
@@ -372,7 +375,85 @@ export const getCatalogSection = async (
   opts: CatalogSectionOptions,
   exec: DbExecutor = db,
 ): Promise<CatalogSection> => {
-  const { fromDate, toDate, topLimit } = opts;
+  const { fromDate, toDate, topLimit, canViewQuotes, canViewOrders, canViewInvoices } = opts;
+
+  const usageQueries: SQL[] = [];
+  if (canViewQuotes) {
+    usageQueries.push(sql`SELECT
+        qi.product_id,
+        qi.product_name,
+        COUNT(*) as use_count,
+        COALESCE(SUM(qi.quantity), 0) as quantity_total
+      FROM quote_items qi
+      JOIN quotes q ON q.id = qi.quote_id
+     WHERE q.created_at::date >= ${fromDate}
+       AND q.created_at::date <= ${toDate}
+       AND qi.product_id IS NOT NULL
+     GROUP BY qi.product_id, qi.product_name`);
+  }
+  if (canViewOrders) {
+    usageQueries.push(sql`SELECT
+        si.product_id,
+        si.product_name,
+        COUNT(*) as use_count,
+        COALESCE(SUM(si.quantity), 0) as quantity_total
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+     WHERE s.created_at::date >= ${fromDate}
+       AND s.created_at::date <= ${toDate}
+       AND si.product_id IS NOT NULL
+     GROUP BY si.product_id, si.product_name`);
+  }
+  if (canViewInvoices) {
+    usageQueries.push(sql`SELECT
+        ii.product_id,
+        ii.description as product_name,
+        COUNT(*) as use_count,
+        COALESCE(SUM(ii.quantity), 0) as quantity_total
+      FROM invoice_items ii
+      JOIN invoices i ON i.id = ii.invoice_id
+     WHERE i.issue_date >= ${fromDate}
+       AND i.issue_date <= ${toDate}
+       AND ii.product_id IS NOT NULL
+     GROUP BY ii.product_id, ii.description`);
+  }
+
+  const topProductsByUsageQuery =
+    usageQueries.length > 0
+      ? sql`WITH usage_rows AS (${sql.join(usageQueries, sql` UNION ALL `)})
+          SELECT
+            product_id,
+            product_name,
+            COALESCE(SUM(use_count), 0) as usage_count,
+            COALESCE(SUM(quantity_total), 0) as quantity_total
+            FROM usage_rows
+           GROUP BY product_id, product_name
+           ORDER BY usage_count DESC, quantity_total DESC
+           LIMIT ${topLimit}`
+      : null;
+
+  const topProductsByRevenueQuery = canViewOrders
+    ? sql`SELECT
+            si.product_id,
+            si.product_name,
+            COALESCE(
+              SUM(
+                si.quantity
+                * si.unit_price
+                * (1 - COALESCE(si.discount, 0) / 100.0)
+                * (1 - COALESCE(s.discount, 0) / 100.0)
+              ),
+              0
+            ) as value
+           FROM sale_items si
+           JOIN sales s ON s.id = si.sale_id
+          WHERE s.created_at::date >= ${fromDate}
+            AND s.created_at::date <= ${toDate}
+            AND si.product_id IS NOT NULL
+          GROUP BY si.product_id, si.product_name
+          ORDER BY value DESC
+          LIMIT ${topLimit}`
+    : null;
 
   const [
     counts,
@@ -422,63 +503,20 @@ export const getCatalogSection = async (
         ORDER BY value DESC
         LIMIT ${topLimit}`,
     ),
-    executeRows<{
-      product_id: string;
-      product_name: string;
-      usage_count: string;
-      quantity_total: string;
-    }>(
-      exec,
-      sql`WITH usage_rows AS (
-          SELECT qi.product_id, qi.product_name, COUNT(*) as use_count, COALESCE(SUM(qi.quantity), 0) as quantity_total
-            FROM quote_items qi
-            JOIN quotes q ON q.id = qi.quote_id
-           WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate} AND qi.product_id IS NOT NULL
-           GROUP BY qi.product_id, qi.product_name
-          UNION ALL
-          SELECT si.product_id, si.product_name, COUNT(*) as use_count, COALESCE(SUM(si.quantity), 0) as quantity_total
-            FROM sale_items si
-            JOIN sales s ON s.id = si.sale_id
-           WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate} AND si.product_id IS NOT NULL
-           GROUP BY si.product_id, si.product_name
-          UNION ALL
-          SELECT ii.product_id, ii.description as product_name, COUNT(*) as use_count, COALESCE(SUM(ii.quantity), 0) as quantity_total
-            FROM invoice_items ii
-            JOIN invoices i ON i.id = ii.invoice_id
-           WHERE i.issue_date >= ${fromDate} AND i.issue_date <= ${toDate} AND ii.product_id IS NOT NULL
-           GROUP BY ii.product_id, ii.description
-         )
-        SELECT
-          product_id,
-          product_name,
-          COALESCE(SUM(use_count), 0) as usage_count,
-          COALESCE(SUM(quantity_total), 0) as quantity_total
-          FROM usage_rows
-         GROUP BY product_id, product_name
-         ORDER BY usage_count DESC, quantity_total DESC
-         LIMIT ${topLimit}`,
-    ),
-    executeRows<{ product_id: string; product_name: string; value: string }>(
-      exec,
-      sql`SELECT
-          si.product_id,
-          si.product_name,
-          COALESCE(
-            SUM(
-              si.quantity
-              * si.unit_price
-              * (1 - COALESCE(si.discount, 0) / 100.0)
-              * (1 - COALESCE(s.discount, 0) / 100.0)
-            ),
-            0
-          ) as value
-         FROM sale_items si
-         JOIN sales s ON s.id = si.sale_id
-        WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate} AND si.product_id IS NOT NULL
-        GROUP BY si.product_id, si.product_name
-        ORDER BY value DESC
-        LIMIT ${topLimit}`,
-    ),
+    topProductsByUsageQuery
+      ? executeRows<{
+          product_id: string;
+          product_name: string;
+          usage_count: string;
+          quantity_total: string;
+        }>(exec, topProductsByUsageQuery)
+      : Promise.resolve([]),
+    topProductsByRevenueQuery
+      ? executeRows<{ product_id: string; product_name: string; value: string }>(
+          exec,
+          topProductsByRevenueQuery,
+        )
+      : Promise.resolve([]),
   ]);
 
   return {
