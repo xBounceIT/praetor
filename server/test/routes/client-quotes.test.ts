@@ -1849,28 +1849,32 @@ describe('client quote candidate-family create and update', () => {
     );
     return names;
   };
+  const quotePayload = (
+    items: Array<Record<string, unknown>>,
+    over: Record<string, unknown> = {},
+  ) => ({
+    id: 'q-new',
+    clientId: 'c1',
+    clientName: 'Client',
+    items,
+    candidates: [
+      {
+        name: 'Variante A',
+        items,
+        expirationDate: '2999-12-31',
+        communicationChannelId: 'qcc_email',
+      },
+    ],
+    expirationDate: '2999-12-31',
+    communicationChannelId: 'qcc_email',
+    ...over,
+  });
   const postQuote = (items: Array<Record<string, unknown>>, over: Record<string, unknown> = {}) =>
     testApp.inject({
       method: 'POST',
       url: '/api/sales/client-quotes',
       headers: authHeader(),
-      payload: {
-        id: 'q-new',
-        clientId: 'c1',
-        clientName: 'Client',
-        items,
-        candidates: [
-          {
-            name: 'Variante A',
-            items,
-            expirationDate: '2999-12-31',
-            communicationChannelId: 'qcc_email',
-          },
-        ],
-        expirationDate: '2999-12-31',
-        communicationChannelId: 'qcc_email',
-        ...over,
-      },
+      payload: quotePayload(items, over),
     });
   const putCandidateFamily = (discount: number, itemOverrides: Record<string, unknown> = {}) =>
     testApp.inject({
@@ -1943,6 +1947,48 @@ describe('client quote candidate-family create and update', () => {
       items: [SUPPLIER_ITEM],
     });
   };
+
+  test('400 rejects a quote for a nonexistent client without disclosing database details', async () => {
+    setupCreate();
+    cqCreateMock.mockRejectedValue({
+      code: '23503',
+      constraint: 'quotes_client_id_clients_id_fk',
+      message: 'insert into quotes violated private_constraint_name',
+    });
+
+    const res = await postQuote([freshLine()], { clientId: 'missing-client' });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Client not found' });
+    expect(res.body).not.toContain('private_constraint_name');
+  });
+
+  test('500 delegates unexpected create failures to the application error handler', async () => {
+    setupCreate();
+    cqCreateMock.mockRejectedValue(
+      new Error('insert into quotes violated private_constraint_name'),
+    );
+    const maskingApp = await buildRouteTestApp(routePlugin, '/api/sales/client-quotes', (app) => {
+      app.setErrorHandler((_error, _request, reply) =>
+        reply.code(500).send({ error: 'Internal server error' }),
+      );
+    });
+
+    try {
+      const res = await maskingApp.inject({
+        method: 'POST',
+        url: '/api/sales/client-quotes',
+        headers: authHeader(),
+        payload: quotePayload([freshLine()]),
+      });
+
+      expect(res.statusCode).toBe(500);
+      expect(JSON.parse(res.body)).toEqual({ error: 'Internal server error' });
+      expect(res.body).not.toContain('private_constraint_name');
+    } finally {
+      await maskingApp.close();
+    }
+  });
 
   const setupLegacyCandidateUpdate = (quoteId = 'q-1') => {
     setupCreate();
