@@ -266,6 +266,27 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('POST /api/clients-orders product-less supplier lines (issue #783)', () => {
+  for (const status of ['confirmed', 'denied'] as const) {
+    test(`400 rejects caller-supplied ${status} status`, async () => {
+      coInsertItemsMock.mockResolvedValue([insertedItem()]);
+
+      const res = await testApp.inject({
+        method: 'POST',
+        url: '/api/clients-orders',
+        headers: authHeader(),
+        payload: {
+          clientId: 'c1',
+          clientName: 'Acme',
+          status,
+          items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(coCreateMock).not.toHaveBeenCalled();
+    });
+  }
+
   test('400 rejects a percentage document discount above 100%', async () => {
     const res = await testApp.inject({
       method: 'POST',

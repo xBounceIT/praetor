@@ -47,6 +47,45 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+const CLIENT_ORDER_STATUSES = ['draft', 'confirmed', 'denied'] as const;
+type ClientOrderStatus = (typeof CLIENT_ORDER_STATUSES)[number];
+
+const clientOrderStatusSchema = {
+  type: 'string',
+  enum: CLIENT_ORDER_STATUSES,
+} as const;
+
+const draftClientOrderStatusSchema = {
+  type: 'string',
+  enum: ['draft'],
+  description: 'Client orders are always created in draft status.',
+} as const;
+
+const isAllowedClientOrderStatusTransition = (
+  currentStatus: string,
+  requestedStatus: ClientOrderStatus,
+) => currentStatus === requestedStatus || currentStatus === 'draft';
+
+const replyInvalidClientOrderStatusTransition = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  orderId: string,
+  currentStatus: string,
+  requestedStatus: ClientOrderStatus,
+) =>
+  replyError(request, reply, {
+    statusCode: 409,
+    message: 'This client order status transition is not allowed',
+    action: 'client_order.update.conflict',
+    entityType: 'client_order',
+    entityId: orderId,
+    details: {
+      secondaryLabel: 'invalid_transition',
+      fromValue: currentStatus,
+      toValue: requestedStatus,
+    },
+  });
+
 const idParamSchema = {
   type: 'object',
   properties: {
@@ -111,7 +150,7 @@ const clientOrderSchema = {
     paymentTerms: { type: ['string', 'null'] },
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
-    status: { type: 'string' },
+    status: clientOrderStatusSchema,
     notes: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
@@ -210,7 +249,7 @@ const clientOrderCreateBodySchema = {
     paymentTerms: { type: 'string' },
     discount: documentDiscountValueSchema,
     discountType: documentDiscountTypeSchema,
-    status: { type: 'string' },
+    status: draftClientOrderStatusSchema,
     notes: { type: 'string' },
   },
   required: ['clientId', 'clientName', 'items'],
@@ -228,7 +267,7 @@ const clientOrderUpdateBodySchema = {
     paymentTerms: { type: 'string' },
     discount: documentDiscountValueSchema,
     discountType: documentDiscountTypeSchema,
-    status: { type: 'string' },
+    status: clientOrderStatusSchema,
     notes: { type: ['string', 'null'] },
   },
 } as const;
@@ -719,7 +758,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms,
         discount,
         discountType,
-        status,
         notes,
       } = request.body as {
         id?: unknown;
@@ -732,7 +770,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms: unknown;
         discount: unknown;
         discountType: unknown;
-        status: unknown;
         notes: unknown;
       };
 
@@ -912,7 +949,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
               discount: discountResult.value || 0,
               discountType: discountTypeValue,
-              status: typeof status === 'string' && status ? status : 'draft',
+              status: 'draft',
               notes: (notes as string | null | undefined) ?? null,
             },
             buildItemsForInsert(normalizedItems),
@@ -1024,7 +1061,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         paymentTerms: unknown;
         discount: unknown;
         discountType: unknown;
-        status: unknown;
+        status: ClientOrderStatus | undefined;
         notes: unknown;
       };
       const idResult = requireNonEmptyString(id, 'id');
@@ -1098,6 +1135,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      const requestedStatus = status;
+      const statusChanged =
+        requestedStatus !== undefined && requestedStatus !== existingOrder.status;
+      if (
+        statusChanged &&
+        !isAllowedClientOrderStatusTransition(existingOrder.status, requestedStatus)
+      ) {
+        return replyInvalidClientOrderStatusTransition(
+          request,
+          reply,
+          idResult.value,
+          existingOrder.status,
+          requestedStatus,
+        );
+      }
+
       const effectiveDiscountType = discountTypeValue ?? existingOrder.discountType;
       const discountPairChanged =
         (discount !== undefined && discount !== existingOrder.discount) ||
@@ -1124,6 +1177,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discountType !== undefined ||
         notes !== undefined ||
         items !== undefined;
+      const requiresStatusLock =
+        statusChanged ||
+        (existingOrder.status === 'draft' && (requestedOrderIdChanged || hasLockedFieldUpdates));
 
       if (existingOrder.status === 'denied' && (requestedOrderIdChanged || hasLockedFieldUpdates)) {
         return replyError(request, reply, {
@@ -1422,9 +1478,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let result: {
         order: clientsOrdersRepo.ClientOrder | null;
         items: clientsOrdersRepo.ClientOrderItem[];
+        transitionConflictStatus?: string;
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          if (requiresStatusLock) {
+            const lockedOrder = await clientsOrdersRepo.lockExistingById(idResult.value, tx);
+            if (!lockedOrder) return { order: null, items: [] };
+            if (lockedOrder.status !== existingOrder.status) {
+              return {
+                order: null,
+                items: [],
+                transitionConflictStatus: lockedOrder.status,
+              };
+            }
+          }
           if (shouldSnapshot) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
@@ -1445,7 +1513,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             patch.discount = discountValue;
           }
           if (discountTypeValue !== undefined) patch.discountType = discountTypeValue;
-          if (typeof status === 'string') patch.status = status;
+          if (statusChanged && requestedStatus !== undefined) patch.status = requestedStatus;
           if (notes !== undefined) patch.notes = notes as string | null;
 
           let renamedOrder: clientsOrdersRepo.ClientOrder | null = null;
@@ -1507,6 +1575,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOrder = result.order;
       const updatedItems = result.items;
+      if (result.transitionConflictStatus !== undefined) {
+        if (statusChanged && requestedStatus !== undefined) {
+          return replyInvalidClientOrderStatusTransition(
+            request,
+            reply,
+            idResult.value,
+            result.transitionConflictStatus,
+            requestedStatus,
+          );
+        }
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Client order status changed while it was being updated',
+          action: 'client_order.update.conflict',
+          entityType: 'client_order',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: 'concurrent_status_change',
+            fromValue: existingOrder.status,
+            toValue: result.transitionConflictStatus,
+          },
+        });
+      }
       if (!updatedOrder) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -1519,8 +1610,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOrderId = updatedOrder.id;
 
-      const nextStatus = typeof status === 'string' ? status : updatedOrder.status;
-      const didStatusChange = status !== undefined && existingOrder.status !== nextStatus;
+      const nextStatus = requestedStatus ?? updatedOrder.status;
+      const didStatusChange = requestedStatus !== undefined && existingOrder.status !== nextStatus;
 
       await logAudit({
         request,

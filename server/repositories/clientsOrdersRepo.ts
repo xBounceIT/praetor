@@ -229,6 +229,39 @@ export type ExistingClientOrder = {
   notes: string | null;
 };
 
+const EXISTING_CLIENT_ORDER_FIELDS = {
+  id: sales.id,
+  linkedQuoteId: sales.linkedQuoteId,
+  linkedOfferId: sales.linkedOfferId,
+  clientId: sales.clientId,
+  clientName: sales.clientName,
+  paymentTerms: sales.paymentTerms,
+  discount: sales.discount,
+  discountType: sales.discountType,
+  status: sales.status,
+  notes: sales.notes,
+  description: sales.description,
+} as const;
+
+type ExistingClientOrderRow = Pick<
+  typeof sales.$inferSelect,
+  keyof typeof EXISTING_CLIENT_ORDER_FIELDS
+>;
+
+const mapExistingClientOrder = (row: ExistingClientOrderRow): ExistingClientOrder => ({
+  id: row.id,
+  linkedQuoteId: row.linkedQuoteId,
+  linkedOfferId: row.linkedOfferId,
+  clientId: row.clientId,
+  clientName: row.clientName,
+  paymentTerms: row.paymentTerms,
+  discount: parseDbNumber(row.discount, 0),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
+  status: row.status,
+  notes: row.notes,
+  description: row.description,
+});
+
 // Reads the minimal set of fields needed to gate updates / restores. Named `findExisting`
 // (not `findForUpdate`) because it does not acquire a row lock - callers run the read,
 // validate, and then issue a separate UPDATE outside any locking scope. If you need true
@@ -237,36 +270,22 @@ export const findExisting = async (
   id: string,
   exec: DbExecutor = db,
 ): Promise<ExistingClientOrder | null> => {
+  const rows = await exec.select(EXISTING_CLIENT_ORDER_FIELDS).from(sales).where(eq(sales.id, id));
+  return rows[0] ? mapExistingClientOrder(rows[0]) : null;
+};
+
+// SELECT ... FOR UPDATE variant of `findExisting`. Must be called inside a transaction when a
+// status-dependent write must serialize against another transition.
+export const lockExistingById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<ExistingClientOrder | null> => {
   const rows = await exec
-    .select({
-      id: sales.id,
-      linkedQuoteId: sales.linkedQuoteId,
-      linkedOfferId: sales.linkedOfferId,
-      clientId: sales.clientId,
-      clientName: sales.clientName,
-      paymentTerms: sales.paymentTerms,
-      discount: sales.discount,
-      discountType: sales.discountType,
-      status: sales.status,
-      notes: sales.notes,
-      description: sales.description,
-    })
+    .select(EXISTING_CLIENT_ORDER_FIELDS)
     .from(sales)
-    .where(eq(sales.id, id));
-  if (!rows[0]) return null;
-  return {
-    id: rows[0].id,
-    linkedQuoteId: rows[0].linkedQuoteId,
-    linkedOfferId: rows[0].linkedOfferId,
-    clientId: rows[0].clientId,
-    clientName: rows[0].clientName,
-    paymentTerms: rows[0].paymentTerms,
-    discount: parseDbNumber(rows[0].discount, 0),
-    discountType: rows[0].discountType === 'currency' ? 'currency' : 'percentage',
-    status: rows[0].status,
-    notes: rows[0].notes,
-    ...(rows[0].description !== undefined ? { description: rows[0].description } : {}),
-  };
+    .where(eq(sales.id, id))
+    .for('update');
+  return rows[0] ? mapExistingClientOrder(rows[0]) : null;
 };
 
 export const findStatusAndClientName = async (
