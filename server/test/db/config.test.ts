@@ -135,11 +135,10 @@ describe('getDbSslConfig', () => {
     expect(getDbSslConfig()).toBe(false);
   });
 
-  test('DB_SSL=true / require yields { rejectUnauthorized: false } (encrypt without CA validation)', () => {
-    process.env.DB_SSL = 'true';
-    expect(getDbSslConfig()).toEqual({ rejectUnauthorized: false });
-    process.env.DB_SSL = 'require';
-    expect(getDbSslConfig()).toEqual({ rejectUnauthorized: false });
+  test.each(['true', 'require'])('DB_SSL=%s enforces CA and hostname validation', (mode) => {
+    process.env.DB_SSL = mode;
+    process.env.DB_SSL_CA = 'TRUSTED_CA';
+    expect(getDbSslConfig()).toEqual({ rejectUnauthorized: true, ca: 'TRUSTED_CA' });
   });
 
   test('DB_SSL=verify-full enforces CA and hostname validation', () => {
@@ -213,7 +212,7 @@ describe('createDbPoolConfig', () => {
   test('propagates DB_SSL through to pool.ssl', () => {
     process.env.DB_SSL = 'require';
     const pool = createDbPoolConfig();
-    expect(pool.ssl).toEqual({ rejectUnauthorized: false });
+    expect(pool.ssl).toEqual({ rejectUnauthorized: true });
   });
 
   test('overrides win over both env vars and computed ssl', () => {
