@@ -449,6 +449,44 @@ describe('determineRequestedSections', () => {
 });
 
 describe('buildBusinessDataset modern sections', () => {
+  test('marks client details unavailable for non-CRM workflow viewers', async () => {
+    await buildBusinessDataset(
+      { user: { id: 'u1', permissions: ['timesheets.tracker.view'] } } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+      new Set(['clients']),
+    );
+
+    expect(getClientsSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewerId: 'u1',
+        canViewAllClients: false,
+        canViewClientDetails: false,
+      }),
+      expect.anything(),
+    );
+  });
+
+  test('marks client details available for CRM client viewers', async () => {
+    await buildBusinessDataset(
+      { user: { id: 'u1', permissions: ['crm.clients.view'] } } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+      new Set(['clients']),
+    );
+
+    expect(getClientsSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewerId: 'u1',
+        canViewAllClients: false,
+        canViewClientDetails: true,
+      }),
+      expect.anything(),
+    );
+  });
+
   test('loads newly available sections only when their view permissions are granted', async () => {
     getClientOffersSectionMock.mockResolvedValue({ source: 'client-offers' });
     getSupplierOrdersSectionMock.mockResolvedValue({ source: 'supplier-orders' });

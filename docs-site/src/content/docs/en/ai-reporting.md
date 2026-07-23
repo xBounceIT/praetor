@@ -52,6 +52,8 @@ For every request, AI Reporting builds a fresh dataset restricted to the view pe
 
 Unauthorized sections are never added to the AI context. When a question targets one area, Praetor loads only the relevant sections; an overview request uses every available section. Document totals for duration-based lines use the displayed value as their multiplier without converting months and years; historical documents retain the calculation contract that was active when they were saved. For quotes with multiple candidates, reporting analyzes the selected candidate or the first active candidate.
 
+Within the client dataset, contact name, email, phone, and address are included only with `crm.clients.view`. Other permissions that make the client section available, such as timesheet, project, or commercial-document permissions, preserve the already authorized client row scope without exposing these master-data details.
+
 Within the supplier dataset, master-data details are included only with `crm.suppliers_all.view`. With a base supplier permission or supplier-document view permission alone, AI Reporting and the `praetor_list_suppliers` MCP tool receive only the supplier identifier, name, and status.
 
 ## Interactive visualizations

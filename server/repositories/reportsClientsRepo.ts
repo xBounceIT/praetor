@@ -13,10 +13,10 @@ type ClientRow = {
   name: string | null;
   client_code: string | null;
   type: string | null;
-  contact_name: string | null;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
   is_disabled: boolean | null;
 };
 
@@ -25,6 +25,7 @@ export type ClientsSectionOptions = {
   fromDate: string;
   toDate: string;
   canViewAllClients: boolean;
+  canViewClientDetails: boolean;
   canViewQuotes: boolean;
   canViewOffers: boolean;
   canViewOrders: boolean;
@@ -40,10 +41,10 @@ export type ClientInfo = {
   name: string;
   clientCode: string;
   type: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  address: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
   isDisabled: boolean;
 };
 
@@ -76,6 +77,7 @@ export const getClientsSection = async (
     fromDate,
     toDate,
     canViewAllClients,
+    canViewClientDetails,
     canViewQuotes,
     canViewOffers,
     canViewOrders,
@@ -85,6 +87,10 @@ export const getClientsSection = async (
     allowedTimesheetUserIds,
     itemsLimit,
   } = opts;
+
+  const clientDetailsSelect = canViewClientDetails
+    ? sql`, c.contact_name, c.email, c.phone, c.address`
+    : sql``;
 
   const countQuery = canViewAllClients
     ? executeRows<{ count: string }>(exec, sql`SELECT COUNT(*) as count FROM clients`)
@@ -104,11 +110,8 @@ export const getClientsSection = async (
               c.name,
               c.client_code,
               c.type,
-              c.contact_name,
-              c.email,
-              c.phone,
-              c.address,
               c.is_disabled
+              ${clientDetailsSelect}
              FROM clients c
             ORDER BY c.name ASC
             LIMIT ${itemsLimit}`,
@@ -120,11 +123,8 @@ export const getClientsSection = async (
               c.name,
               c.client_code,
               c.type,
-              c.contact_name,
-              c.email,
-              c.phone,
-              c.address,
               c.is_disabled
+              ${clientDetailsSelect}
              FROM clients c
              JOIN user_clients uc ON uc.client_id = c.id
             WHERE uc.user_id = ${viewerId}
@@ -139,11 +139,15 @@ export const getClientsSection = async (
     name: toDbText(r.name),
     clientCode: toDbText(r.client_code),
     type: toDbText(r.type),
-    contactName: toDbText(r.contact_name),
-    email: toDbText(r.email),
-    phone: toDbText(r.phone),
-    address: toDbText(r.address),
     isDisabled: Boolean(r.is_disabled),
+    ...(canViewClientDetails
+      ? {
+          contactName: toDbText(r.contact_name),
+          email: toDbText(r.email),
+          phone: toDbText(r.phone),
+          address: toDbText(r.address),
+        }
+      : {}),
   }));
 
   const clientIds = items.flatMap((i) => (i.id ? [i.id] : []));
