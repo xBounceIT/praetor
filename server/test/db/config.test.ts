@@ -28,6 +28,7 @@ beforeEach(() => {
     delete process.env[key];
   }
   process.env.NODE_ENV = 'test';
+  process.env.DB_PASSWORD = 'test-database-secret';
 });
 
 afterEach(() => {
@@ -42,18 +43,24 @@ afterEach(() => {
 });
 
 describe('getDbConnectionConfig', () => {
-  test('uses local defaults in the explicit test runtime', () => {
+  test('uses non-secret local connection defaults with an explicit test password', () => {
     expect(getDbConnectionConfig()).toEqual({
       host: 'localhost',
       port: 5432,
       database: 'praetor',
       user: 'praetor',
-      password: 'praetor',
+      password: 'test-database-secret',
     });
+  });
+
+  test('requires DB_PASSWORD in the explicit test runtime', () => {
+    delete process.env.DB_PASSWORD;
+    expect(() => getDbConnectionConfig()).toThrow('DB_PASSWORD is required');
   });
 
   test('requires DB_PASSWORD in production', () => {
     process.env.NODE_ENV = 'production';
+    delete process.env.DB_PASSWORD;
     expect(() => getDbConnectionConfig()).toThrow('DB_PASSWORD is required');
   });
 
@@ -63,13 +70,31 @@ describe('getDbConnectionConfig', () => {
     expect(getDbConnectionConfig().password).toBe('production-secret');
   });
 
-  test('requires DB_PASSWORD when the runtime mode is unspecified', () => {
-    delete process.env.NODE_ENV;
+  test.each([
+    'praetor',
+    'tempo',
+    'change-me-strong-password',
+  ])('rejects the published DB_PASSWORD default %s in production', (password) => {
+    process.env.NODE_ENV = 'production';
+    process.env.DB_PASSWORD = password;
+    expect(() => getDbConnectionConfig()).toThrow('DB_PASSWORD must be set to a non-default value');
+  });
+
+  test('rejects a whitespace-only DB_PASSWORD in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DB_PASSWORD = '   ';
     expect(() => getDbConnectionConfig()).toThrow('DB_PASSWORD is required');
   });
 
-  test('keeps the local fallback in the explicit development runtime', () => {
+  test('requires DB_PASSWORD when the runtime mode is unspecified', () => {
+    delete process.env.NODE_ENV;
+    delete process.env.DB_PASSWORD;
+    expect(() => getDbConnectionConfig()).toThrow('DB_PASSWORD is required');
+  });
+
+  test('allows an explicitly configured local password in development', () => {
     process.env.NODE_ENV = 'development';
+    process.env.DB_PASSWORD = 'praetor';
     expect(getDbConnectionConfig().password).toBe('praetor');
   });
 

@@ -20,6 +20,10 @@ Set at least:
 - `FRONTEND_URL`
 - `ADMIN_DEFAULT_PASSWORD` for a fresh installation
 
+Generate a unique `POSTGRES_PASSWORD`; do not leave the published example placeholder in place.
+The backend always requires an explicit database password and, outside explicit local
+development or test runtimes, refuses to start with a known default.
+
 Fresh installs create the bootstrap admin as `admin` with the unique password from
 `ADMIN_DEFAULT_PASSWORD`. Generate it before first startup: the backend refuses to create the
 account when the variable is blank or uses a published legacy default. An upgrade with an

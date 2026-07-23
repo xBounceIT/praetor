@@ -9,6 +9,8 @@ sidebar:
 
 Accedi con le credenziali fornite dall'amministratore. Se l'azienda usa LDAP o single sign-on, potresti essere reindirizzato al provider aziendale prima di entrare nella piattaforma.
 
+Prima di avviare un'installazione, l'operatore deve generare una password database univoca e impostarla in `POSTGRES_PASSWORD` (oppure `DB_PASSWORD` per un avvio diretto del backend). Praetor richiede sempre una password database esplicita; fuori dagli ambienti locali configurati come sviluppo o test, rifiuta anche valori predefiniti o segnaposto pubblicati.
+
 In una nuova installazione, l'operatore deve generare una password univoca e impostarla in `ADMIN_DEFAULT_PASSWORD` prima del primo avvio. Praetor non crea l'account `admin` se il valore è vuoto o corrisponde a una credenziale predefinita pubblicata in precedenza. Negli aggiornamenti, la variabile non è necessaria quando l'account `admin` esiste già.
 
 Se abiliti il dataset dimostrativo con `DEMO_SEEDING=true`, imposta anche una password univoca in `DEMO_USER_PASSWORD`. Il refresh si interrompe prima di pulire o riseminare i dati demo se il valore è vuoto o corrisponde alla vecchia password pubblica. Ogni refresh reimposta gli account demo a questa password senza cambiare le identità e le relazioni deterministiche del dataset.
