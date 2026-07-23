@@ -18,6 +18,7 @@ import {
   MANUAL_ASSIGNMENT_SOURCE,
   TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE,
 } from './userAssignmentsRepo.ts';
+import { managedUserIdsSubquerySql } from './workUnitsRepo.ts';
 
 export type Task = {
   id: string;
@@ -350,27 +351,45 @@ export const findIdByProjectAndName = async (
   return rows[0]?.id ?? null;
 };
 
-// When `userId` is undefined this aggregates ALL time entries for the given projects with
-// no user filter — it is a deliberate "show everything" mode, not the absence of a filter.
-// Callers must authorize that broader scope before invoking. Do not pass `undefined` simply
-// because no user is at hand.
+export type TaskHoursScope = {
+  /** When set, only tasks assigned to this user are visible. */
+  taskAssigneeId?: string;
+  /** Time-entry ownership is independent from task visibility. */
+  timeEntries:
+    | { kind: 'all' }
+    | { kind: 'manager'; managerId: string }
+    | { kind: 'owner'; userId: string };
+};
+
 export const sumHoursByProjects = async (
   projectIds: string[],
-  userId: string | undefined,
+  scope: TaskHoursScope,
   exec: DbExecutor = db,
 ): Promise<Array<{ projectId: string; task: string; total: number }>> => {
   if (projectIds.length === 0) return [];
-  const query = userId
-    ? sql`SELECT ${timeEntriesTe.projectId} AS "projectId", ${timeEntriesTe.task}, COALESCE(SUM(${timeEntriesTe.duration}), 0)::float AS total
-            FROM time_entries te
-            ${timeEntriesTasksJoin}
-            JOIN user_tasks ut ON ut.task_id = ${tasksT.id}
-           WHERE ${inArray(timeEntriesTe.projectId, projectIds)} AND ut.user_id = ${userId}
-           GROUP BY ${timeEntriesTe.projectId}, ${timeEntriesTe.task}`
-    : sql`SELECT project_id AS "projectId", task, COALESCE(SUM(duration), 0)::float AS total
-            FROM time_entries
-           WHERE ${inArray(timeEntries.projectId, projectIds)}
-           GROUP BY project_id, task`;
+  const taskVisibilityJoin = scope.taskAssigneeId
+    ? sql`${timeEntriesTasksJoin}
+          JOIN user_tasks ut ON ut.task_id = ${tasksT.id}`
+    : sql``;
+  const conditions = [inArray(timeEntriesTe.projectId, projectIds)];
+
+  if (scope.taskAssigneeId) {
+    conditions.push(sql`ut.user_id = ${scope.taskAssigneeId}`);
+  }
+  if (scope.timeEntries.kind === 'owner') {
+    conditions.push(sql`${timeEntriesTe.userId} = ${scope.timeEntries.userId}`);
+  } else if (scope.timeEntries.kind === 'manager') {
+    const managerId = scope.timeEntries.managerId;
+    conditions.push(
+      sql`(${timeEntriesTe.userId} = ${managerId} OR ${timeEntriesTe.userId} IN (${managedUserIdsSubquerySql(managerId)}))`,
+    );
+  }
+
+  const query = sql`SELECT ${timeEntriesTe.projectId} AS "projectId", ${timeEntriesTe.task}, COALESCE(SUM(${timeEntriesTe.duration}), 0)::float AS total
+                      FROM time_entries te
+                      ${taskVisibilityJoin}
+                     WHERE ${and(...conditions)}
+                     GROUP BY ${timeEntriesTe.projectId}, ${timeEntriesTe.task}`;
   const rows = await executeRows<{ projectId: string; task: string; total: number }>(exec, query);
   return rows.map((r) => ({ projectId: r.projectId, task: r.task, total: Number(r.total) }));
 };

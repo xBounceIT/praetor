@@ -134,6 +134,23 @@ const canAccessTask = makeAccessChecker(
   'projects.tasks_all.view',
 );
 
+const resolveTaskHoursScope = (
+  request: FastifyRequest,
+  actorId: string,
+): tasksRepo.TaskHoursScope => {
+  const taskAssigneeId = hasPermission(request, 'projects.tasks_all.view') ? undefined : actorId;
+  const timeEntries: tasksRepo.TaskHoursScope['timeEntries'] = hasPermission(
+    request,
+    'timesheets.tracker_all.view',
+  )
+    ? { kind: 'all' }
+    : hasPermission(request, 'timesheets.tracker.view')
+      ? { kind: 'manager', managerId: actorId }
+      : { kind: 'owner', userId: actorId };
+
+  return { taskAssigneeId, timeEntries };
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all tasks
   fastify.get(
@@ -387,6 +404,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['tasks'],
         summary: 'Get total logged hours per task for multiple projects',
+        description:
+          'Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.',
         querystring: {
           type: 'object',
           required: ['projectIds'],
@@ -418,10 +437,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (idArray.length === 0) return badRequest(reply, 'projectIds must contain at least one ID');
       if (idArray.length > 200) return badRequest(reply, 'projectIds cannot exceed 200 IDs');
 
-      const canViewAll = hasPermission(request, 'projects.tasks_all.view');
       const rows = await tasksRepo.sumHoursByProjects(
         idArray,
-        canViewAll ? undefined : request.user.id,
+        resolveTaskHoursScope(request, request.user.id),
       );
 
       const hours: Record<string, Record<string, number>> = {};
@@ -452,6 +470,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['tasks'],
         summary: 'Get total logged hours per task for a project',
+        description:
+          'Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.',
         querystring: {
           type: 'object',
           required: ['projectId'],
@@ -470,10 +490,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const projectIdResult = requireNonEmptyString(projectId, 'projectId');
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
 
-      const canViewAll = hasPermission(request, 'projects.tasks_all.view');
       const rows = await tasksRepo.sumHoursByProjects(
         [projectIdResult.value],
-        canViewAll ? undefined : request.user.id,
+        resolveTaskHoursScope(request, request.user.id),
       );
 
       const hours: Record<string, number> = {};

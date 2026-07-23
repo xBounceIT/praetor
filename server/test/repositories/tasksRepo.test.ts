@@ -274,16 +274,21 @@ describe('clearNonTopManagerAssignments / addManualAssignments', () => {
 });
 
 describe('hours aggregation', () => {
-  test('sumHoursByProjects (no user) passes ids and returns mapped rows with numeric totals', async () => {
+  test('sumHoursByProjects with all-entry scope returns mapped numeric totals', async () => {
     exec.enqueue({
       rows: [
         { projectId: 'p-1', task: 'Dev', total: 4.5 },
         { projectId: 'p-1', task: 'QA', total: '2' },
       ],
     });
-    const result = await tasksRepo.sumHoursByProjects(['p-1', 'p-2'], undefined, testDb);
+    const result = await tasksRepo.sumHoursByProjects(
+      ['p-1', 'p-2'],
+      { timeEntries: { kind: 'all' } },
+      testDb,
+    );
     expect(exec.calls[0].params).toContain('p-1');
     expect(exec.calls[0].params).toContain('p-2');
+    expect(exec.calls[0].sql).not.toContain('"te"."user_id"');
     expect(result).toEqual([
       { projectId: 'p-1', task: 'Dev', total: 4.5 },
       { projectId: 'p-1', task: 'QA', total: 2 },
@@ -291,19 +296,27 @@ describe('hours aggregation', () => {
   });
 
   test('sumHoursByProjects short-circuits to [] for an empty ids array', async () => {
-    const result = await tasksRepo.sumHoursByProjects([], undefined, testDb);
+    const result = await tasksRepo.sumHoursByProjects([], { timeEntries: { kind: 'all' } }, testDb);
     expect(result).toEqual([]);
     expect(exec.calls).toHaveLength(0);
   });
 
-  test('sumHoursByProjects with userId joins via tasks with name fallback', async () => {
+  test('sumHoursByProjects restricts both task assignment and entry ownership', async () => {
     exec.enqueue({ rows: [] });
-    await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', testDb);
+    await tasksRepo.sumHoursByProjects(
+      ['p-1'],
+      {
+        taskAssigneeId: 'u-1',
+        timeEntries: { kind: 'owner', userId: 'u-1' },
+      },
+      testDb,
+    );
     const sql = exec.calls[0].sql;
     // FROM clause declares the `te` alias; LATERAL subquery declares the `t` alias.
     expect(sql).toContain('FROM time_entries te');
     expect(sql).toContain('JOIN LATERAL');
     expect(sql).toContain('JOIN user_tasks ut ON ut.task_id = "t"."id"');
+    expect(sql).toContain('"te"."user_id" =');
     expect(exec.calls[0].params).toContain('u-1');
     expect(exec.calls[0].params).toContain('p-1');
 
@@ -320,6 +333,20 @@ describe('hours aggregation', () => {
     expect(onClause).toContain('t_inner.name = "te"."task"');
   });
 
+  test('manager entry scope includes only the manager and managed users', async () => {
+    exec.enqueue({ rows: [] });
+    await tasksRepo.sumHoursByProjects(
+      ['p-1'],
+      { timeEntries: { kind: 'manager', managerId: 'manager-1' } },
+      testDb,
+    );
+
+    const { params, sql } = exec.calls[0];
+    expect(sql).toContain('"te"."user_id" =');
+    expect(sql).toContain('work_unit_managers');
+    expect(params.filter((param) => param === 'manager-1')).toHaveLength(2);
+  });
+
   // When two tasks share (project_id, name), the legacy OR-branch
   // `ON t.id = te.task_id OR (te.task_id IS NULL AND ...)` multiplied rows because a single
   // time-entry with task_id IS NULL matched every duplicate. The LATERAL `SELECT ... LIMIT 1`
@@ -329,7 +356,14 @@ describe('hours aggregation', () => {
   // lowest task id (matching findIdByProjectAndName's contract).
   test('legacy fallback resolves duplicate task names to a single row (no multiplication)', async () => {
     exec.enqueue({ rows: [{ projectId: 'p-1', task: 'Dev', total: 4 }] });
-    const result = await tasksRepo.sumHoursByProjects(['p-1'], 'u-1', testDb);
+    const result = await tasksRepo.sumHoursByProjects(
+      ['p-1'],
+      {
+        taskAssigneeId: 'u-1',
+        timeEntries: { kind: 'owner', userId: 'u-1' },
+      },
+      testDb,
+    );
     const sql = exec.calls[0].sql;
 
     expect(sql).toContain('JOIN LATERAL');

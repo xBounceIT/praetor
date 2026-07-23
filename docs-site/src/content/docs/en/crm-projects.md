@@ -51,7 +51,7 @@ Jobs connect customers, tasks, and time entries. The module remains named **Proj
 
 For each job and task, you can set the billing type (retainer or time and materials) and the billing frequency (monthly or one-time) independently — both billing types support either frequency. If tasks use a billing type that differs from the job, the job is shown as mixed.
 
-Use estimated monthly effort to plan recurring load and task duration as a generic multiplier. Total effort is calculated automatically as monthly effort × duration and is used to track progress against the overall expected hours. Task total revenue is calculated the same way: revenue × duration.
+Use estimated monthly effort to plan recurring load and task duration as a generic multiplier. Total effort is calculated automatically as monthly effort × duration and is used to track progress against the overall expected hours. Task total revenue is calculated the same way: revenue × duration. Logged-hour totals apply task visibility and timesheet visibility independently: they show your own hours, include managed users for holders of the Timesheets permission, and include every user only with **All timesheets - View** (`timesheets.tracker_all.view`).
 
 Creating a task in an assigned job requires both **Tasks - Create** (`projects.tasks.create`) and assignment to that job. The global **All tasks - Create** permission (`projects.tasks_all.create`) allows task creation in any job. Global job-view permissions alone do not authorize task creation and do not extend the user's assignments.
 
