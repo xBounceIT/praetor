@@ -9,6 +9,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { clients } from './clients.ts';
@@ -53,6 +54,12 @@ export const timeEntries = pgTable(
     index('idx_time_entries_client_id').on(table.clientId),
     index('idx_time_entries_project_id').on(table.projectId),
     index('idx_time_entries_task_id').on(table.taskId),
+    uniqueIndex('idx_time_entries_entry_key_unique').on(
+      table.userId,
+      table.date,
+      table.projectId,
+      table.task,
+    ),
     index('idx_time_entries_created_at_id').on(table.createdAt.desc(), table.id.desc()),
     index('idx_time_entries_user_id_created_at_id').on(
       table.userId,

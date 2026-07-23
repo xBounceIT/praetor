@@ -33,6 +33,8 @@ const INSERT_APPLIED_MIGRATION_SQL = `
   INSERT INTO "${DRIZZLE_MIGRATIONS_SCHEMA}"."${DRIZZLE_MIGRATIONS_TABLE}" ("hash", "created_at")
   VALUES ($1, $2)
 `;
+const CONCURRENT_INDEX_STATEMENT_PATTERN =
+  /(?:^|\n)\s*(?:CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+INDEX)\s+CONCURRENTLY\b/i;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -164,29 +166,64 @@ export const runDrizzleMigrationsWithClient = async (
     );
   }
 
-  await client.query('BEGIN');
+  let inTransaction = false;
+  const beginTransaction = async () => {
+    if (inTransaction) return;
+    await client.query('BEGIN');
+    inTransaction = true;
+  };
+  const commitTransaction = async () => {
+    if (!inTransaction) return;
+    await client.query('COMMIT');
+    inTransaction = false;
+  };
+
   try {
     for (const migration of pendingMigrations) {
+      let usedAutocommit = false;
+
       for (const statement of migration.sql) {
         if (statement.trim().length === 0) continue;
+
+        if (CONCURRENT_INDEX_STATEMENT_PATTERN.test(statement)) {
+          // PostgreSQL rejects CREATE/DROP INDEX CONCURRENTLY inside a transaction. Commit all
+          // prior migration work first, then run consecutive concurrent-index statements in
+          // autocommit mode. The migration must make its pre-index work retry-safe because its
+          // ledger row is intentionally recorded only after every statement succeeds.
+          await commitTransaction();
+          await client.query(statement);
+          usedAutocommit = true;
+          continue;
+        }
+
+        await beginTransaction();
         await client.query(statement);
       }
 
+      await beginTransaction();
       await client.query(INSERT_APPLIED_MIGRATION_SQL, [
         migration.hash,
         String(migration.folderMillis),
       ]);
+
+      // Autocommit statements are already durable. Commit their ledger with the rest of this
+      // migration so a later migration failure cannot make successfully applied work look pending.
+      if (usedAutocommit) {
+        await commitTransaction();
+      }
     }
 
-    await client.query('COMMIT');
+    await commitTransaction();
   } catch (err) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (rollbackErr) {
-      logger.warn(
-        { err: serializeError(rollbackErr) },
-        'Failed to roll back Drizzle migration transaction',
-      );
+    if (inTransaction) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        logger.warn(
+          { err: serializeError(rollbackErr) },
+          'Failed to roll back Drizzle migration transaction',
+        );
+      }
     }
 
     throw err;

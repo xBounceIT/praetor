@@ -139,6 +139,37 @@ Deploy migration `0114_add_user_hourly_cost_periods.sql` before the application 
 
 If application rollback is required during the compatibility window, the previous image can continue reading `users.cost_per_hour`; leave the new table in place. Before rollback, reconcile that column to the rate effective on the rollback date if calendar edits were accepted. Rolling the schema back requires restoring a pre-migration backup because dropping the calendar would discard effective-dated rates. Prefer roll-forward after fixing the application and run `db:ready` plus a comparison of current calendar rates against `users.cost_per_hour`.
 
+## Time-entry key uniqueness rollout (migration 0121)
+
+Deploy migration `0121_enforce_time_entry_keys.sql` with the application image. Before the
+unique index is created, the migration ranks legacy duplicates by optimistic-lock version,
+creation time, and id; a retry keeps any survivor already referenced by this migration's audit
+rows. It locks only duplicate groups, consolidates duration, a duration-weighted hourly cost,
+notes, and placeholder state into one deterministic active row, then copies every removed
+original row in full to `audit_logs` with action
+`time_entry.migration_duplicate_archived`. Deletion is guarded by both the survivor update and
+matching archive record, so either failure aborts the index build instead of discarding data. A
+duplicate group whose combined duration exceeds the single-entry 24-hour limit stops with
+SQLSTATE `23514`; reconcile that group and retry rather than losing hours or creating an invalid
+survivor. The same preflight stops with `23514` when the historical financial total cannot be
+represented exactly by the survivor's two-decimal hourly cost; reconcile that group explicitly
+rather than accepting rounding drift in reports.
+
+After the backfill commits, `migrationsRunner.ts` runs `DROP/CREATE INDEX CONCURRENTLY` in
+autocommit mode, so the index scans do not block normal inserts, updates, or deletes from older
+instances during a rolling deploy. If a legacy write recreates a duplicate in that narrow
+window, PostgreSQL fails the unique build with `23505` and may leave an invalid index; the
+migration ledger remains pending. Retrying 0121 consolidates the racing row into the same prior
+survivor, drops the valid or invalid index concurrently, and completes a fresh concurrent build.
+
+The new application serializes date/project/task moves with the same per-user lock already
+used by creation and recurring generation and returns HTTP 409 for a conflicting key. The
+database index then protects direct or future writers. Run `db:migrate`, `db:ready`, and
+`db:check`; CI also replays migration 0121 against a legacy duplicate fixture. Roll forward if
+the application needs correction. A schema rollback requires restoring a pre-migration backup
+or first dropping `idx_time_entries_entry_key_unique` and deliberately restoring any archived
+rows whose key no longer conflicts; the previous image does not enforce update-time uniqueness.
+
 ## Conventions for schema authors
 
 - **One file per table cluster.** `quotes.ts` defines both `quotes` and `quoteItems`; `tasks.ts` defines `tasks` and `userTasks`. Re-export everything from `schema/index.ts`.

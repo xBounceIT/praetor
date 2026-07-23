@@ -13,19 +13,19 @@ Prima di salvare, verifica che le date siano corrette e che l'attività apparten
 
 Il tracker consente sempre registrazioni su sabati, domeniche e festività italiane. Quando il totale giornaliero supera **8 ore**, oppure quando vengono registrate ore in un weekend o in una festività italiana, Praetor crea una notifica di straordinario per i responsabili del centro di competenza dell'utente e per i Top Manager. Ogni evento viene notificato una sola volta per utente, data e origine tracker.
 
-Praetor non consente di creare una seconda registrazione per lo stesso utente, data, progetto e attività: `POST /api/entries` risponde con `409` se la combinazione esiste già. Aggiorna la registrazione esistente invece di crearne una duplicata.
+Praetor non consente una seconda registrazione per lo stesso utente, data, progetto e attività: `POST /api/entries` risponde con `409` se la combinazione esiste già e `PUT /api/entries/:id` risponde con `409` se una modifica di data, progetto o attività produrrebbe la stessa combinazione. Aggiorna la registrazione esistente invece di crearne una duplicata.
 
 La durata di una singola registrazione è limitata a 24 ore: sia `POST /api/entries` sia `PUT /api/entries/:id` rifiutano qualsiasi `duration` superiore a `24`. Suddividi il lavoro su più date invece di registrare durate impossibili.
 
 I progetti con data fine precedente alla data odierna sono considerati scaduti. Senza il permesso `timesheets.expired_projects.create`, non compaiono nelle selezioni della vista giornaliera e settimanale e il server rifiuta nuove registrazioni o spostamenti verso quei progetti con `403`. Le commesse in stato **In pausa** o **Terminato** sono invece sempre escluse dai selettori del tracker, della vista settimanale e del RIL, e il server rifiuta sempre inserimenti o spostamenti ore verso quelle commesse anche quando l'utente può lavorare su commesse scadute. Le registrazioni già presenti su progetti scaduti restano modificabili per campi non catalogo come durata, note, luogo e segnaposto; lo stato **In pausa** o **Terminato** blocca invece anche le modifiche alle registrazioni già collegate e qualsiasi cambio catalogo verso quella commessa.
 
-Quando una registrazione viene modificata, Praetor usa il campo `version` restituito dall'API per impedire sovrascritture concorrenti. Se la stessa registrazione è stata salvata altrove nel frattempo, `PUT /api/entries/:id` risponde con `409` e occorre ricaricare la registrazione prima di riprovare.
+Quando una registrazione viene modificata, Praetor usa il campo `version` restituito dall'API per impedire sovrascritture concorrenti. Se la stessa registrazione è stata salvata altrove nel frattempo, `PUT /api/entries/:id` risponde con `409` e occorre ricaricare la registrazione prima di riprovare. Lo stesso stato segnala anche un conflitto con la combinazione univoca utente/data/progetto/attività.
 
 ## Vista settimanale
 
 La vista settimanale aiuta a controllare rapidamente le ore distribuite sui giorni. È utile per individuare giornate mancanti, duplicazioni o attività attribuite al progetto sbagliato.
 
-Ogni registrazione esistente occupa una propria riga, così eventuali dati storici duplicati restano visibili e modificabili in modo indipendente. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni e rispetta il controllo anti-duplicato.
+Ogni registrazione esistente occupa una propria riga. Durante l'aggiornamento che introduce il vincolo univoco, gli eventuali duplicati storici vengono consolidati in una sola riga attiva: le ore vengono sommate, il costo orario viene ricalcolato in modo ponderato sulla durata e le note vengono conservate. Ogni riga originale rimossa viene inoltre archiviata per intero nel registro di audit, così un amministratore può ispezionarne o recuperarne i dati esatti. Se un gruppo duplicato supera complessivamente 24 ore, oppure se il suo costo storico non è rappresentabile esattamente da un'unica tariffa oraria con due decimali, l'aggiornamento si interrompe per richiedere una riconciliazione esplicita invece di perdere ore o alterare i totali finanziari. La riga "Nuova voce" in alto serve esclusivamente a creare nuove registrazioni e rispetta il controllo anti-duplicato.
 
 ## RIL
 

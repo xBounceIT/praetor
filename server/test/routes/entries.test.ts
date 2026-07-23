@@ -1179,6 +1179,71 @@ describe('PUT /api/entries/:id', () => {
     );
   });
 
+  test('409 when a date change would duplicate another entry key', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    entriesExistsForEntryKeyMock.mockResolvedValue(true);
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, date: '2025-06-03' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ date: '2025-06-03' }),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'A time entry already exists for this date, project, and task',
+    });
+    expect(lockUserByIdMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
+    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
+      {
+        userId: 'u1',
+        date: '2025-06-03',
+        projectId: 'p1',
+        task: 'Dev',
+        excludeId: 'te-1',
+      },
+      TX_SENTINEL,
+    );
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when a catalog change would duplicate another entry key', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext());
+    projectsFindClientIdAndNameMock.mockResolvedValue({
+      clientId: 'c2',
+      name: 'Beta',
+      endDate: null,
+      status: 'in_corso',
+    });
+    clientsFindNameMock.mockResolvedValue('Other');
+    findIdByProjectAndNameMock.mockResolvedValue('t2');
+    entriesExistsForEntryKeyMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ clientId: 'c2', projectId: 'p2', task: 'QA' }),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
+      {
+        userId: 'u1',
+        date: '2025-06-02',
+        projectId: 'p2',
+        task: 'QA',
+        excludeId: 'te-1',
+      },
+      TX_SENTINEL,
+    );
+    expect(lockUserByIdMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
+    expect(findHourlyCostForDateMock).not.toHaveBeenCalled();
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('400 when update omits the optimistic-lock version', async () => {
     const res = await testApp.inject({
       method: 'PUT',
@@ -1687,6 +1752,8 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(projectsFindTimeEntryAvailabilityByIdMock).toHaveBeenCalledWith('p1');
+    expect(entriesExistsForEntryKeyMock).not.toHaveBeenCalled();
+    expect(withDbTransactionMock).not.toHaveBeenCalled();
     expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
   });
 
