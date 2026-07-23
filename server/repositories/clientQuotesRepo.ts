@@ -328,6 +328,11 @@ export type ClientQuoteGate = {
   linkedSupplierQuoteExpiration: string | null;
 };
 
+export type LockedClientQuoteGate = ClientQuoteGate & {
+  clientId: string;
+  clientName: string;
+};
+
 const GATE_PROJECTION = {
   status: quotes.status,
   discount: quotes.discount,
@@ -337,14 +342,16 @@ const GATE_PROJECTION = {
   linkedSupplierQuoteExpiration: linkedSupplierQuoteExpirationSubquery,
 } as const;
 
-const mapGateRow = (row: {
+type ClientQuoteGateRow = {
   status: string;
   discount: string | number;
   discountType: string;
   expirationDate: string | null;
   linkedSupplierQuoteId: string | null;
   linkedSupplierQuoteExpiration: string | null;
-}): ClientQuoteGate => ({
+};
+
+const mapGateRow = (row: ClientQuoteGateRow): ClientQuoteGate => ({
   status: row.status,
   discount: parseDbNumber(row.discount, 0),
   discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
@@ -354,6 +361,20 @@ const mapGateRow = (row: {
     row.linkedSupplierQuoteExpiration,
     'quote.linkedSupplierQuoteExpiration',
   ),
+});
+
+const LOCKED_GATE_PROJECTION = {
+  ...GATE_PROJECTION,
+  clientId: quotes.clientId,
+  clientName: quotes.clientName,
+} as const;
+
+const mapLockedGateRow = (
+  row: ClientQuoteGateRow & { clientId: string; clientName: string },
+): LockedClientQuoteGate => ({
+  ...mapGateRow(row),
+  clientId: row.clientId,
+  clientName: row.clientName,
 });
 
 // Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
@@ -373,13 +394,13 @@ export const findCurrent = async (
 export const lockCurrentById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<ClientQuoteGate | null> => {
+): Promise<LockedClientQuoteGate | null> => {
   const rows = await exec
-    .select(GATE_PROJECTION)
+    .select(LOCKED_GATE_PROJECTION)
     .from(quotes)
     .where(eq(quotes.id, id))
     .for('update');
-  return rows[0] ? mapGateRow(rows[0]) : null;
+  return rows[0] ? mapLockedGateRow(rows[0]) : null;
 };
 
 export const findStatusAndClientName = async (

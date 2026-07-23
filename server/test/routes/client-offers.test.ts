@@ -1378,6 +1378,57 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 
+  test('POST: derives client identity from the locked source quote', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'accepted',
+      clientName: 'Source Client',
+    });
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'accepted',
+      clientId: 'source-client',
+      clientName: 'Source Client',
+    });
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve(
+        updatedOffer({
+          clientId: input.clientId,
+          clientName: input.clientName,
+        }),
+      ),
+    );
+    coInsertItemsMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'other-client',
+        clientName: 'Other Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80)],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: 'source-client',
+        clientName: 'Source Client',
+      }),
+      expect.anything(),
+    );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ secondaryLabel: 'Source Client' }),
+      }),
+    );
+  });
+
   test('POST: preserves each source quote marker in a mixed offer', async () => {
     cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
     cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
