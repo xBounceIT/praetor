@@ -1,11 +1,9 @@
--- Stop before changing data when a legacy duplicate group cannot be represented by one valid
--- survivor. A unique key can hold at most one 24-hour entry, and hourly_cost stores only two
--- decimals, so some weighted rates cannot preserve the exact historical duration * cost total.
--- Operators can then reconcile the source rows explicitly without losing time or money.
+-- A unique key can hold at most one 24-hour entry. Stop before changing data when a legacy
+-- duplicate group cannot be represented by one valid survivor; operators can then reconcile
+-- the source rows explicitly without the migration discarding time.
 DO $$
 DECLARE
 	"oversized_group" RECORD;
-	"inexact_cost_group" RECORD;
 BEGIN
 	SELECT
 		"user_id",
@@ -34,45 +32,15 @@ BEGIN
 				),
 				HINT = 'Reconcile the duplicate rows so their combined duration is at most 24 hours, then retry the migration.';
 	END IF;
-
-	SELECT
-		"duplicate_group".*,
-		ROUND("total_cost" / "total_duration", 2) AS "merged_hourly_cost"
-	INTO "inexact_cost_group"
-	FROM (
-		SELECT
-			"user_id",
-			"date",
-			"project_id",
-			"task",
-			SUM(COALESCE("duration", 0)) AS "total_duration",
-			SUM(COALESCE("duration", 0) * COALESCE("hourly_cost", 0)) AS "total_cost"
-		FROM "time_entries"
-		GROUP BY "user_id", "date", "project_id", "task"
-		HAVING COUNT(*) > 1
-	) AS "duplicate_group"
-	WHERE "total_duration" > 0
-		AND ROUND("total_cost" / "total_duration", 2) * "total_duration" <> "total_cost"
-	ORDER BY "user_id", "date", "project_id", "task"
-	LIMIT 1;
-
-	IF FOUND THEN
-		RAISE EXCEPTION 'Cannot consolidate duplicate time-entry key without changing its financial total'
-			USING
-				ERRCODE = '23514',
-				DETAIL = FORMAT(
-					'user_id=%s date=%s project_id=%s task=%s total_duration=%s total_cost=%s nearest_hourly_cost=%s',
-					"inexact_cost_group"."user_id",
-					"inexact_cost_group"."date",
-					"inexact_cost_group"."project_id",
-					"inexact_cost_group"."task",
-					"inexact_cost_group"."total_duration",
-					"inexact_cost_group"."total_cost",
-					"inexact_cost_group"."merged_hourly_cost"
-				),
-				HINT = 'Reconcile the duplicate rows to one exact two-decimal hourly cost, then retry the migration.';
-	END IF;
 END $$;
+--> statement-breakpoint
+
+-- Temp table used by the consolidation CTE below to detect duplicate groups whose weighted
+-- two-decimal hourly cost would change the financial total. The CHECK constraint raises 23514
+-- under the FOR UPDATE row locks, so a concurrent insert cannot bypass the guard.
+CREATE TEMP TABLE IF NOT EXISTS "migration_0121_cost_guard" (
+  "satisfied" BOOLEAN NOT NULL CHECK ("satisfied")
+);
 --> statement-breakpoint
 
 -- Preserve every legacy duplicate before removing it from the active timesheet. The
@@ -104,6 +72,20 @@ WITH "duplicate_entry_keys" AS (
 		AND "duplicate_key"."project_id" = "entry"."project_id"
 		AND "duplicate_key"."task" = "entry"."task"
 	FOR UPDATE OF "entry"
+),
+"inexact_cost_guard" AS (
+  INSERT INTO "migration_0121_cost_guard" ("satisfied")
+  SELECT FALSE
+  FROM "locked_time_entries"
+  GROUP BY "user_id", "date", "project_id", "task"
+  HAVING COUNT(*) > 1
+    AND SUM(COALESCE("duration", 0)) > 0
+    AND ROUND(
+      SUM(COALESCE("duration", 0) * COALESCE("hourly_cost", 0)) /
+      SUM(COALESCE("duration", 0)),
+      2
+    ) * SUM(COALESCE("duration", 0)) <>
+      SUM(COALESCE("duration", 0) * COALESCE("hourly_cost", 0))
 ),
 "ranked_time_entries" AS (
 	SELECT
@@ -215,4 +197,6 @@ WHERE "duplicate_entry"."id" = "duplicate"."id"
 -- remains pending and a retry consolidates that row before replacing the invalid index.
 DROP INDEX CONCURRENTLY IF EXISTS "idx_time_entries_entry_key_unique";--> statement-breakpoint
 
-CREATE UNIQUE INDEX CONCURRENTLY "idx_time_entries_entry_key_unique" ON "time_entries" USING btree ("user_id","date","project_id","task");
+CREATE UNIQUE INDEX CONCURRENTLY "idx_time_entries_entry_key_unique" ON "time_entries" USING btree ("user_id","date","project_id","task");--> statement-breakpoint
+
+DROP TABLE IF EXISTS "migration_0121_cost_guard";

@@ -12,9 +12,8 @@ const CONCURRENT_INDEX_STATEMENT_PATTERN =
   /(?:^|\n)\s*(?:CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+INDEX)\s+CONCURRENTLY\b/i;
 
 test('migration 0121 preflights duplicate groups whose exact cost cannot be preserved', () => {
-  expect(MIGRATION).toContain(
-    'Cannot consolidate duplicate time-entry key without changing its financial total',
-  );
+  expect(MIGRATION).toContain('"migration_0121_cost_guard"');
+  expect(MIGRATION).toContain('CHECK ("satisfied")');
 });
 
 const executeMigrationStatements = async (
