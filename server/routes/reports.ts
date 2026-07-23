@@ -1964,7 +1964,14 @@ export const buildBusinessDataset = async (
     if (canListProducts && shouldIncludeDatasetSection(requestedSections, 'catalog')) {
       includedSections.add('catalog');
       dataset.catalog = await reportsCatalogRepo.getCatalogSection(
-        { fromDate, toDate, topLimit: listLimits.top },
+        {
+          fromDate,
+          toDate,
+          topLimit: listLimits.top,
+          canViewQuotes,
+          canViewOrders,
+          canViewInvoices,
+        },
         datasetDb,
       );
     }

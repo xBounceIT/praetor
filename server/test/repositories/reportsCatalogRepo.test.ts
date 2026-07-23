@@ -12,6 +12,14 @@ beforeEach(() => {
 
 const FROM = '2026-01-01';
 const TO = '2026-01-31';
+const CATALOG_OPTIONS = {
+  fromDate: FROM,
+  toDate: TO,
+  topLimit: 10,
+  canViewQuotes: true,
+  canViewOrders: true,
+  canViewInvoices: true,
+};
 
 describe('getSuppliersSection', () => {
   test('summary + list run in parallel; activity branches skipped when no suppliers', async () => {
@@ -239,9 +247,51 @@ describe('getSupplierQuotesSection', () => {
 });
 
 describe('getCatalogSection', () => {
+  test('omits commercial queries and metrics without client document permissions', async () => {
+    exec.enqueueEmptyN(5);
+
+    const result = await repo.getCatalogSection(
+      {
+        fromDate: FROM,
+        toDate: TO,
+        topLimit: 10,
+        canViewQuotes: false,
+        canViewOrders: false,
+        canViewInvoices: false,
+      },
+      testDb,
+    );
+
+    expect(exec.calls).toHaveLength(5);
+    expect(exec.calls.some((call) => call.sql.includes('quote_items'))).toBe(false);
+    expect(exec.calls.some((call) => call.sql.includes('sale_items'))).toBe(false);
+    expect(exec.calls.some((call) => call.sql.includes('invoice_items'))).toBe(false);
+    expect(result.topProductsByUsage).toEqual([]);
+    expect(result.topProductsByRevenue).toEqual([]);
+  });
+
+  test('queries usage only from authorized client document types', async () => {
+    exec.enqueueEmptyN(6);
+
+    await repo.getCatalogSection(
+      {
+        ...CATALOG_OPTIONS,
+        canViewOrders: false,
+        canViewInvoices: false,
+      },
+      testDb,
+    );
+
+    const usageCall = exec.calls.find((call) => call.sql.includes('WITH usage_rows'));
+    expect(usageCall?.sql).toContain('quote_items');
+    expect(usageCall?.sql).not.toContain('sale_items');
+    expect(usageCall?.sql).not.toContain('invoice_items');
+    expect(usageCall?.params).toEqual([FROM, TO, 10]);
+  });
+
   test('dispatches 7 parallel queries (counts + 4 breakdowns + 2 top lists)', async () => {
     exec.enqueueEmptyN(7);
-    await repo.getCatalogSection({ fromDate: FROM, toDate: TO, topLimit: 10 }, testDb);
+    await repo.getCatalogSection(CATALOG_OPTIONS, testDb);
     expect(exec.calls).toHaveLength(7);
   });
 
@@ -250,16 +300,13 @@ describe('getCatalogSection', () => {
       rows: [{ internal_count: '5', external_count: '3', disabled_count: '1' }],
     });
     exec.enqueueEmptyN(6);
-    const result = await repo.getCatalogSection(
-      { fromDate: FROM, toDate: TO, topLimit: 10 },
-      testDb,
-    );
+    const result = await repo.getCatalogSection(CATALOG_OPTIONS, testDb);
     expect(result.productCounts).toEqual({ internal: 5, external: 3, disabled: 1 });
   });
 
   test('productsBySupplier query has [topLimit] as the only param (LIMIT $1)', async () => {
     exec.enqueueEmptyN(7);
-    await repo.getCatalogSection({ fromDate: FROM, toDate: TO, topLimit: 12 }, testDb);
+    await repo.getCatalogSection({ ...CATALOG_OPTIONS, topLimit: 12 }, testDb);
     const productsBySupplierCall = exec.calls.find((c) => c.sql.includes('LEFT JOIN suppliers'));
     expect(productsBySupplierCall?.params).toEqual([12]);
     expect(productsBySupplierCall?.sql).toContain('LIMIT $1');
@@ -267,7 +314,7 @@ describe('getCatalogSection', () => {
 
   test('top usage query binds [from, to] per UNION ALL leg + topLimit (7 params, LIMIT $7)', async () => {
     exec.enqueueEmptyN(7);
-    await repo.getCatalogSection({ fromDate: FROM, toDate: TO, topLimit: 8 }, testDb);
+    await repo.getCatalogSection({ ...CATALOG_OPTIONS, topLimit: 8 }, testDb);
     const usageCall = exec.calls.find((c) => c.sql.includes('WITH usage_rows'));
     expect(usageCall?.params).toEqual([FROM, TO, FROM, TO, FROM, TO, 8]);
     expect(usageCall?.sql).toContain('LIMIT $7');
@@ -295,10 +342,7 @@ describe('getCatalogSection', () => {
     });
     exec.enqueue({ rows: [{ product_id: 'p2', product_name: 'Gadget', value: '420' }] });
 
-    const result = await repo.getCatalogSection(
-      { fromDate: FROM, toDate: TO, topLimit: 10 },
-      testDb,
-    );
+    const result = await repo.getCatalogSection(CATALOG_OPTIONS, testDb);
     expect(result.byType).toEqual([{ label: 'service', value: 5 }]);
     expect(result.byCategory).toEqual([{ label: 'consulting', value: 4 }]);
     expect(result.bySubcategory).toEqual([{ label: 'training', value: 3 }]);
