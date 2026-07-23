@@ -168,6 +168,7 @@ Time-entry update tools require the `version` field returned by `praetor_list_ti
 Security notes:
 
 - MCP tokens inherit your current role permissions at call time, filtered by the token's scope (full or read-only).
+- `praetor_get_users_hierarchy` returns HR details only for employee types authorized by `hr.internal.view` or `hr.external.view`. Email and hourly-cost visibility remain controlled independently by their respective permissions.
 - Tokens expire automatically after 30 days of inactivity. Operators can override the window with the `MCP_IDLE_TIMEOUT_MS` environment variable (milliseconds).
 - Changing your account password also invalidates every MCP token you previously issued. Re-issue and re-key your agents after a password rotation.
 - The MCP endpoint is rate-limited at the standard authenticated-route limit (600 requests/minute per client IP); excess requests get a 429 response.

@@ -27,6 +27,10 @@ import {
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
+import {
+  HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE,
+  maskUserResponse,
+} from '../services/userVisibility.ts';
 import { APP_VERSION } from '../utils/app-version.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { canViewProjectDetails, equivalentPermissionsFor } from '../utils/permissions.ts';
@@ -193,15 +197,6 @@ const canViewCostFor = (user: McpAuthenticatedUser, targetUserId: string | null 
   if (targetUserId === user.id) return hasPermission(user, 'hr.costs.view');
   return hasPermission(user, 'hr.costs_all.view');
 };
-
-const maskUser = (
-  user: usersRepo.UserListRow,
-  options: { canViewCosts: boolean; canViewEmails: boolean },
-) => ({
-  ...user,
-  email: options.canViewEmails ? user.email : '',
-  costPerHour: options.canViewCosts ? user.costPerHour : 0,
-});
 
 const runTimeEntryTool = async (
   operation: () => Promise<Record<string, unknown>>,
@@ -564,17 +559,21 @@ const buildServer = () => {
 
       return jsonResult({
         users: users.map((entry) =>
-          maskUser(
+          maskUserResponse(
             { ...entry, costPerHour: currentCosts.get(entry.id) ?? entry.costPerHour },
             {
               canViewCosts: canViewCostFor(user, entry.id),
               canViewEmails: hasEmailView,
+              canViewHrDetails: hasPermission(
+                user,
+                HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE[entry.employeeType],
+              ),
             },
           ),
         ),
         // Expose only member user IDs, derived from the members the repo already returns
         // (no second user_work_units query). The member display names are deliberately
-        // dropped here — they would bypass the per-user `maskUser` scoping applied to
+        // dropped here — they would bypass the per-user `maskUserResponse` scoping applied to
         // `users` above.
         workUnits: visibleWorkUnits.map(({ members, ...unit }) => ({
           ...unit,

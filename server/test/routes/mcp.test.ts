@@ -357,6 +357,36 @@ const makeCreateTimeEntryArgs = (task: string) => ({
   task,
   duration: 1,
 });
+const FULL_HR_USER = {
+  id: 'u2',
+  name: 'Bob',
+  username: 'bob',
+  email: 'bob@example.com',
+  role: 'user',
+  avatarInitials: 'BO',
+  costPerHour: 84,
+  isDisabled: false,
+  employeeType: 'internal' as const,
+  hasTopManagerRole: false,
+  isAdminOnly: false,
+  firstName: 'Robert',
+  lastName: 'Example',
+  phone: '+39 555 0100',
+  jobTitle: 'Engineer',
+  department: 'Research',
+  responsibleUserId: 'u3',
+  responsibleUserName: 'Manager',
+  employeeCode: 'EMP-002',
+  hireDate: '2024-01-15',
+  terminationDate: null,
+  contractType: 'permanent' as const,
+  employmentStatus: 'active' as const,
+  workLocation: 'hybrid' as const,
+  emergencyContactName: 'Emergency Contact',
+  emergencyContactPhone: '+39 555 0199',
+  address: 'Private address',
+  notes: 'Private HR notes',
+};
 const FULL_PROJECT = {
   id: 'p1',
   name: 'Project One',
@@ -733,6 +763,82 @@ describe('/api/mcp', () => {
     expect(workUnitsListUserIdsByUnitIdsMock).not.toHaveBeenCalled();
     expect(usersListAllForAdminMock).not.toHaveBeenCalled();
     expect(workUnitsListAllMock).not.toHaveBeenCalled();
+  });
+
+  test('does not disclose HR details through hierarchy-only permissions', async () => {
+    currentPermissions = ['timesheets.tracker.view', 'hr.work_units.view'];
+    usersListScopedForManagerMock.mockResolvedValue([FULL_HR_USER]);
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 17,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.structuredContent.users).toEqual([
+      {
+        id: 'u2',
+        name: 'Bob',
+        username: 'bob',
+        email: '',
+        role: 'user',
+        avatarInitials: 'BO',
+        costPerHour: 0,
+        isDisabled: false,
+        employeeType: 'internal',
+        hasTopManagerRole: false,
+        isAdminOnly: false,
+      },
+    ]);
+  });
+
+  test('reveals MCP hierarchy HR details only for the matching employee type', async () => {
+    currentPermissions = ['timesheets.tracker.view', 'hr.internal.view'];
+    usersListScopedForManagerMock.mockResolvedValue([
+      FULL_HR_USER,
+      {
+        ...FULL_HR_USER,
+        id: 'u3',
+        name: 'Eve',
+        username: 'eve',
+        employeeType: 'external',
+      },
+    ]);
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 18,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    const [internalUser, externalUser] = body.result.structuredContent.users;
+    expect(internalUser).toMatchObject({
+      id: 'u2',
+      firstName: 'Robert',
+      emergencyContactName: 'Emergency Contact',
+      notes: 'Private HR notes',
+      email: '',
+      costPerHour: 0,
+    });
+    expect(externalUser).toEqual({
+      id: 'u3',
+      name: 'Eve',
+      username: 'eve',
+      email: '',
+      role: 'user',
+      avatarInitials: 'BO',
+      costPerHour: 0,
+      isDisabled: false,
+      employeeType: 'external',
+      hasTopManagerRole: false,
+      isAdminOnly: false,
+    });
   });
 
   test('hr.costs.view → caller sees own costPerHour, other rows masked', async () => {

@@ -168,6 +168,7 @@ Gli strumenti di aggiornamento dei consuntivi richiedono il campo `version` rest
 Note di sicurezza:
 
 - I token MCP ereditano i permessi del tuo ruolo corrente al momento della chiamata, filtrati dall'ambito del token (completo o sola lettura).
+- `praetor_get_users_hierarchy` restituisce i dettagli HR solo per i tipi di dipendente autorizzati da `hr.internal.view` o `hr.external.view`. La visibilità di email e costi orari resta regolata separatamente dai relativi permessi.
 - I token scadono automaticamente dopo 30 giorni di inattività. Gli operatori possono modificare la finestra tramite la variabile d'ambiente `MCP_IDLE_TIMEOUT_MS` (millisecondi).
 - Il cambio password del tuo account invalida anche tutti i token MCP precedentemente emessi. Dopo una rotazione della password devi ricreare i token e reimpostare gli agenti.
 - L'endpoint MCP è limitato alla soglia standard delle route autenticate (600 richieste/minuto per IP client); le richieste in eccesso ricevono una risposta 429.
