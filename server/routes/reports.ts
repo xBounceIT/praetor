@@ -1775,12 +1775,14 @@ export const buildBusinessDataset = async (
       addGrantedPermissions(request, clientListPermissions, permissionsApplied);
 
       const canViewAllClients = hasPermission(request, 'crm.clients_all.view');
+      const canViewClientDetails = hasPermission(request, 'crm.clients.view');
       dataset.clients = await reportsClientsRepo.getClientsSection(
         {
           viewerId,
           fromDate,
           toDate,
           canViewAllClients,
+          canViewClientDetails,
           canViewQuotes,
           canViewOffers: canViewClientOffers,
           canViewOrders,

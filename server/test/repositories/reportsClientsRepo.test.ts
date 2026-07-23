@@ -17,6 +17,7 @@ const baseOpts = {
   fromDate: FROM,
   toDate: TO,
   canViewAllClients: true,
+  canViewClientDetails: true,
   canViewOffers: false,
   canViewQuotes: false,
   canViewOrders: false,
@@ -74,6 +75,44 @@ describe('getClientsSection', () => {
         email: 'j@a.co',
         phone: '+1',
         address: '1 St',
+        isDisabled: false,
+      },
+    ]);
+  });
+
+  test('omits client contact details without crm.clients.view', async () => {
+    exec.enqueue({ rows: [{ count: '1' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 'c1',
+          name: 'Acme',
+          client_code: 'AC',
+          type: 'company',
+          contact_name: 'Jane',
+          email: 'j@a.co',
+          phone: '+1',
+          address: '1 St',
+          is_disabled: false,
+        },
+      ],
+    });
+
+    const result = await repo.getClientsSection(
+      { ...baseOpts, canViewClientDetails: false },
+      testDb,
+    );
+
+    expect(exec.calls[1].sql).not.toContain('c.contact_name');
+    expect(exec.calls[1].sql).not.toContain('c.email');
+    expect(exec.calls[1].sql).not.toContain('c.phone');
+    expect(exec.calls[1].sql).not.toContain('c.address');
+    expect(result.items).toEqual([
+      {
+        id: 'c1',
+        name: 'Acme',
+        clientCode: 'AC',
+        type: 'company',
         isDisabled: false,
       },
     ]);
