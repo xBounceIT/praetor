@@ -27,7 +27,7 @@ import type { ProjectRule, ProjectRuleRecipientOptions } from '../../types';
 import { hasPermission } from '../../utils/permissions';
 import { toastError, toastSuccess } from '../../utils/toast';
 import ProjectRuleFormModal, { type ProjectRuleFormPayload } from './ProjectRuleFormModal';
-import { getProjectRuleFieldDefinition } from './projectRuleRegistry';
+import { canViewProjectRule, getProjectRuleFieldDefinition } from './projectRuleRegistry';
 
 export interface ProjectRulesProps {
   projectId: string;
@@ -119,31 +119,6 @@ const projectRulesReducer = (
   }
 };
 
-const canModifyRuleField = (rule: ProjectRule, permissions: string[]) => {
-  const permissionSet = new Set(permissions);
-  const conditions =
-    rule.conditions?.length > 0
-      ? rule.conditions
-      : [
-          {
-            field: rule.field,
-            operator: rule.operator,
-            value: rule.value,
-            valueType: 'literal' as const,
-          },
-        ];
-  return conditions.every((condition) => {
-    const definition = getProjectRuleFieldDefinition(condition.field);
-    const valueDefinition =
-      condition.valueType === 'field' ? getProjectRuleFieldDefinition(condition.value) : null;
-    return (
-      (!definition?.requiresPermission || permissionSet.has(definition.requiresPermission)) &&
-      (!valueDefinition?.requiresPermission ||
-        permissionSet.has(valueDefinition.requiresPermission))
-    );
-  });
-};
-
 const enumValueLabelKey = (field: string, value: string) => {
   if (field === 'billing_type') {
     if (value === 'time_and_materials') return 'projects:projects.billingTypes.timeAndMaterials';
@@ -202,7 +177,7 @@ const ProjectRuleListItem: React.FC<{
   onDelete,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
-  const canUpdateThis = canUpdate && canModifyRuleField(rule, permissions);
+  const canUpdateThis = canUpdate && canViewProjectRule(rule, permissions);
   const disabledReason =
     canUpdate && !canUpdateThis ? t('projects:detail.rules.costPermissionRequired') : undefined;
   const hasNotificationRecipients =
@@ -434,6 +409,12 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
     void loadRules(controller.signal);
     return () => controller.abort();
   }, [canView, loadRules]);
+  const formRuleIsVisible = !formRule || canViewProjectRule(formRule, permissions);
+  const ruleToDeleteIsVisible = !ruleToDelete || canViewProjectRule(ruleToDelete, permissions);
+  useEffect(() => {
+    if (formOpen && !formRuleIsVisible) dispatch({ type: 'setFormOpen', open: false });
+    if (!ruleToDeleteIsVisible) dispatch({ type: 'clearDelete' });
+  }, [formOpen, formRuleIsVisible, ruleToDeleteIsVisible]);
 
   const ruleSummary = useCallback(
     (rule: ProjectRule) => {
@@ -516,7 +497,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
   };
 
   const handleToggle = async (rule: ProjectRule, checked: boolean) => {
-    if (!canUpdate || !canModifyRuleField(rule, permissions)) return;
+    if (!canUpdate || !canViewProjectRule(rule, permissions)) return;
     dispatch({ type: 'setBusyRule', ruleId: rule.id });
     try {
       const updated = await projectRulesApi.update(projectId, rule.id, { isEnabled: checked });
@@ -547,8 +528,11 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
   };
 
   const sortedRules = useMemo(
-    () => rules.toSorted((left, right) => left.name.localeCompare(right.name)),
-    [rules],
+    () =>
+      rules
+        .filter((rule) => canViewProjectRule(rule, permissions))
+        .toSorted((left, right) => left.name.localeCompare(right.name)),
+    [permissions, rules],
   );
   const deletingSelectedRule = busyRuleId === ruleToDelete?.id;
 
@@ -580,16 +564,16 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
       />
 
       <ProjectRuleFormModal
-        open={formOpen}
+        open={formOpen && formRuleIsVisible}
         onOpenChange={(open) => dispatch({ type: 'setFormOpen', open })}
-        rule={formRule}
+        rule={formRuleIsVisible ? formRule : null}
         recipients={recipients}
         permissions={permissions}
         onSubmit={handleSubmit}
       />
 
       <ProjectRuleDeleteDialog
-        ruleToDelete={ruleToDelete}
+        ruleToDelete={ruleToDeleteIsVisible ? ruleToDelete : null}
         deleting={deletingSelectedRule}
         onCancel={() => dispatch({ type: 'clearDelete' })}
         onDelete={() => void handleDelete()}

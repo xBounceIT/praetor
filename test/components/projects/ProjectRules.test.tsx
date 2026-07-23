@@ -343,24 +343,96 @@ describe('<ProjectRules />', () => {
     );
   });
 
-  test('disables update controls for cost-derived rules without cost permission', async () => {
+  test('hides cost-derived rules if the API returns them without cost permission', async () => {
+    listMock.mockResolvedValue([
+      RULE,
+      {
+        ...RULE,
+        id: 'pr-cost',
+        name: 'Cost threshold',
+        field: 'budget_used_pct',
+        conditionMet: true,
+        conditions: [
+          { field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' },
+        ],
+      },
+    ]);
+    renderProjectRules(['projects.rules.view']);
+
+    expect(await screen.findByText('Budget warning')).toBeInTheDocument();
+    expect(screen.queryByText('Cost threshold')).not.toBeInTheDocument();
+    expect(screen.queryByText('projects:detail.rules.conditionMet')).not.toBeInTheDocument();
+  });
+
+  test('shows cost-derived rules with cost permission', async () => {
     listMock.mockResolvedValue([
       {
         ...RULE,
         field: 'budget_used_pct',
         conditions: [
-          { field: 'budget_used_pct', operator: 'gte', value: '1000', valueType: 'literal' },
+          { field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' },
         ],
       },
     ]);
-    renderProjectRules(['projects.rules.view', 'projects.rules.update']);
+    renderProjectRules(['projects.rules.view', 'projects.rules.update', 'reports.cost.view']);
 
     expect(await screen.findByText('Budget warning')).toBeInTheDocument();
     expect(
       screen.getByRole('switch', { name: 'projects:detail.rules.actions.toggle' }),
-    ).toBeDisabled();
+    ).not.toBeDisabled();
     expect(
       screen.getByRole('button', { name: 'projects:detail.rules.actions.edit' }),
-    ).toBeDisabled();
+    ).not.toBeDisabled();
+  });
+
+  test('hides loaded cost-derived rules immediately when cost permission is revoked', async () => {
+    const costRule = {
+      ...RULE,
+      field: 'budget_used_pct',
+      conditions: [
+        { field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' as const },
+      ],
+    };
+    listMock.mockResolvedValue([costRule]);
+    const view = render(
+      <ProjectRules projectId="p1" permissions={['projects.rules.view', 'reports.cost.view']} />,
+    );
+
+    expect(await screen.findByText('Budget warning')).toBeInTheDocument();
+
+    view.rerender(<ProjectRules projectId="p1" permissions={['projects.rules.view']} />);
+
+    expect(screen.queryByText('Budget warning')).not.toBeInTheDocument();
+  });
+
+  test('closes a cost-derived rule dialog when cost permission is revoked', async () => {
+    const costRule = {
+      ...RULE,
+      field: 'budget_used_pct',
+      conditions: [
+        { field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' as const },
+      ],
+    };
+    listMock.mockResolvedValue([costRule]);
+    const view = render(
+      <ProjectRules
+        projectId="p1"
+        permissions={['projects.rules.view', 'projects.rules.delete', 'reports.cost.view']}
+      />,
+    );
+
+    expect(await screen.findByText('Budget warning')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'projects:detail.rules.actions.delete' }));
+    expect(screen.getByRole('button', { name: 'common:buttons.delete' })).toBeInTheDocument();
+
+    view.rerender(
+      <ProjectRules
+        projectId="p1"
+        permissions={['projects.rules.view', 'projects.rules.delete']}
+      />,
+    );
+
+    expect(screen.queryByText('Budget warning')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'common:buttons.delete' })).not.toBeInTheDocument();
   });
 });

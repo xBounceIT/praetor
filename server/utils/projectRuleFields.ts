@@ -79,6 +79,39 @@ export const isProjectRuleConditionValueType = (
 ): value is ProjectRuleConditionValueType =>
   PROJECT_RULE_CONDITION_VALUE_TYPES.includes(value as ProjectRuleConditionValueType);
 
+type ProjectRulePermissionCondition = {
+  field: string;
+  value: string;
+  valueType?: string;
+};
+
+export const canViewProjectRule = (
+  rule: {
+    field: string;
+    value: string;
+    conditions?: readonly ProjectRulePermissionCondition[];
+  },
+  permissions: readonly string[],
+): boolean => {
+  const permissionSet = new Set(permissions);
+  const conditions =
+    rule.conditions && rule.conditions.length > 0
+      ? rule.conditions
+      : [{ field: rule.field, value: rule.value, valueType: 'literal' }];
+
+  return conditions.every((condition) => {
+    const fieldPermission = getProjectRuleFieldDefinition(condition.field)?.requiresPermission;
+    const valuePermission =
+      condition.valueType === 'field'
+        ? getProjectRuleFieldDefinition(condition.value)?.requiresPermission
+        : undefined;
+    return (
+      (!fieldPermission || permissionSet.has(fieldPermission)) &&
+      (!valuePermission || permissionSet.has(valuePermission))
+    );
+  });
+};
+
 export const normalizeProjectRuleConditionValueType = (
   value: unknown,
 ): ProjectRuleConditionValueType => (value === 'field' ? 'field' : 'literal');

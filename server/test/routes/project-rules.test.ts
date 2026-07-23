@@ -211,8 +211,60 @@ describe('project rule routes', () => {
     expect(listRulesMock).not.toHaveBeenCalled();
   });
 
+  test('GET rules hides cost-derived rules without reports.cost.view', async () => {
+    const hoursRule = {
+      ...SAMPLE_RULE,
+      id: 'pr-hours',
+      name: 'Hours warning',
+      field: 'hours_to_date',
+      value: '40',
+      conditions: [{ field: 'hours_to_date', operator: 'gte', value: '40', valueType: 'literal' }],
+    };
+    const costTargetRule = {
+      ...SAMPLE_RULE,
+      id: 'pr-cost-target',
+      name: 'Margin warning',
+      field: 'revenue',
+      value: 'cost_to_date',
+      conditions: [
+        {
+          field: 'revenue',
+          operator: 'gte',
+          value: 'cost_to_date',
+          valueType: 'field',
+        },
+      ],
+    };
+    listRulesMock.mockResolvedValue([SAMPLE_RULE, hoursRule, costTargetRule]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).map((rule: { name: string }) => rule.name)).toEqual([
+      'Hours warning',
+    ]);
+  });
+
+  test('GET rules retains cost-derived rules with reports.cost.view', async () => {
+    currentPermissions = ['projects.rules.view', 'reports.cost.view'];
+    listRulesMock.mockResolvedValue([SAMPLE_RULE]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)[0].name).toBe('Budget warning');
+  });
+
   test('GET rules redacts webhook identifiers without administration.webhooks.view', async () => {
-    currentPermissions = ['projects.rules.view'];
+    currentPermissions = ['projects.rules.view', 'reports.cost.view'];
     listRulesMock.mockResolvedValue([
       {
         ...SAMPLE_RULE,
@@ -244,7 +296,11 @@ describe('project rule routes', () => {
   });
 
   test('GET rules retains webhook identifiers for authorized callers', async () => {
-    currentPermissions = ['projects.rules.view', 'administration.webhooks.view'];
+    currentPermissions = [
+      'projects.rules.view',
+      'reports.cost.view',
+      'administration.webhooks.view',
+    ];
     const rule = {
       ...SAMPLE_RULE,
       actionConfig: {
@@ -266,7 +322,7 @@ describe('project rule routes', () => {
   });
 
   test('GET rules marks a redacted legacy webhook-only config as webhook', async () => {
-    currentPermissions = ['projects.rules.view'];
+    currentPermissions = ['projects.rules.view', 'reports.cost.view'];
     listRulesMock.mockResolvedValue([
       {
         ...SAMPLE_RULE,
