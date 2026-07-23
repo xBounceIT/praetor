@@ -131,6 +131,7 @@ describe('getProjectsSection', () => {
         fromDate: FROM,
         toDate: TO,
         canViewAllProjects: true,
+        canViewProjectDetails: false,
         canViewTimesheets: true,
         canViewAllTimesheets: true,
         allowedTimesheetUserIds: null,
@@ -150,6 +151,7 @@ describe('getProjectsSection', () => {
         fromDate: FROM,
         toDate: TO,
         canViewAllProjects: true,
+        canViewProjectDetails: false,
         canViewTimesheets: false,
         canViewAllTimesheets: true,
         allowedTimesheetUserIds: null,
@@ -171,6 +173,7 @@ describe('getProjectsSection', () => {
         fromDate: FROM,
         toDate: TO,
         canViewAllProjects: true,
+        canViewProjectDetails: false,
         canViewTimesheets: true,
         canViewAllTimesheets: true,
         allowedTimesheetUserIds: null,
@@ -198,6 +201,7 @@ describe('getProjectsSection', () => {
         fromDate: FROM,
         toDate: TO,
         canViewAllProjects: true,
+        canViewProjectDetails: false,
         canViewTimesheets: true,
         canViewAllTimesheets: true,
         allowedTimesheetUserIds: null,
@@ -226,6 +230,7 @@ describe('getProjectsSection', () => {
         fromDate: FROM,
         toDate: TO,
         canViewAllProjects: true,
+        canViewProjectDetails: false,
         canViewTimesheets: true,
         canViewAllTimesheets: true,
         allowedTimesheetUserIds: null,
@@ -246,6 +251,7 @@ describe('getProjectsSection', () => {
         fromDate: FROM,
         toDate: TO,
         canViewAllProjects: false,
+        canViewProjectDetails: false,
         canViewTimesheets: false,
         canViewAllTimesheets: false,
         allowedTimesheetUserIds: ['u1'],
@@ -290,6 +296,7 @@ describe('getProjectsSection', () => {
         fromDate: FROM,
         toDate: TO,
         canViewAllProjects: true,
+        canViewProjectDetails: true,
         canViewTimesheets: true,
         canViewAllTimesheets: true,
         allowedTimesheetUserIds: null,
@@ -318,6 +325,55 @@ describe('getProjectsSection', () => {
         isDisabled: false,
       },
     ]);
+  });
+
+  test('omits commercial project fields without project-detail permission', async () => {
+    exec.enqueue({ rows: [{ count: '1', disabled_count: '0' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 'p1',
+          name: 'Phoenix',
+          client_id: 'c1',
+          client_name: 'Acme',
+          description: 'desc',
+          order_id: 'o1',
+          offer_id: 'of1',
+          start_date: '2026-01-01',
+          end_date: '2026-12-31',
+          revenue: '50000',
+          billing_type: 'fixed',
+          billing_frequency: 'monthly',
+          status: 'active',
+          tipo: 'attivo',
+          is_disabled: false,
+        },
+      ],
+    });
+    exec.enqueue({ rows: [] });
+
+    const result = await repo.getProjectsSection(
+      {
+        viewerId: 'u1',
+        fromDate: FROM,
+        toDate: TO,
+        canViewAllProjects: false,
+        canViewProjectDetails: false,
+        canViewTimesheets: false,
+        canViewAllTimesheets: false,
+        allowedTimesheetUserIds: ['u1'],
+        itemsLimit: 50,
+        topLimit: 10,
+      },
+      testDb,
+    );
+
+    expect(exec.calls[1].sql).not.toContain('p.order_id');
+    expect(exec.calls[1].sql).not.toContain('p.offer_id');
+    expect(exec.calls[1].sql).not.toContain('p.revenue');
+    expect(result.items[0]).not.toHaveProperty('orderId');
+    expect(result.items[0]).not.toHaveProperty('offerId');
+    expect(result.items[0]).not.toHaveProperty('revenue');
   });
 });
 

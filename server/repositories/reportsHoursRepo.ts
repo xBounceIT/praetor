@@ -17,11 +17,11 @@ type ProjectRow = {
   client_id: string | null;
   client_name: string | null;
   description: string | null;
-  order_id: string | null;
-  offer_id: string | null;
+  order_id?: string | null;
+  offer_id?: string | null;
   start_date: string | null;
   end_date: string | null;
-  revenue: string | number | null;
+  revenue?: string | number | null;
   billing_type: string | null;
   billing_frequency: string | null;
   status: string | null;
@@ -208,6 +208,7 @@ export type ProjectsSectionOptions = {
   fromDate: string;
   toDate: string;
   canViewAllProjects: boolean;
+  canViewProjectDetails: boolean;
   canViewTimesheets: boolean;
   canViewAllTimesheets: boolean;
   allowedTimesheetUserIds: string[] | null;
@@ -221,11 +222,11 @@ export type ProjectInfo = {
   clientId: string;
   clientName: string;
   description: string;
-  orderId: string;
-  offerId: string;
+  orderId?: string;
+  offerId?: string;
   startDate: string;
   endDate: string;
-  revenue: number;
+  revenue?: number;
   billingType: string;
   billingFrequency: string;
   status: string;
@@ -251,12 +252,16 @@ export const getProjectsSection = async (
     fromDate,
     toDate,
     canViewAllProjects,
+    canViewProjectDetails,
     canViewTimesheets,
     canViewAllTimesheets,
     allowedTimesheetUserIds,
     itemsLimit,
     topLimit,
   } = opts;
+  const commercialProjectFieldsSql = canViewProjectDetails
+    ? sql`p.order_id, p.offer_id, p.revenue,`
+    : sql``;
 
   const summaryQuery = canViewAllProjects
     ? executeRows<{ count: string; disabled_count: string }>(
@@ -285,11 +290,9 @@ export const getProjectsSection = async (
             p.client_id,
             c.name as client_name,
             p.description,
-            p.order_id,
-            p.offer_id,
+            ${commercialProjectFieldsSql}
             p.start_date,
             p.end_date,
-            p.revenue,
             ${derivedBillingTypeSql} AS billing_type,
             p.billing_frequency,
             p.status,
@@ -308,11 +311,9 @@ export const getProjectsSection = async (
             p.client_id,
             c.name as client_name,
             p.description,
-            p.order_id,
-            p.offer_id,
+            ${commercialProjectFieldsSql}
             p.start_date,
             p.end_date,
-            p.revenue,
             ${derivedBillingTypeSql} AS billing_type,
             p.billing_frequency,
             p.status,
@@ -388,11 +389,15 @@ export const getProjectsSection = async (
       clientId: toDbText(r.client_id),
       clientName: toDbText(r.client_name),
       description: toDbText(r.description),
-      orderId: toDbText(r.order_id),
-      offerId: toDbText(r.offer_id),
+      ...(canViewProjectDetails
+        ? {
+            orderId: toDbText(r.order_id),
+            offerId: toDbText(r.offer_id),
+            revenue: parseDbNumber(r.revenue, 0),
+          }
+        : {}),
       startDate: toDbText(r.start_date),
       endDate: toDbText(r.end_date),
-      revenue: parseDbNumber(r.revenue, 0),
       billingType: toDbText(r.billing_type),
       billingFrequency: toDbText(r.billing_frequency),
       status: toDbText(r.status),

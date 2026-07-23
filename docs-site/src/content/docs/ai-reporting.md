@@ -82,6 +82,10 @@ Usa i risultati come supporto all'analisi, non come sostituto dei dati ufficiali
 - Controlla sempre importi, date e riferimenti citati nella risposta.
 - Riformula la domanda se la risposta è troppo generica.
 
+## Dati avanzati delle commesse
+
+I dataset di AI reporting includono ordine collegato, offerta e ricavo di una commessa solo se il ruolo dispone del permesso `projects.details.view`. Senza questo permesso, restano disponibili i dati operativi della commessa consentiti dagli altri permessi, ma i riferimenti commerciali e il ricavo vengono omessi.
+
 ## Costi nei report
 
 Praetor calcola il costo di ogni voce di consuntivo come `durata * costo orario` con la stessa precisione decimale usata per le fatture. Il costo orario salvato sulla voce deriva dal calendario del dipendente alla data della registrazione; quando il calendario cambia, Praetor aggiorna retroattivamente le entry interessate e i relativi aggregati.

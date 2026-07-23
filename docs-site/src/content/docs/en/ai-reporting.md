@@ -82,6 +82,10 @@ Use results as analytical support, not as a replacement for official data. Befor
 - Always verify amounts, dates, and references mentioned in the answer.
 - Rephrase the question if the answer is too generic.
 
+## Advanced project data
+
+AI reporting datasets include a project's linked order, offer, and revenue only when the role has the `projects.details.view` permission. Without this permission, project operational data allowed by other permissions remains available, but commercial references and revenue are omitted.
+
 ## Cost in reports
 
 Praetor computes each time entry cost as `duration * hourly cost`, using the same currency precision as invoices. The stored hourly cost comes from the employee calendar on the entry date; changing that calendar retroactively updates affected entries and their aggregates.
