@@ -13,6 +13,7 @@ import {
   preservePricingSemanticsVersions,
 } from '../utils/pricing-semantics.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
+import { lockClientDocumentSupplierReferences } from './supplierQuotesRepo.ts';
 
 export type ClientQuote = {
   id: string;
@@ -749,38 +750,40 @@ export const insertItems = async (
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
   candidateId?: string,
-): Promise<ClientQuoteItem[]> => {
-  if (items.length === 0) return [];
-  const resolvedCandidateId = candidateId ?? (await resolvePrimaryCandidateId(quoteId, exec));
-  const rows = await exec
-    .insert(quoteItems)
-    .values(
-      items.map((item) => ({
-        id: item.id,
-        quoteId,
-        candidateId: resolvedCandidateId,
-        position: item.position,
-        productId: item.productId,
-        productName: item.productName,
-        quantity: numericForDb(item.quantity),
-        unitPrice: numericForDb(item.unitPrice),
-        productCost: numericForDb(item.productCost),
-        productMolPercentage: numericForDb(item.productMolPercentage),
-        discount: numericForDb(item.discount),
-        note: item.note,
-        supplierQuoteId: item.supplierQuoteId,
-        supplierQuoteItemId: item.supplierQuoteItemId,
-        supplierQuoteSupplierName: item.supplierQuoteSupplierName,
-        supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
-        unitType: item.unitType,
-        durationMonths: item.durationMonths ?? 1,
-        durationUnit: item.durationUnit ?? 'months',
-        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
-      })),
-    )
-    .returning();
-  return rows.sort((left, right) => left.position - right.position).map(mapItem);
-};
+): Promise<ClientQuoteItem[]> =>
+  runAtomically(exec, async (tx) => {
+    if (items.length === 0) return [];
+    await lockClientDocumentSupplierReferences(items, tx);
+    const resolvedCandidateId = candidateId ?? (await resolvePrimaryCandidateId(quoteId, tx));
+    const rows = await tx
+      .insert(quoteItems)
+      .values(
+        items.map((item) => ({
+          id: item.id,
+          quoteId,
+          candidateId: resolvedCandidateId,
+          position: item.position,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: numericForDb(item.quantity),
+          unitPrice: numericForDb(item.unitPrice),
+          productCost: numericForDb(item.productCost),
+          productMolPercentage: numericForDb(item.productMolPercentage),
+          discount: numericForDb(item.discount),
+          note: item.note,
+          supplierQuoteId: item.supplierQuoteId,
+          supplierQuoteItemId: item.supplierQuoteItemId,
+          supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+          supplierQuoteUnitPrice: numericForDb(item.supplierQuoteUnitPrice),
+          unitType: item.unitType,
+          durationMonths: item.durationMonths ?? 1,
+          durationUnit: item.durationUnit ?? 'months',
+          pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
+        })),
+      )
+      .returning();
+    return rows.sort((left, right) => left.position - right.position).map(mapItem);
+  });
 
 export const replaceItems = async (
   quoteId: string,

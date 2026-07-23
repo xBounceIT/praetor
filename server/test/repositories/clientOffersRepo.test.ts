@@ -352,6 +352,45 @@ describe('insertItems', () => {
       2,
     ]);
   });
+
+  test('locks and revalidates supplier references before inserting offer items', async () => {
+    exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
+    exec.enqueue({ rows: [['sq-1']] });
+    exec.enqueue({
+      rows: [
+        ['sqi-1', 'sq-1', 'Vendor', 'p-1', '5', 2, '2999-12-31', null, null, null, null, null],
+      ],
+    });
+    exec.enqueue({ rows: [itemRow()] });
+
+    await clientOffersRepo.insertItems(
+      'co-1',
+      [
+        {
+          id: 'coi-1',
+          productId: 'p-1',
+          productName: 'Widget',
+          quantity: 2,
+          unitPrice: 10,
+          productCost: 5,
+          productMolPercentage: null,
+          discount: 0,
+          note: null,
+          supplierQuoteId: 'sq-1',
+          supplierQuoteItemId: 'sqi-1',
+          supplierQuoteSupplierName: 'Vendor',
+          supplierQuoteUnitPrice: 5,
+          unitType: 'unit',
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+      testDb,
+    );
+
+    expect(exec.calls[1].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[3].sql.toLowerCase()).toContain('insert into "customer_offer_items"');
+  });
 });
 
 describe('replaceItems', () => {

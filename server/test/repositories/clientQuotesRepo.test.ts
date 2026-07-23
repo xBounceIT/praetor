@@ -443,6 +443,13 @@ describe('replaceItems', () => {
   test('issues DELETE then bulk INSERT and preserves order', async () => {
     exec.enqueue({ rows: [['cq-1']] });
     exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
+    exec.enqueue({ rows: [['sq-1']] });
+    exec.enqueue({
+      rows: [
+        ['sqi-1', 'sq-1', 'Vendor', 'p-1', '4', 2, '2999-12-31', null, null, null, null, null],
+      ],
+    });
     exec.enqueue({
       rows: [itemRow({ 0: 'b', 18: 1 }), itemRow({ 0: 'a', 18: 0 })],
     });
@@ -487,13 +494,14 @@ describe('replaceItems', () => {
       },
     ];
     const result = await clientQuotesRepo.replaceItems('cq-1', items, testDb);
-    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls).toHaveLength(6);
     expect(exec.calls[0].sql.toLowerCase()).toContain('from "quote_candidates"');
     expect(exec.calls[1].sql.toLowerCase()).toContain('delete from "quote_items"');
     expect(exec.calls[1].sql.toLowerCase()).toContain('"candidate_id" is null');
-    expect(exec.calls[2].sql.toLowerCase()).toContain('insert into "quote_items"');
-    expect(exec.calls[2].params).toContain('a');
-    expect(exec.calls[2].params).toContain('b');
+    expect(exec.calls[3].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[5].sql.toLowerCase()).toContain('insert into "quote_items"');
+    expect(exec.calls[5].params).toContain('a');
+    expect(exec.calls[5].params).toContain('b');
     expect(result.map((i) => i.id)).toEqual(['a', 'b']);
   });
 

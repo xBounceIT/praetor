@@ -17,6 +17,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
@@ -38,6 +39,7 @@ const getRolePermissionsMock = mock();
 const sqFindByIdMock = mock();
 const sqExistsByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
+const sqLockEffectiveStatusByIdMock = mock();
 const sqIsSourcedByClientDocumentsMock = mock();
 const sqDeleteByIdMock = mock();
 const sqDeleteByIdWithAttachmentStoredNamesMock = mock();
@@ -77,6 +79,7 @@ beforeAll(async () => {
     findById: sqFindByIdMock,
     existsById: sqExistsByIdMock,
     findLinkedOrderId: sqFindLinkedOrderIdMock,
+    lockEffectiveStatusById: sqLockEffectiveStatusByIdMock,
     isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
     deleteById: sqDeleteByIdMock,
     deleteByIdWithAttachmentStoredNames: sqDeleteByIdWithAttachmentStoredNamesMock,
@@ -181,6 +184,7 @@ const allMocks = [
   sqFindByIdMock,
   sqExistsByIdMock,
   sqFindLinkedOrderIdMock,
+  sqLockEffectiveStatusByIdMock,
   sqDeleteByIdMock,
   sqDeleteByIdWithAttachmentStoredNamesMock,
   sqaListForQuoteMock,
@@ -218,6 +222,13 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
+  sqLockEffectiveStatusByIdMock.mockResolvedValue({
+    expirationDate: '2999-12-31',
+    linkedClientStatus: null,
+    linkedClientQuoteExpiration: null,
+    linkedOfferStatus: null,
+    linkedOfferExpiration: null,
+  });
   sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
@@ -685,6 +696,10 @@ describe('DELETE /api/sales/supplier-quotes/:id cleans up attachment files', () 
     });
 
     expect(res.statusCode).toBe(204);
+    expect(sqLockEffectiveStatusByIdMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
+    expect(sqFindLinkedOrderIdMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
+    expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
+    expect(sqDeleteByIdWithAttachmentStoredNamesMock).toHaveBeenCalledWith('sq-1', TX_SENTINEL);
     expect(deleteAttachmentMock).toHaveBeenCalledTimes(2);
     expect(deleteAttachmentMock).toHaveBeenCalledWith('abc-123.xlsx');
     expect(deleteAttachmentMock).toHaveBeenCalledWith('def-456.pdf');

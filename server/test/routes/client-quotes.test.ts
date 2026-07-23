@@ -13,6 +13,7 @@ import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realDocumentRevisions from '../../services/documentRevisions.ts';
 import * as realAudit from '../../utils/audit.ts';
+import { ConflictError } from '../../utils/http-errors.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -2031,6 +2032,22 @@ describe('client quote candidate-family create and update', () => {
 
     expect(res.statusCode).toBe(400);
     expect(cqRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('409s when a supplier reference changes while creating the quote', async () => {
+    setupCreate();
+    cqInsertItemsMock.mockImplementationOnce(async () => {
+      throw new ConflictError(
+        'A referenced supplier quote changed during the request; retry the operation',
+      );
+    });
+
+    const res = await postQuote([freshLine()]);
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'A referenced supplier quote changed during the request; retry the operation',
+    });
   });
 
   test('accepts a route-safe manual code for a new quote', async () => {

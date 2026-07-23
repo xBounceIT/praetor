@@ -862,33 +862,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // soft, FK-less denormalized value that does NOT cascade, so after a rename the derived-status
       // reverse lookup and the client progression/expiration guards can no longer find them.
       const isRenaming = nextIdValue !== null && nextIdValue !== idResult.value;
-      const [
-        current,
-        linkedOrderId,
-        idConflict,
-        sourcedByClientDocuments,
-        existingItems,
-        sourcedItemIds,
-      ] = await Promise.all([
+      const [current, linkedOrderId, idConflict] = await Promise.all([
         supplierQuotesRepo.findById(idResult.value),
         supplierQuotesRepo.findLinkedOrderId(idResult.value),
         nextIdValue
           ? supplierQuotesRepo.findIdConflict(nextIdValue, idResult.value)
           : Promise.resolve(false),
-        // Renaming strands ALL soft client-line references, including quote-level
-        // supplier_quote_id ones the item-level set below can't see — keep the coarse check
-        // for the rename guard only. The lookup is wasted otherwise.
-        isRenaming
-          ? supplierQuotesRepo.isSourcedByClientDocuments(idResult.value)
-          : Promise.resolve(false),
-        // The items guards below need the persisted rows (to keep incoming ids) and the subset
-        // of item ids client lines reference (to refuse the genuinely stranding shapes).
-        normalizedItems
-          ? supplierQuotesRepo.findItemsForQuote(idResult.value)
-          : Promise.resolve(null),
-        normalizedItems
-          ? supplierQuotesRepo.findSourcedItemIds(idResult.value)
-          : Promise.resolve(new Set<string>()),
       ]);
       if (!current) {
         return replyError(request, reply, {
@@ -918,86 +897,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'supplier_quote',
           entityId: idResult.value,
           details: { secondaryLabel: 'non_draft_read_only', fromValue: currentEffective },
-        });
-      }
-      // A draft-DERIVED supplier quote can still be SOURCED by a draft client line: #779 dropped
-      // the status filter in getQuoteItemSnapshots, and a quote sourced only by a draft client
-      // quote derives back to `draft`, slipping past the read-only guard above. The original #812
-      // guard refused ANY items payload on a sourced quote because the PUT re-minted every item id
-      // (replaceItems), stranding the client lines' soft, FK-less supplier_quote_item_id
-      // references — which also blocked plain pricing edits (user report). Identity is preserved
-      // instead: an incoming item carrying its persisted id is updated IN PLACE via upsertItems
-      // (client lines keep resolving and surface the new pricing through the per-line drift
-      // chip), so only the two shapes that still strand or poison references are refused —
-      // deleting a referenced item, and repointing a referenced item to a different product (the
-      // client-line snapshot resolver hard-fails its next edit on a product mismatch).
-      if (normalizedItems && existingItems) {
-        const existingItemById = new Map(existingItems.map((item) => [item.id, item] as const));
-        const existingIds = new Set(existingItemById.keys());
-        // Keep each persisted id claimed by the payload (first occurrence wins — a duplicate or
-        // foreign id keeps its freshly minted one and inserts as a new row).
-        const claimedIds = new Set<string>();
-        normalizedItems.forEach((normalized, index) => {
-          const incomingId = items?.[index]?.id;
-          if (incomingId && existingIds.has(incomingId) && !claimedIds.has(incomingId)) {
-            normalized.id = incomingId;
-            claimedIds.add(incomingId);
-            const existing = existingItemById.get(incomingId);
-            // Client syncs may intentionally persist an authoritative cost that differs from the
-            // rounded list-price/discount formula. When those pricing inputs are unchanged, keep
-            // the stored cost across full-form or notes-only saves. A genuine pricing edit still
-            // uses the freshly derived value produced during validation above.
-            if (
-              existing &&
-              normalized.listPrice === existing.listPrice &&
-              normalized.discountPercent === existing.discountPercent
-            ) {
-              normalized.unitPrice = normalizeSupplierUnitPrice(existing.unitPrice);
-            }
-          }
-        });
-        const existingProductById = new Map(
-          existingItems.map((item) => [item.id, item.productId] as const),
-        );
-        const repointsSourcedItem = normalizedItems.some(
-          (item) =>
-            sourcedItemIds.has(item.id) && existingProductById.get(item.id) !== item.productId,
-        );
-        if (repointsSourcedItem) {
-          return replyError(request, reply, {
-            statusCode: 409,
-            message:
-              'Cannot change the product of supplier quote items that are used by client quotes, offers or orders',
-            action: 'supplier_quote.update.conflict',
-            entityType: 'supplier_quote',
-            entityId: idResult.value,
-            details: { secondaryLabel: 'sourced_item_product_changed' },
-          });
-        }
-        const removesSourcedItem = [...sourcedItemIds].some(
-          (sourcedId) => existingIds.has(sourcedId) && !claimedIds.has(sourcedId),
-        );
-        if (removesSourcedItem) {
-          return replyError(request, reply, {
-            statusCode: 409,
-            message:
-              'Cannot remove supplier quote items that are used by client quotes, offers or orders',
-            action: 'supplier_quote.update.conflict',
-            entityType: 'supplier_quote',
-            entityId: idResult.value,
-            details: { secondaryLabel: 'sourced_item_removed' },
-          });
-        }
-      }
-      if (isRenaming && sourcedByClientDocuments) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message:
-            'Cannot change the id of a supplier quote whose items are used by client quotes, offers or orders',
-          action: 'supplier_quote.update.conflict',
-          entityType: 'supplier_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'sourced_by_client_documents' },
         });
       }
       if (idConflict) {
@@ -1031,34 +930,142 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let updated: supplierQuotesRepo.SupplierQuote | null;
       let resultItems: supplierQuotesRepo.SupplierQuoteItem[];
       try {
-        const txResult = await withDbTransaction(async (tx) => {
-          // Snapshot only when the patch carries actual content. ID-only renames cascade
-          // through the FK without altering snapshot fields, and empty PUTs are no-ops in
-          // `update()` - both would otherwise create misleading "Save" rows.
-          if (hasContentUpdate) {
-            await snapshotPreState(idResult.value, 'update', request, tx);
-          }
-          let renamedQuote: supplierQuotesRepo.SupplierQuote | null = null;
-          if (nextIdValue && nextIdValue !== idResult.value) {
-            renamedQuote = await supplierQuotesRepo.rename(idResult.value, nextIdValue, tx);
-            if (!renamedQuote) {
-              return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+        type UpdateConflict =
+          | 'order_exists'
+          | 'non_draft_read_only'
+          | 'rename_sourced'
+          | 'sourced_item_product_changed'
+          | 'sourced_item_removed';
+        const txResult = await withDbTransaction(
+          async (
+            tx,
+          ): Promise<{
+            quote: supplierQuotesRepo.SupplierQuote | null;
+            items: supplierQuotesRepo.SupplierQuoteItem[];
+            conflict?: UpdateConflict;
+          }> => {
+            // Client quote/offer/order item writers lock this same row before persisting their soft
+            // supplier references. Hold it through the final guard reads and destructive upsert or
+            // rename so a concurrent writer either lands first and is observed here, or waits and
+            // revalidates the source after this transaction commits.
+            const locked = await supplierQuotesRepo.lockEffectiveStatusById(idResult.value, tx);
+            if (!locked) return { quote: null, items: [] };
+            if (await supplierQuotesRepo.findLinkedOrderId(idResult.value, tx)) {
+              return { quote: null, items: [], conflict: 'order_exists' };
             }
-            await reserveDocumentCodeCounterFromCode('supplier_quote', nextIdValue, tx);
-          }
-          // id-only renames have nothing left to write — reuse the row returned by rename().
-          const quote =
-            Object.keys(patch).length === 0 && renamedQuote
-              ? renamedQuote
-              : await supplierQuotesRepo.update(renamedQuote?.id ?? idResult.value, patch, tx);
-          if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
-          // upsertItems (not replaceItems): rows whose id survived the claim pass above keep
-          // their identity, so client lines sourcing them stay attached across the edit.
-          const finalItems = normalizedItems
-            ? await supplierQuotesRepo.upsertItems(quote.id, normalizedItems, tx)
-            : await supplierQuotesRepo.findItemsForQuote(quote.id, tx);
-          return { quote, items: finalItems };
-        });
+            if (
+              effectiveSupplierQuoteStatusFromDate(locked) !== 'draft' &&
+              hasNonExpirationContentUpdate
+            ) {
+              return { quote: null, items: [], conflict: 'non_draft_read_only' };
+            }
+            if (
+              isRenaming &&
+              (await supplierQuotesRepo.isSourcedByClientDocuments(idResult.value, tx))
+            ) {
+              return { quote: null, items: [], conflict: 'rename_sourced' };
+            }
+            if (normalizedItems) {
+              const existingItems = await supplierQuotesRepo.findItemsForQuote(idResult.value, tx);
+              const sourcedItemIds = await supplierQuotesRepo.findSourcedItemIds(
+                idResult.value,
+                tx,
+              );
+              const existingItemById = new Map(
+                existingItems.map((item) => [item.id, item] as const),
+              );
+              const existingIds = new Set(existingItemById.keys());
+              const claimedIds = new Set<string>();
+              normalizedItems.forEach((normalized, index) => {
+                const incomingId = items?.[index]?.id;
+                if (incomingId && existingIds.has(incomingId) && !claimedIds.has(incomingId)) {
+                  normalized.id = incomingId;
+                  claimedIds.add(incomingId);
+                  const existing = existingItemById.get(incomingId);
+                  if (
+                    existing &&
+                    normalized.listPrice === existing.listPrice &&
+                    normalized.discountPercent === existing.discountPercent
+                  ) {
+                    normalized.unitPrice = normalizeSupplierUnitPrice(existing.unitPrice);
+                  }
+                }
+              });
+              const existingProductById = new Map(
+                existingItems.map((item) => [item.id, item.productId] as const),
+              );
+              if (
+                normalizedItems.some(
+                  (item) =>
+                    sourcedItemIds.has(item.id) &&
+                    existingProductById.get(item.id) !== item.productId,
+                )
+              ) {
+                return { quote: null, items: [], conflict: 'sourced_item_product_changed' };
+              }
+              if (
+                [...sourcedItemIds].some(
+                  (sourcedId) => existingIds.has(sourcedId) && !claimedIds.has(sourcedId),
+                )
+              ) {
+                return { quote: null, items: [], conflict: 'sourced_item_removed' };
+              }
+            }
+            // Snapshot only when the patch carries actual content. ID-only renames cascade
+            // through the FK without altering snapshot fields, and empty PUTs are no-ops in
+            // `update()` - both would otherwise create misleading "Save" rows.
+            if (hasContentUpdate) {
+              await snapshotPreState(idResult.value, 'update', request, tx);
+            }
+            let renamedQuote: supplierQuotesRepo.SupplierQuote | null = null;
+            if (nextIdValue && nextIdValue !== idResult.value) {
+              renamedQuote = await supplierQuotesRepo.rename(idResult.value, nextIdValue, tx);
+              if (!renamedQuote) {
+                return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+              }
+              await reserveDocumentCodeCounterFromCode('supplier_quote', nextIdValue, tx);
+            }
+            // id-only renames have nothing left to write — reuse the row returned by rename().
+            const quote =
+              Object.keys(patch).length === 0 && renamedQuote
+                ? renamedQuote
+                : await supplierQuotesRepo.update(renamedQuote?.id ?? idResult.value, patch, tx);
+            if (!quote) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+            // upsertItems (not replaceItems): rows whose id survived the claim pass above keep
+            // their identity, so client lines sourcing them stay attached across the edit.
+            const finalItems = normalizedItems
+              ? await supplierQuotesRepo.upsertItems(quote.id, normalizedItems, tx)
+              : await supplierQuotesRepo.findItemsForQuote(quote.id, tx);
+            return { quote, items: finalItems };
+          },
+        );
+        if (txResult.conflict) {
+          const conflictMessages: Record<UpdateConflict, string> = {
+            order_exists: 'Quotes become read-only once an order exists',
+            non_draft_read_only: 'Non-draft supplier quotes are read-only',
+            rename_sourced:
+              'Cannot change the id of a supplier quote whose items are used by client quotes, offers or orders',
+            sourced_item_product_changed:
+              'Cannot change the product of supplier quote items that are used by client quotes, offers or orders',
+            sourced_item_removed:
+              'Cannot remove supplier quote items that are used by client quotes, offers or orders',
+          };
+          const conflictLabels: Record<UpdateConflict, string> = {
+            order_exists: 'order_exists',
+            non_draft_read_only: 'non_draft_read_only',
+            rename_sourced: 'sourced_by_client_documents',
+            sourced_item_product_changed: 'sourced_item_product_changed',
+            sourced_item_removed: 'sourced_item_removed',
+          };
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: conflictMessages[txResult.conflict],
+            action: 'supplier_quote.update.conflict',
+            entityType: 'supplier_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: conflictLabels[txResult.conflict] },
+          });
+        }
         updated = txResult.quote;
         resultItems = txResult.items;
       } catch (error) {
@@ -1379,6 +1386,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const restored = await withDbTransaction(async (tx) => {
+        const locked = await supplierQuotesRepo.lockEffectiveStatusById(idResult.value, tx);
+        if (!locked) return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
+        if (await supplierQuotesRepo.findLinkedOrderId(idResult.value, tx)) {
+          return {
+            quote: null,
+            items: [] as supplierQuotesRepo.SupplierQuoteItem[],
+            orderConflict: true,
+          };
+        }
+        if (await supplierQuotesRepo.isSourcedByClientDocuments(idResult.value, tx)) {
+          return {
+            quote: null,
+            items: [] as supplierQuotesRepo.SupplierQuoteItem[],
+            sourcedConflict: true,
+          };
+        }
         // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
         await snapshotPreState(idResult.value, 'restore', request, tx);
         const snapshotCommunicationChannelId =
@@ -1422,6 +1445,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const items = await supplierQuotesRepo.replaceItems(quote.id, snapshotItems, tx);
         return { quote, items };
       });
+
+      if ('orderConflict' in restored && restored.orderConflict) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Quotes become read-only once an order exists',
+          action: 'supplier_quote.restore.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'order_exists' },
+        });
+      }
+
+      if ('sourcedConflict' in restored && restored.sourcedConflict) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message:
+            'Cannot restore a supplier quote whose items are used by client quotes, offers or orders',
+          action: 'supplier_quote.restore.conflict',
+          entityType: 'supplier_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'sourced_by_client_documents' },
+        });
+      }
 
       if ('missingChannel' in restored && restored.missingChannel) {
         return replyError(request, reply, {
@@ -1875,8 +1921,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(idResult.value);
-      if (linkedOrderId) {
+      type DeleteOutcome =
+        | {
+            kind: 'deleted';
+            deleted: NonNullable<
+              Awaited<ReturnType<typeof supplierQuotesRepo.deleteByIdWithAttachmentStoredNames>>
+            >;
+          }
+        | { kind: 'not_found' }
+        | { kind: 'order_conflict' }
+        | { kind: 'sourced_conflict' };
+      const outcome = await withDbTransaction(async (tx): Promise<DeleteOutcome> => {
+        const locked = await supplierQuotesRepo.lockEffectiveStatusById(idResult.value, tx);
+        if (!locked) return { kind: 'not_found' };
+        if (await supplierQuotesRepo.findLinkedOrderId(idResult.value, tx)) {
+          return { kind: 'order_conflict' };
+        }
+        if (await supplierQuotesRepo.isSourcedByClientDocuments(idResult.value, tx)) {
+          return { kind: 'sourced_conflict' };
+        }
+        const deleted = await supplierQuotesRepo.deleteByIdWithAttachmentStoredNames(
+          idResult.value,
+          tx,
+        );
+        return deleted ? { kind: 'deleted', deleted } : { kind: 'not_found' };
+      });
+
+      if (outcome.kind === 'order_conflict') {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Cannot delete a quote once an order has been created from it',
@@ -1891,7 +1962,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // deletable ones — and the client-line references have no FK behind them, so deleting a
       // sourced quote would strand those lines with dead supplierQuoteItemIds (their next edit
       // would 400). Refuse instead.
-      if (await supplierQuotesRepo.isSourcedByClientDocuments(idResult.value)) {
+      if (outcome.kind === 'sourced_conflict') {
         return replyError(request, reply, {
           statusCode: 409,
           message:
@@ -1903,8 +1974,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const deleted = await supplierQuotesRepo.deleteByIdWithAttachmentStoredNames(idResult.value);
-      if (!deleted) {
+      if (outcome.kind === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Supplier quote not found',
@@ -1913,6 +1983,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
+      const { deleted } = outcome;
 
       await Promise.all(
         deleted.attachmentStoredNames.map((storedName) =>
