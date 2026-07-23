@@ -27,6 +27,7 @@ export type ProjectRuleRecipientOptions = {
 
 export type ProjectRuleRecipientValidationOptions = {
   allowedDisabledWebhookIds?: readonly string[];
+  allowedUnassignedRoleIds?: readonly string[];
 };
 
 type UserRecipientRow = {
@@ -62,6 +63,18 @@ const mapUserRow = (row: UserRecipientRow): ProjectRuleUserRecipientOption => ({
   avatarInitials: row.avatarInitials ?? '',
 });
 
+const roleHasEnabledProjectAssignee = (projectId: string) => sql`
+  EXISTS (
+    SELECT 1
+    FROM users u
+    INNER JOIN user_projects up ON up.user_id = u.id
+    LEFT JOIN user_roles ur ON ur.user_id = u.id
+    WHERE up.project_id = ${projectId}
+      AND COALESCE(u.is_disabled, false) = false
+      AND (u.role = r.id OR ur.role_id = r.id)
+  )
+`;
+
 export const listRecipientOptions = async (
   projectId: string,
   exec: DbExecutor = db,
@@ -83,6 +96,7 @@ export const listRecipientOptions = async (
       sql`
         SELECT r.id, r.name
         FROM roles r
+        WHERE ${roleHasEnabledProjectAssignee(projectId)}
         ORDER BY r.name
       `,
     ),
@@ -114,6 +128,7 @@ export const findInvalidRecipientIds = async (
   const roleIds = uniqueStrings(config.recipientRoleIds);
   const webhookIds = uniqueStrings(config.webhookIds);
   const allowedDisabledWebhookIds = uniqueStrings(options.allowedDisabledWebhookIds ?? []);
+  const allowedUnassignedRoleIds = uniqueStrings(options.allowedUnassignedRoleIds ?? []);
   const [validUserRows, validRoleRows, validWebhookRows] = await Promise.all([
     userIds.length === 0
       ? Promise.resolve([])
@@ -132,7 +147,18 @@ export const findInvalidRecipientIds = async (
       ? Promise.resolve([])
       : executeRows<{ id: string }>(
           exec,
-          sql`SELECT id FROM roles WHERE id = ANY(${sql.param(roleIds)}::text[])`,
+          sql`
+            SELECT r.id
+            FROM roles r
+            WHERE r.id = ANY(${sql.param(roleIds)}::text[])
+              AND (
+                ${roleHasEnabledProjectAssignee(projectId)}
+                OR (
+                  ${allowedUnassignedRoleIds.length > 0}
+                  AND r.id = ANY(${sql.param(allowedUnassignedRoleIds)}::text[])
+                )
+              )
+          `,
         ),
     webhookIds.length === 0
       ? Promise.resolve([])
@@ -175,7 +201,7 @@ export const resolveRecipientUserIds = async (
     sql`
       SELECT DISTINCT u.id
       FROM users u
-      LEFT JOIN user_projects up
+      INNER JOIN user_projects up
         ON up.user_id = u.id
        AND up.project_id = ${projectId}
       LEFT JOIN user_roles ur ON ur.user_id = u.id
@@ -183,7 +209,6 @@ export const resolveRecipientUserIds = async (
         AND (
           (
             ${recipientUserIds.length > 0}
-            AND up.user_id IS NOT NULL
             AND u.id = ANY(${sql.param(recipientUserIds)}::text[])
           )
           OR (

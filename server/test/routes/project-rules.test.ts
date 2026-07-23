@@ -959,7 +959,7 @@ describe('project rule routes', () => {
       'p1',
       existingRule.actionConfig,
       TX_SENTINEL,
-      { allowedDisabledWebhookIds: [] },
+      { allowedDisabledWebhookIds: [], allowedUnassignedRoleIds: [] },
     );
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
@@ -1000,7 +1000,7 @@ describe('project rule routes', () => {
       'p1',
       existingRule.actionConfig,
       TX_SENTINEL,
-      { allowedDisabledWebhookIds: ['webhook-disabled'] },
+      { allowedDisabledWebhookIds: ['webhook-disabled'], allowedUnassignedRoleIds: [] },
     );
     expect(updateRuleMock).toHaveBeenCalledWith(
       'p1',
@@ -1014,6 +1014,69 @@ describe('project rule routes', () => {
       webhookIds: [],
       actions: [],
     });
+  });
+
+  test('PUT can disable a rule whose role no longer has eligible project assignees', async () => {
+    currentPermissions = ['projects.rules.update', 'reports.cost.view'];
+    findRuleMock.mockResolvedValue(SAMPLE_RULE);
+    updateRuleMock.mockResolvedValue({ ...SAMPLE_RULE, isEnabled: false });
+    findInvalidRecipientIdsMock.mockImplementation(async (...args: unknown[]) => {
+      const options = args[3] as { allowedUnassignedRoleIds?: string[] } | undefined;
+      return options?.allowedUnassignedRoleIds?.includes('manager')
+        ? { userIds: [], roleIds: [], webhookIds: [] }
+        : { userIds: [], roleIds: ['manager'], webhookIds: [] };
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: { isEnabled: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findInvalidRecipientIdsMock).toHaveBeenCalledWith(
+      'p1',
+      SAMPLE_RULE.actionConfig,
+      TX_SENTINEL,
+      {
+        allowedDisabledWebhookIds: [],
+        allowedUnassignedRoleIds: ['manager'],
+      },
+    );
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({ isEnabled: false, resetCondition: false }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('PUT rejects re-enabling a rule whose role has no eligible project assignees', async () => {
+    currentPermissions = ['projects.rules.update', 'reports.cost.view'];
+    const existingRule = { ...SAMPLE_RULE, isEnabled: false };
+    findRuleMock.mockResolvedValue(existingRule);
+    findInvalidRecipientIdsMock.mockResolvedValue({
+      userIds: [],
+      roleIds: ['manager'],
+      webhookIds: [],
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: { isEnabled: true },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(findInvalidRecipientIdsMock).toHaveBeenCalledWith(
+      'p1',
+      existingRule.actionConfig,
+      TX_SENTINEL,
+      { allowedDisabledWebhookIds: [], allowedUnassignedRoleIds: [] },
+    );
+    expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
   test('PUT rejects newly added inactive webhooks on disabled rules', async () => {
@@ -1061,7 +1124,7 @@ describe('project rule routes', () => {
         actions: [{ type: 'webhook', webhookId: 'webhook-new-disabled' }],
       },
       TX_SENTINEL,
-      { allowedDisabledWebhookIds: ['webhook-existing'] },
+      { allowedDisabledWebhookIds: ['webhook-existing'], allowedUnassignedRoleIds: [] },
     );
     expect(updateRuleMock).not.toHaveBeenCalled();
   });

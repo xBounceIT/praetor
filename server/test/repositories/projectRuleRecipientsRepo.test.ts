@@ -27,6 +27,11 @@ describe('projectRuleRecipientsRepo', () => {
     });
     expect(exec.calls[0].sql).toContain('INNER JOIN user_projects');
     expect(exec.calls[0].sql).toContain('COALESCE(u.is_disabled, false) = false');
+    expect(exec.calls[1].sql).toContain('INNER JOIN user_projects');
+    expect(exec.calls[1].sql).toContain('LEFT JOIN user_roles');
+    expect(exec.calls[1].sql).toContain('up.project_id');
+    expect(exec.calls[1].sql).toContain('COALESCE(u.is_disabled, false) = false');
+    expect(exec.calls[1].params).toContain('p1');
     expect(exec.calls[2].sql).toContain('FROM webhooks');
     expect(exec.calls[2].sql).toContain('WHERE enabled = true');
   });
@@ -52,6 +57,11 @@ describe('projectRuleRecipientsRepo', () => {
       roleIds: ['ghost'],
       webhookIds: ['webhook-missing'],
     });
+    expect(exec.calls[1].sql).toContain('INNER JOIN user_projects');
+    expect(exec.calls[1].sql).toContain('LEFT JOIN user_roles');
+    expect(exec.calls[1].sql).toContain('up.project_id');
+    expect(exec.calls[1].sql).toContain('COALESCE(u.is_disabled, false) = false');
+    expect(exec.calls[1].params).toContain('p1');
   });
 
   test('allows configured disabled webhook ids during update validation', async () => {
@@ -78,7 +88,32 @@ describe('projectRuleRecipientsRepo', () => {
     expect(exec.calls[0].sql).toContain('id = ANY');
   });
 
-  test('resolves explicit project users plus primary and secondary role users', async () => {
+  test('allows existing unassigned role ids while a rule is being disabled', async () => {
+    exec.enqueue({ rows: [{ id: 'manager' }] });
+
+    const result = await recipientsRepo.findInvalidRecipientIds(
+      'p1',
+      {
+        recipientUserIds: [],
+        recipientRoleIds: ['manager', 'ghost'],
+        webhookIds: [],
+        actions: [],
+      },
+      testDb,
+      { allowedUnassignedRoleIds: ['manager'] },
+    );
+
+    expect(result).toEqual({
+      userIds: [],
+      roleIds: ['ghost'],
+      webhookIds: [],
+    });
+    expect(exec.calls[0].sql).toContain('INNER JOIN user_projects');
+    expect(exec.calls[0].sql).toContain('r.id = ANY');
+    expect(exec.calls[0].params).toContainEqual(['manager']);
+  });
+
+  test('resolves explicit users plus project-assigned primary and secondary role users', async () => {
     exec.enqueue({ rows: [{ id: 'u1' }, { id: 'u2' }] });
 
     const result = await recipientsRepo.resolveRecipientUserIds(
@@ -93,6 +128,9 @@ describe('projectRuleRecipientsRepo', () => {
     );
 
     expect(result).toEqual(['u1', 'u2']);
+    expect(exec.calls[0].sql).toContain('INNER JOIN user_projects');
+    expect(exec.calls[0].sql).toContain('up.project_id');
+    expect(exec.calls[0].params).toContain('p1');
     expect(exec.calls[0].sql).toContain('LEFT JOIN user_roles');
     expect(exec.calls[0].sql).toContain('u.role = ANY');
     expect(exec.calls[0].sql).toContain('ur.role_id = ANY');
