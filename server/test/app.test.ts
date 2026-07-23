@@ -48,16 +48,22 @@ const buildTestApp = () => {
   return { fastify, logLines };
 };
 
-// Capture both the value and presence: assigning `undefined` back to `process.env.NODE_ENV`
-// would stringify to the literal `'undefined'` and break later reads, so delete it instead
-// when the var wasn't set at module load.
+// Capture both values and presence: assigning `undefined` back to `process.env` stringifies
+// it to the literal `'undefined'`, so delete variables that were absent at module load.
 const hadOriginalNodeEnv = 'NODE_ENV' in process.env;
 const originalNodeEnv = process.env.NODE_ENV;
+const hadOriginalExposeInternalErrors = 'EXPOSE_INTERNAL_ERRORS' in process.env;
+const originalExposeInternalErrors = process.env.EXPOSE_INTERNAL_ERRORS;
 afterEach(() => {
   if (hadOriginalNodeEnv) {
     process.env.NODE_ENV = originalNodeEnv;
   } else {
     delete process.env.NODE_ENV;
+  }
+  if (hadOriginalExposeInternalErrors) {
+    process.env.EXPOSE_INTERNAL_ERRORS = originalExposeInternalErrors;
+  } else {
+    delete process.env.EXPOSE_INTERNAL_ERRORS;
   }
 });
 
@@ -87,11 +93,35 @@ describe('buildErrorResponseMessage', () => {
     expect(result).toEqual({ statusCode: 400, message: 'Invalid email' });
   });
 
-  test('non-production + 500: original message passes through (developer ergonomics)', () => {
+  test('development + 500: masks sensitive details by default', () => {
     const result = buildErrorResponseMessage(new Error('SQL near "FROM" failed'), {
       NODE_ENV: 'development',
     } as NodeJS.ProcessEnv);
+    expect(result).toEqual({ statusCode: 500, message: 'Internal server error' });
+  });
+
+  test('missing NODE_ENV + 500: masks sensitive details by default', () => {
+    const result = buildErrorResponseMessage(
+      new Error('SQL near "FROM" failed'),
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(result).toEqual({ statusCode: 500, message: 'Internal server error' });
+  });
+
+  test('development + explicit opt-in: exposes detailed 500 messages', () => {
+    const result = buildErrorResponseMessage(new Error('SQL near "FROM" failed'), {
+      NODE_ENV: 'development',
+      EXPOSE_INTERNAL_ERRORS: 'true',
+    } as NodeJS.ProcessEnv);
     expect(result).toEqual({ statusCode: 500, message: 'SQL near "FROM" failed' });
+  });
+
+  test('production ignores the detailed-error opt-in', () => {
+    const result = buildErrorResponseMessage(new Error('SQL near "FROM" failed'), {
+      NODE_ENV: 'production',
+      EXPOSE_INTERNAL_ERRORS: 'true',
+    } as NodeJS.ProcessEnv);
+    expect(result).toEqual({ statusCode: 500, message: 'Internal server error' });
   });
 
   test('falls back to "Internal server error" when the Error has no message', () => {
@@ -163,8 +193,22 @@ describe('Fastify error handler integration', () => {
     await fastify.close();
   });
 
-  test('non-production: 5xx error messages still pass through to the client', async () => {
+  test('development masks 5xx error messages unless explicitly enabled', async () => {
     process.env.NODE_ENV = 'development';
+    delete process.env.EXPOSE_INTERNAL_ERRORS;
+    const { fastify } = buildTestApp();
+
+    const response = await fastify.inject({ method: 'GET', url: '/boom-500' });
+
+    expect(response.statusCode).toBe(500);
+    expect(JSON.parse(response.body)).toEqual({ error: 'Internal server error' });
+
+    await fastify.close();
+  });
+
+  test('development can explicitly enable detailed 5xx error messages', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.EXPOSE_INTERNAL_ERRORS = 'true';
     const { fastify } = buildTestApp();
 
     const response = await fastify.inject({ method: 'GET', url: '/boom-500' });
