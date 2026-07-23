@@ -28,7 +28,12 @@ import {
   externalGroupsYieldNoKnownRole,
 } from '../services/external-auth.ts';
 import { requiresTotpEnrollment } from '../services/totpEnforcement.ts';
-import { getUserVisibilityScope } from '../services/userVisibility.ts';
+import {
+  getUserVisibilityScope,
+  HR_DETAIL_FIELDS,
+  HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE,
+  maskUserResponse,
+} from '../services/userVisibility.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
@@ -403,35 +408,8 @@ const HR_UPDATE_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = 
   external: 'hr.external.update',
 };
 
-const HR_VIEW_PERM_BY_EMPLOYEE_TYPE: Record<usersRepo.EmployeeType, string> = {
-  app_user: 'hr.internal.view',
-  internal: 'hr.internal.view',
-  external: 'hr.external.view',
-};
-
-const HR_DETAIL_FIELDS = [
-  'firstName',
-  'lastName',
-  'phone',
-  'jobTitle',
-  'department',
-  'responsibleUserId',
-  'employeeCode',
-  'hireDate',
-  'terminationDate',
-  'contractType',
-  'employmentStatus',
-  'workLocation',
-  'emergencyContactName',
-  'emergencyContactPhone',
-  'address',
-  'notes',
-] as const;
-
-const HR_RESPONSE_DETAIL_FIELDS = [...HR_DETAIL_FIELDS, 'responsibleUserName'] as const;
-
 const canViewHrDetailsFor = (request: FastifyRequest, employeeType: usersRepo.EmployeeType) =>
-  hasPermission(request, HR_VIEW_PERM_BY_EMPLOYEE_TYPE[employeeType]);
+  hasPermission(request, HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE[employeeType]);
 
 const canUpdateHrDetailsFor = (request: FastifyRequest, employeeType: usersRepo.EmployeeType) =>
   hasPermission(request, HR_UPDATE_PERM_BY_EMPLOYEE_TYPE[employeeType]);
@@ -439,34 +417,12 @@ const canUpdateHrDetailsFor = (request: FastifyRequest, employeeType: usersRepo.
 const canViewEmailFor = (request: FastifyRequest, user: usersRepo.UserListRow) =>
   canViewUserEmails(request) || canViewHrDetailsFor(request, user.employeeType);
 
-const maskUserResponse = (
-  user: usersRepo.UserListRow,
-  canViewCosts: boolean,
-  canRevealUserEmails: boolean,
-  canRevealHrDetails: boolean,
-) => {
-  const response: Partial<usersRepo.UserListRow> = {
-    ...user,
-    email: canRevealUserEmails ? user.email : '',
-    costPerHour: canViewCosts ? user.costPerHour : 0,
-  };
-
-  if (!canRevealHrDetails) {
-    for (const field of HR_RESPONSE_DETAIL_FIELDS) {
-      delete response[field];
-    }
-  }
-
-  return response;
-};
-
 const maskUserForRequest = (request: FastifyRequest, user: usersRepo.UserListRow) =>
-  maskUserResponse(
-    user,
-    canViewCostFor(request, user.id),
-    canViewEmailFor(request, user),
-    canViewHrDetailsFor(request, user.employeeType),
-  );
+  maskUserResponse(user, {
+    canViewCosts: canViewCostFor(request, user.id),
+    canViewEmails: canViewEmailFor(request, user),
+    canViewHrDetails: canViewHrDetailsFor(request, user.employeeType),
+  });
 
 // Cost visibility per row — the two scopes are strictly independent:
 //   - own row    → hr.costs.view       (personal-scope, read-only counterpart of hr.costs.update)
