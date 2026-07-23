@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PoolClient } from 'pg';
 import {
+  assertDemoSeedingAllowedForEnvironment,
   assertNoDemoDocumentIdConflicts,
   cleanupDemoNamespace,
   insertCompatibilityDefaults,
@@ -740,5 +741,22 @@ describe('DEMO_USERS HR profiles', () => {
         expect(user.hireDate <= user.terminationDate).toBe(true);
       }
     }
+  });
+});
+
+describe('assertDemoSeedingAllowedForEnvironment', () => {
+  test('refuses to seed shared demo accounts in production', () => {
+    expect(() => assertDemoSeedingAllowedForEnvironment('production')).toThrow(
+      /NODE_ENV=production/,
+    );
+    expect(() => assertDemoSeedingAllowedForEnvironment(' Production ')).toThrow(
+      /NODE_ENV=production/,
+    );
+  });
+
+  test('allows demo seeding outside production', () => {
+    expect(() => assertDemoSeedingAllowedForEnvironment('development')).not.toThrow();
+    expect(() => assertDemoSeedingAllowedForEnvironment('test')).not.toThrow();
+    expect(() => assertDemoSeedingAllowedForEnvironment(undefined)).not.toThrow();
   });
 });

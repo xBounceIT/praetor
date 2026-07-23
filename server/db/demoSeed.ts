@@ -37,6 +37,19 @@ import pool from './index.ts';
 
 const logger = createChildLogger({ module: 'db:demo-seed' });
 
+// Demo seeding provisions shared demo accounts (manager, user, and the top_manager `topmanager`)
+// that all share one credential, so refuse to run it in production even if DEMO_SEEDING is toggled
+// on by mistake.
+export const assertDemoSeedingAllowedForEnvironment = (
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): void => {
+  if (nodeEnv?.trim().toLowerCase() === 'production') {
+    throw new Error(
+      'Demo seeding is disabled when NODE_ENV=production because it provisions shared demo accounts. Unset DEMO_SEEDING or run outside production.',
+    );
+  }
+};
+
 const DEMO_SEED_MARKER = '-- Refreshable demo dataset.';
 const seedPath = new URL('./seed.sql', import.meta.url);
 
@@ -1423,6 +1436,8 @@ export const runDemoSeedRefresh = async ({
 }: {
   source: DemoSeedSource;
 }): Promise<DemoSeedResult> => {
+  // Fail fast before touching the database: refuse production outright.
+  assertDemoSeedingAllowedForEnvironment();
   const demoUserPassword = readRequiredNonDefaultEnv(
     'DEMO_USER_PASSWORD',
     INSECURE_DEFAULT_DEMO_USER_PASSWORDS,
