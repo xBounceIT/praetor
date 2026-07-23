@@ -19789,7 +19789,7 @@
         "tags": [
           "tasks"
         ],
-        "description": "Requires projects.assignments.update. Task update permissions do not authorize assignment changes.",
+        "description": "Requires projects.assignments.update. Task update permissions do not authorize assignment changes. Assignees must be active, eligible users visible to the caller.",
         "requestBody": {
           "required": true,
           "content": {

@@ -14,6 +14,7 @@ import {
   standardErrorResponses,
   standardRateLimitedErrorResponses,
 } from '../schemas/common.ts';
+import { findIneligibleTaskAssigneeIds } from '../services/taskAssignmentEligibility.ts';
 import { MAX_DURATION_HOURS } from '../services/timeEntries.ts';
 import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
@@ -766,7 +767,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['tasks'],
         summary: 'Update task user assignments',
         description:
-          'Requires projects.assignments.update. Task update permissions do not authorize assignment changes.',
+          'Requires projects.assignments.update. Task update permissions do not authorize assignment changes. Assignees must be active, eligible users visible to the caller.',
         params: idParamSchema,
         body: userIdsSchema,
         response: {
@@ -811,10 +812,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      await withDbTransaction(async (tx) => {
+      const ineligibleUserIds = await withDbTransaction(async (tx) => {
+        const invalidIds = await findIneligibleTaskAssigneeIds(request, validUserIds, tx);
+        if (invalidIds.length > 0) return invalidIds;
+
         await tasksRepo.clearNonTopManagerAssignments(idResult.value, tx);
         await tasksRepo.addManualAssignments(idResult.value, validUserIds, tx);
+        return [];
       });
+      if (ineligibleUserIds.length > 0) {
+        return badRequest(reply, 'userIds contains users who are not eligible for task assignment');
+      }
 
       await logAudit({
         request,
