@@ -293,23 +293,32 @@ export const update = async (
   if (!Object.values(patch).some((v) => v !== undefined)) {
     return findById(id, exec);
   }
-  const [row] = await exec
-    .update(supplierInvoices)
-    .set({
-      supplierId: sql`COALESCE(${patch.supplierId ?? null}, ${supplierInvoices.supplierId})`,
-      supplierName: sql`COALESCE(${patch.supplierName ?? null}, ${supplierInvoices.supplierName})`,
-      issueDate: sql`COALESCE(${patch.issueDate ?? null}::date, ${supplierInvoices.issueDate})`,
-      dueDate: sql`COALESCE(${patch.dueDate ?? null}::date, ${supplierInvoices.dueDate})`,
-      status: sql`COALESCE(${patch.status ?? null}, ${supplierInvoices.status})`,
-      subtotal: sql`COALESCE(${numericForDb(patch.subtotal) ?? null}::numeric, ${supplierInvoices.subtotal})`,
-      total: sql`COALESCE(${numericForDb(patch.total) ?? null}::numeric, ${supplierInvoices.total})`,
-      amountPaid: sql`COALESCE(${numericForDb(patch.amountPaid) ?? null}::numeric, ${supplierInvoices.amountPaid})`,
-      notes: sql`COALESCE(${patch.notes ?? null}, ${supplierInvoices.notes})`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .where(eq(supplierInvoices.id, id))
-    .returning();
-  return row ? mapInvoice(row) : null;
+
+  return runAtomically(exec, async (tx) => {
+    // Lock the row before mutation so concurrent updates serialize against
+    // this write — prevents TOCTOU between a caller's pre-flight read and the
+    // actual UPDATE.
+    const locked = await lockExistingById(id, tx);
+    if (!locked) return null;
+
+    const [row] = await tx
+      .update(supplierInvoices)
+      .set({
+        supplierId: sql`COALESCE(${patch.supplierId ?? null}, ${supplierInvoices.supplierId})`,
+        supplierName: sql`COALESCE(${patch.supplierName ?? null}, ${supplierInvoices.supplierName})`,
+        issueDate: sql`COALESCE(${patch.issueDate ?? null}::date, ${supplierInvoices.issueDate})`,
+        dueDate: sql`COALESCE(${patch.dueDate ?? null}::date, ${supplierInvoices.dueDate})`,
+        status: sql`COALESCE(${patch.status ?? null}, ${supplierInvoices.status})`,
+        subtotal: sql`COALESCE(${numericForDb(patch.subtotal) ?? null}::numeric, ${supplierInvoices.subtotal})`,
+        total: sql`COALESCE(${numericForDb(patch.total) ?? null}::numeric, ${supplierInvoices.total})`,
+        amountPaid: sql`COALESCE(${numericForDb(patch.amountPaid) ?? null}::numeric, ${supplierInvoices.amountPaid})`,
+        notes: sql`COALESCE(${patch.notes ?? null}, ${supplierInvoices.notes})`,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(supplierInvoices.id, id))
+      .returning();
+    return row ? mapInvoice(row) : null;
+  });
 };
 
 // Separate from update() so generic patches can't mutate the PK (issue #621). Relies on
@@ -319,17 +328,32 @@ export const rename = async (
   newId: string,
   exec: DbExecutor = db,
 ): Promise<SupplierInvoice | null> => {
-  const [row] = await exec
-    .update(supplierInvoices)
-    .set({ id: newId, updatedAt: sql`CURRENT_TIMESTAMP` })
-    .where(eq(supplierInvoices.id, currentId))
-    .returning();
-  return row ? mapInvoice(row) : null;
+  return runAtomically(exec, async (tx) => {
+    // Lock the source row so a concurrent rename or delete serializes against this
+    // mutation — prevents double-rename races.
+    const locked = await lockExistingById(currentId, tx);
+    if (!locked) return null;
+
+    const [row] = await tx
+      .update(supplierInvoices)
+      .set({ id: newId, updatedAt: sql`CURRENT_TIMESTAMP` })
+      .where(eq(supplierInvoices.id, currentId))
+      .returning();
+    return row ? mapInvoice(row) : null;
+  });
 };
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
-  const result = await exec.delete(supplierInvoices).where(eq(supplierInvoices.id, id));
-  return (result.rowCount ?? 0) > 0;
+  return runAtomically(exec, async (tx) => {
+    // Lock before delete so a concurrent status transition (e.g. draft → paid)
+    // serializes against this deletion — prevents deleting a row that was verified
+    // as draft by a caller's pre-flight read.
+    const locked = await lockExistingById(id, tx);
+    if (!locked) return false;
+
+    const result = await tx.delete(supplierInvoices).where(eq(supplierInvoices.id, id));
+    return (result.rowCount ?? 0) > 0;
+  });
 };
 
 export type NewSupplierInvoiceItem = {
