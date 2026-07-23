@@ -8,6 +8,8 @@ RUN bun install --frozen-lockfile
 FROM oven/bun:1.3.14-slim AS release
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 COPY --from=install --chown=bun:bun /temp/node_modules node_modules
 COPY --chown=bun:bun . .
 
