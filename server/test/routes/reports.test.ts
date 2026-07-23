@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
+import rateLimit from 'fastify-rate-limit';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realReportsAiChatRepo from '../../repositories/reportsAiChatRepo.ts';
@@ -12,6 +13,10 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
+import {
+  AI_REPORTING_GENERATION_RATE_LIMIT,
+  AI_REPORTING_MAX_OUTPUT_TOKENS,
+} from '../../utils/ai-reporting-abuse-controls.ts';
 import * as realLocalAiEndpoint from '../../utils/local-ai-endpoint.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -300,7 +305,9 @@ afterEach(async () => {
   await testApp.close();
 });
 
-const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+const authHeader = (userId = 'u1') => ({
+  authorization: `Bearer ${signToken({ userId })}`,
+});
 const attachmentMessage = (visibleText: string, content: string) =>
   `${visibleText}\n\n\u001ePRAETOR_AI_ATTACHMENTS_V1\n${JSON.stringify({
     files: [{ name: 'data.csv', content }],
@@ -319,6 +326,13 @@ const createDeferredResponse = () => {
     resolveResponse = resolve;
   });
   return { promise, resolve: resolveResponse };
+};
+
+const waitForFetchCalls = async (expected: number) => {
+  for (let attempt = 0; attempt < 100 && fetchMock.mock.calls.length < expected; attempt++) {
+    await Bun.sleep(1);
+  }
+  expect(fetchMock).toHaveBeenCalledTimes(expected);
 };
 
 const expectAssistantPersistedBeforeMetadata = async () => {
@@ -1061,6 +1075,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     ) as {
       systemInstruction: { parts: Array<{ text: string }> };
       contents: Array<{ parts: Array<{ text: string }> }>;
+      generationConfig: { maxOutputTokens: number };
     };
     const systemPrompt = providerRequest.systemInstruction.parts[0]?.text ?? '';
     const prompt = providerRequest.contents[0]?.parts[0]?.text ?? '';
@@ -1095,6 +1110,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(prompt).toContain('at most 10 points');
     expect(prompt).toContain('at most 7 visualization blocks');
     expect(prompt).toContain('Never include HTML, JavaScript, CSS, color values, URLs');
+    expect(providerRequest.generationConfig.maxOutputTokens).toBe(AI_REPORTING_MAX_OUTPUT_TOKENS);
     expect(prompt).toContain(
       'Place each interpretation immediately before its matching visualization block',
     );
@@ -1298,6 +1314,10 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    const providerRequest = JSON.parse(
+      String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
+    ) as { max_tokens?: number };
+    expect(providerRequest.max_tokens).toBe(AI_REPORTING_MAX_OUTPUT_TOKENS);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       'https://openrouter.ai/api/v1/model/openai/gpt-4o-mini-test',
     );
@@ -1349,7 +1369,11 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
       expect.objectContaining({ Authorization: 'Bearer test-openai-key' }),
     );
     expect(JSON.parse(String(init.body))).toEqual(
-      expect.objectContaining({ model: 'gpt-5', store: false }),
+      expect.objectContaining({
+        model: 'gpt-5',
+        max_output_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+        store: false,
+      }),
     );
     expect(JSON.parse(res.body).technicalInfo).toEqual({
       provider: 'openai',
@@ -1722,7 +1746,11 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
     expect(options.redirect).toBe('error');
     expect(JSON.parse(String(options.body))).toEqual(
-      expect.objectContaining({ model: 'llama3.2', messages: expect.any(Array) }),
+      expect.objectContaining({
+        model: 'llama3.2',
+        max_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+        messages: expect.any(Array),
+      }),
     );
     expect(insertAssistantMessageMock).toHaveBeenCalledWith(
       expect.objectContaining({ content: 'Local answer', thoughtContent: 'Local reasoning' }),
@@ -1804,6 +1832,119 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     );
   });
 
+  test('rejects a third concurrent generation and releases capacity after completion', async () => {
+    findAuthUserByIdMock.mockImplementation(async (userId: string) => ({
+      ...HAPPY_USER,
+      id: userId,
+    }));
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    updateSessionTitleAndTouchMock.mockResolvedValue(undefined);
+
+    const providerResponse = createDeferredResponse();
+    fetchMock.mockImplementation(() => providerResponse.promise);
+    const request = (userId = 'u1') =>
+      testApp.inject({
+        method: 'POST',
+        url: '/api/reports/ai-reporting/chat',
+        headers: authHeader(userId),
+        payload: { sessionId: 'rpt-chat-1', message: 'Summarize revenue' },
+      });
+
+    const first = request();
+    const second = request();
+    await waitForFetchCalls(2);
+
+    const rejected = await request();
+    expect(rejected.statusCode).toBe(429);
+    expect(JSON.parse(rejected.body)).toEqual({
+      error: 'Too many concurrent AI reporting requests',
+    });
+    expect(rejected.headers['retry-after']).toBe('1');
+
+    const otherUser = request('u2');
+    await waitForFetchCalls(3);
+
+    providerResponse.resolve(
+      okFetchResponse({
+        candidates: [{ content: { parts: [{ text: 'Revenue summary' }] } }],
+      }),
+    );
+    expect((await first).statusCode).toBe(200);
+    expect((await second).statusCode).toBe(200);
+    expect((await otherUser).statusCode).toBe(200);
+
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        candidates: [{ content: { parts: [{ text: 'Capacity restored' }] } }],
+      }),
+    );
+    expect((await request()).statusCode).toBe(200);
+  });
+
+  test('shares a per-user generation budget across all generation endpoints', async () => {
+    await testApp.close();
+    testApp = Fastify({ logger: false });
+    await testApp.register(rateLimit, { global: false });
+    await testApp.register(routePlugin, { prefix: '/api/reports' });
+    await testApp.ready();
+
+    findAuthUserByIdMock.mockImplementation(async (userId: string) => ({
+      ...HAPPY_USER,
+      id: userId,
+    }));
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    updateSessionTitleAndTouchMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        candidates: [{ content: { parts: [{ text: 'Revenue summary' }] } }],
+      }),
+    );
+
+    for (
+      let requestNumber = 0;
+      requestNumber < AI_REPORTING_GENERATION_RATE_LIMIT.max;
+      requestNumber++
+    ) {
+      const response = await testApp.inject({
+        method: 'POST',
+        url: '/api/reports/ai-reporting/chat',
+        headers: authHeader(),
+        payload: { sessionId: 'rpt-chat-1', message: `Request ${requestNumber}` },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+
+    for (const [url, payload] of [
+      ['/api/reports/ai-reporting/chat/stream', { message: 'Stream request' }],
+      [
+        '/api/reports/ai-reporting/chat/edit-stream',
+        { sessionId: 'rpt-chat-1', messageId: 'm-user', content: 'Edit request' },
+      ],
+    ] as const) {
+      const response = await testApp.inject({
+        method: 'POST',
+        url,
+        headers: authHeader(),
+        payload,
+      });
+      expect(response.statusCode).toBe(429);
+    }
+
+    const otherUserResponse = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader('u2'),
+      payload: { sessionId: 'rpt-chat-1', message: 'Independent user request' },
+    });
+    expect(otherUserResponse.statusCode).toBe(200);
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -1871,7 +2012,12 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
     expect(res.body).toContain('stream');
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toEqual(
-      expect.objectContaining({ model: 'gpt-5', stream: true, store: false }),
+      expect.objectContaining({
+        model: 'gpt-5',
+        max_output_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+        stream: true,
+        store: false,
+      }),
     );
     expect(insertAssistantMessageMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2068,7 +2214,12 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
     );
     expect(res.body).toContain('"contextTokensUsed":162000');
     const options = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
-    expect(JSON.parse(String(options.body)).stream).toBe(true);
+    expect(JSON.parse(String(options.body))).toEqual(
+      expect.objectContaining({
+        max_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+        stream: true,
+      }),
+    );
   });
 
   test('streams local Chat Completions deltas and persists reasoning', async () => {
@@ -2123,7 +2274,12 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
     expect(options.headers).toEqual(
       expect.objectContaining({ Authorization: 'Bearer local-token' }),
     );
-    expect(JSON.parse(String(options.body)).stream).toBe(true);
+    expect(JSON.parse(String(options.body))).toEqual(
+      expect.objectContaining({
+        max_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+        stream: true,
+      }),
+    );
   });
 });
 

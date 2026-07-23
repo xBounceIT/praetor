@@ -15,6 +15,10 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
+import {
+  AI_REPORTING_MAX_OUTPUT_TOKENS,
+  createAiReportingAbuseControls,
+} from '../utils/ai-reporting-abuse-controls.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { fetchLocalAi, localAiEndpointUrl, localAiHeaders } from '../utils/local-ai-endpoint.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
@@ -613,7 +617,10 @@ const buildGeminiRequestBody = (prompt: string, systemPrompt?: string) => ({
       }
     : {}),
   contents: [{ role: 'user', parts: [{ text: prompt }] }],
-  generationConfig: { temperature: 0.2 },
+  generationConfig: {
+    temperature: 0.2,
+    maxOutputTokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+  },
 });
 
 const geminiGenerateText = async (
@@ -653,7 +660,12 @@ const chatCompletionsGenerateText = async (
   const res = await fetcher(endpoint, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ model: modelId, temperature: 0.2, messages }),
+    body: JSON.stringify({
+      model: modelId,
+      temperature: 0.2,
+      max_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+      messages,
+    }),
     redirect,
   });
   if (!res.ok) throw new Error(`${providerLabel} request failed: HTTP ${res.status}`);
@@ -700,7 +712,7 @@ const anthropicGenerateText = async (
     },
     body: JSON.stringify({
       model: modelId,
-      max_tokens: 4096,
+      max_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
       temperature: 0.2,
       system: anthropicMessages.system || undefined,
       messages: anthropicMessages.messages,
@@ -718,7 +730,12 @@ const openaiGenerateText = async (apiKey: string, modelId: string, messages: AiC
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model: modelId, input: messages, store: false }),
+    body: JSON.stringify({
+      model: modelId,
+      input: messages,
+      max_output_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+      store: false,
+    }),
   });
   if (!res.ok) throw new Error(`OpenAI request failed: HTTP ${res.status}`);
   return openaiTextFromResponse(await res.json());
@@ -840,6 +857,7 @@ const chatCompletionsGenerateTextStream = async (
     body: JSON.stringify({
       model: modelId,
       temperature: 0.2,
+      max_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
       stream: true,
       messages,
     }),
@@ -996,7 +1014,7 @@ const anthropicGenerateTextStream = async (
     },
     body: JSON.stringify({
       model: modelId,
-      max_tokens: 4096,
+      max_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
       temperature: 0.2,
       stream: true,
       system: anthropicMessages.system || undefined,
@@ -1100,7 +1118,13 @@ const openaiGenerateTextStream = async (
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model: modelId, input: messages, stream: true, store: false }),
+    body: JSON.stringify({
+      model: modelId,
+      input: messages,
+      max_output_tokens: AI_REPORTING_MAX_OUTPUT_TOKENS,
+      stream: true,
+      store: false,
+    }),
     signal,
   });
   if (!res.ok) throw new Error(`OpenAI request failed: HTTP ${res.status}`);
@@ -2375,6 +2399,7 @@ const createSseStreamHandlers = (
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
+  const aiReportingAbuseControls = createAiReportingAbuseControls(fastify);
 
   const sessionSummarySchema = {
     type: 'object',
@@ -2677,7 +2702,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/chat/stream',
     {
-      onRequest: [requirePermission('reports.ai_reporting.create')],
+      onRequest: [
+        requirePermission('reports.ai_reporting.create'),
+        aiReportingAbuseControls.rateLimit,
+        aiReportingAbuseControls.concurrencyLimit,
+      ],
       schema: {
         tags: ['reports'],
         summary: 'Send a message to AI Reporting and stream progress',
@@ -2691,7 +2720,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           required: ['message'],
         },
         response: {
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -2922,7 +2951,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/chat/edit-stream',
     {
-      onRequest: [requirePermission('reports.ai_reporting.create')],
+      onRequest: [
+        requirePermission('reports.ai_reporting.create'),
+        aiReportingAbuseControls.rateLimit,
+        aiReportingAbuseControls.concurrencyLimit,
+      ],
       schema: {
         tags: ['reports'],
         summary: 'Edit a user message and regenerate the assistant response via streaming',
@@ -2937,7 +2970,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           required: ['sessionId', 'messageId', 'content'],
         },
         response: {
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },
@@ -3164,7 +3197,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/ai-reporting/chat',
     {
-      onRequest: [requirePermission('reports.ai_reporting.create')],
+      onRequest: [
+        requirePermission('reports.ai_reporting.create'),
+        aiReportingAbuseControls.rateLimit,
+        aiReportingAbuseControls.concurrencyLimit,
+      ],
       schema: {
         tags: ['reports'],
         summary: 'Send a message to AI Reporting and store history',
@@ -3188,7 +3225,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             required: ['sessionId', 'text'],
           },
-          ...standardErrorResponses,
+          ...standardRateLimitedErrorResponses,
         },
       },
     },

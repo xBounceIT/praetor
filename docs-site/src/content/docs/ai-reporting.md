@@ -35,6 +35,12 @@ Il composer fluttua sopra la conversazione: resta compatto su una riga e cresce 
 
 Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting. Il loro contenuto diventa una fonte dati esplicita per analisi, calcoli e visualizzazioni, ma viene sempre trattato come dato e mai come istruzione per l'AI.
 
+## Limiti di utilizzo
+
+Per proteggere i costi del provider e la capacità del server, ogni utente può avviare fino a 10 generazioni AI al minuto e mantenere al massimo 2 generazioni contemporanee. Il budget è condiviso tra nuovi messaggi, messaggi in streaming e rigenerazioni dopo una modifica. Ogni risposta è limitata a 4.096 token di output.
+
+Quando viene raggiunto un limite, Praetor restituisce una risposta `429`. Attendi la conclusione di una generazione attiva o il rinnovo del budget di un minuto prima di riprovare.
+
 ## Dataset aziendali disponibili
 
 AI Reporting costruisce per ogni richiesta un dataset aggiornato e limitato ai permessi di visualizzazione del tuo ruolo. La risposta può usare queste sezioni:
