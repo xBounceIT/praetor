@@ -49,7 +49,7 @@ services:
     image: ${PRAETOR_IMAGE_PREFIX:-ghcr.io/xbounceit}/praetor-frontend:${PRAETOR_VERSION:?PRAETOR_VERSION is required}
     container_name: praetor-frontend
     ports:
-      - '${FRONTEND_PORT:-3000}:80'
+      - '${FRONTEND_PORT:-3000}:8080'
     depends_on:
       - backend
     restart: unless-stopped

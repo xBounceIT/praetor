@@ -68,7 +68,7 @@ services:
         VITE_API_URL: /api
     container_name: praetor-frontend
     ports:
-      - '3000:80'
+      - '3000:8080'
     depends_on:
       - backend
     restart: unless-stopped
