@@ -5,7 +5,7 @@
 # Caddyfile for Praetor
 # Serves static frontend files and proxies API requests to backend over HTTP
 
-:80 {
+:8080 {
     # Serve static files from the SPA build
     root * /srv
     

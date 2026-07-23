@@ -22,12 +22,20 @@ RUN bun run build
 # STAGE 3: Production with Caddy
 FROM caddy:alpine
 
+RUN addgroup -S -g 10001 praetor \
+    && adduser -S -D -H -u 10001 -G praetor praetor
+
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /app/dist /srv
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN chmod 0555 /docker-entrypoint.sh \
+    && chown -R praetor:praetor /data /config \
+    && chmod -R u=rwX,go= /data /config \
+    && setcap -r /usr/bin/caddy
 
-EXPOSE 80
+USER praetor:praetor
+
+EXPOSE 8080
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
