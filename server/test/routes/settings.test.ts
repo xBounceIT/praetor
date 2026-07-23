@@ -469,6 +469,18 @@ describe('MCP token settings routes', () => {
     expect(listMcpTokensForUserMock).toHaveBeenCalledWith('u1');
   });
 
+  test('GET /api/settings/mcp-tokens rejects personal access token authentication', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/settings/mcp-tokens',
+      headers: patHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(listMcpTokensForUserMock).not.toHaveBeenCalled();
+  });
+
   test('POST /api/settings/mcp-tokens creates token and returns raw token once', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -918,6 +930,19 @@ describe('GET /api/settings/personal-access-token', () => {
     expect(createPersonalAccessTokenIfMissingMock).not.toHaveBeenCalled();
   });
 
+  test('403 rejects personal access token authentication before loading or creating a token', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/settings/personal-access-token',
+      headers: patHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(findPersonalAccessTokenByUserIdMock).not.toHaveBeenCalled();
+    expect(createPersonalAccessTokenIfMissingMock).not.toHaveBeenCalled();
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'GET',
@@ -942,6 +967,18 @@ describe('POST /api/settings/personal-access-token/renew', () => {
     expect(renewPersonalAccessTokenForUserMock.mock.calls[0][0]).toBe('u1');
     expect(renewPersonalAccessTokenForUserMock.mock.calls[0][1]).toMatch(/^[a-f0-9]{64}$/);
     expect(renewPersonalAccessTokenForUserMock.mock.calls[0][2]).toMatch(/^praetor_pat_/);
+  });
+
+  test('403 rejects personal access token authentication before renewing the token', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/personal-access-token/renew',
+      headers: patHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(renewPersonalAccessTokenForUserMock).not.toHaveBeenCalled();
   });
 
   test('401 missing token', async () => {

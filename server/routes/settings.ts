@@ -263,10 +263,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/mcp-tokens',
     {
-      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireSessionAuth,
+      ],
       schema: {
         tags: ['settings'],
-        summary: 'List current user MCP tokens',
+        summary: 'List current user MCP tokens (session-only)',
         response: {
           200: { type: 'array', items: mcpTokenSchema },
           ...standardRateLimitedErrorResponses,
@@ -483,10 +487,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/personal-access-token',
     {
-      onRequest: [authenticateToken],
+      onRequest: [authenticateToken, requireSessionAuth],
       schema: {
         tags: ['settings'],
-        summary: 'Get current user personal access token metadata',
+        summary: 'Get current user personal access token metadata (session-only)',
         response: {
           200: personalAccessTokenSchema,
           ...standardErrorResponses,
@@ -514,10 +518,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/personal-access-token/renew',
     {
-      onRequest: [authenticateToken],
+      onRequest: [authenticateToken, requireSessionAuth],
       schema: {
         tags: ['settings'],
-        summary: 'Renew current user personal access token',
+        summary: 'Renew current user personal access token (session-only)',
         response: {
           200: personalAccessTokenSchema,
           ...standardErrorResponses,
