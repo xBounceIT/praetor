@@ -33,17 +33,17 @@ and rotate it after the first login.
 ### PostgreSQL TLS (optional)
 
 The backend uses `node-postgres`, which does **not** honor `PGSSLMODE` — TLS must be opted
-in via the app-level `DB_SSL` env var. Accepted values mirror libpq:
+in via the app-level `DB_SSL` env var:
 
 - `disable` / unset: no TLS. Use for the bundled compose stack (Postgres image has no TLS).
-- `require`: encrypted connection, server certificate is **not** validated.
+- `true` / `require`: encrypted connection with CA and hostname validation.
 - `verify-ca`: encrypted connection, server certificate is validated against the CA, but
   the hostname is **not** checked. Useful when connecting through a tunnel or by IP.
 - `verify-full`: encrypted connection, server certificate is validated against the CA, and
-  the hostname must match. Recommended for production.
+  the hostname must match.
 
-For `verify-ca` and `verify-full`, provide the CA either inline via `DB_SSL_CA` (PEM
-string) or as a path via `DB_SSL_CA_FILE`. Without a CA, the system trust store is used.
+For every enabled mode, provide the CA either inline via `DB_SSL_CA` (PEM string) or as a path
+via `DB_SSL_CA_FILE`. Without a CA, the system trust store is used.
 
 `DB_SSL` is read by both the runtime pool and `drizzle-kit` migrations, so the same value
 applies to both paths.
