@@ -911,6 +911,11 @@ describe('POST /api/sales/client-offers/:id/revert-to-draft', () => {
 });
 
 describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
+  beforeEach(() => {
+    coLockExistingByIdMock.mockImplementation((id: string) => coFindExistingMock(id));
+    coFindLinkedSaleIdMock.mockResolvedValue(null);
+  });
+
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
     coFindExistingMock.mockResolvedValue({
       id: 'off-1',
