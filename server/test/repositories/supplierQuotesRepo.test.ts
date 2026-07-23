@@ -73,6 +73,16 @@ const ITEM_BASE: readonly unknown[] = [
 
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
 
+// getQuoteItemSnapshots projection:
+// [itemId, quoteId, supplierName, productId, unitPrice, pricingSemanticsVersion,
+//  expirationDate, linkedOrderId, linkedClientQuoteStatus, linkedClientQuoteExpiration,
+//  linkedOfferStatus, linkedOfferExpiration]
+const quoteItemSnapshotRow = (overrides: Record<number, unknown> = {}) =>
+  makeRow(
+    ['sqi-1', 'q-1', 'Acme', null, '10.5', 2, '2999-12-31', null, null, null, null, null],
+    overrides,
+  );
+
 describe('listAll', () => {
   test('issues a query with linkedOrderId correlated subquery', async () => {
     exec.enqueue({ rows: [quoteListRow({ 16: 'so-1' })] });
@@ -770,15 +780,19 @@ describe('lockClientDocumentSupplierReferences', () => {
     });
     exec.enqueue({ rows: [['q-1'], ['q-2']] });
     exec.enqueue({
-      rows: [
-        ['sqi-1', 'q-2'],
-        ['sqi-2', 'q-1'],
-      ],
+      rows: [quoteItemSnapshotRow({ 1: 'q-2' }), quoteItemSnapshotRow({ 0: 'sqi-2' })],
     });
 
     await supplierQuotesRepo.lockClientDocumentSupplierReferences(
       [
-        { supplierQuoteId: 'q-2', supplierQuoteItemId: 'sqi-1' },
+        {
+          supplierQuoteId: 'q-2',
+          supplierQuoteItemId: 'sqi-1',
+          supplierQuoteExpectedProductId: null,
+          supplierQuoteExpectedSupplierName: 'Acme',
+          supplierQuoteExpectedUnitPrice: 10.5,
+          supplierQuoteMustBeSourceable: true,
+        },
         { supplierQuoteId: null, supplierQuoteItemId: 'sqi-2' },
       ],
       testDb,
@@ -805,11 +819,51 @@ describe('lockClientDocumentSupplierReferences', () => {
   test('refuses an item that changes quote membership while waiting for the lock', async () => {
     exec.enqueue({ rows: [['sqi-1', 'q-1']] });
     exec.enqueue({ rows: [['q-1']] });
-    exec.enqueue({ rows: [['sqi-1', 'q-2']] });
+    exec.enqueue({ rows: [quoteItemSnapshotRow({ 1: 'q-2' })] });
 
     await expect(
       supplierQuotesRepo.lockClientDocumentSupplierReferences(
         [{ supplierQuoteId: 'q-1', supplierQuoteItemId: 'sqi-1' }],
+        testDb,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  test('refuses supplier snapshot fields that changed before the client write acquired its lock', async () => {
+    exec.enqueue({ rows: [['sqi-1', 'q-1']] });
+    exec.enqueue({ rows: [['q-1']] });
+    exec.enqueue({ rows: [quoteItemSnapshotRow({ 4: '11' })] });
+
+    await expect(
+      supplierQuotesRepo.lockClientDocumentSupplierReferences(
+        [
+          {
+            supplierQuoteId: 'q-1',
+            supplierQuoteItemId: 'sqi-1',
+            supplierQuoteExpectedProductId: null,
+            supplierQuoteExpectedSupplierName: 'Acme',
+            supplierQuoteExpectedUnitPrice: 10.5,
+          },
+        ],
+        testDb,
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  test('refuses a fresh reference that is no longer sourceable after acquiring the lock', async () => {
+    exec.enqueue({ rows: [['sqi-1', 'q-1']] });
+    exec.enqueue({ rows: [['q-1']] });
+    exec.enqueue({ rows: [quoteItemSnapshotRow({ 7: 'so-1' })] });
+
+    await expect(
+      supplierQuotesRepo.lockClientDocumentSupplierReferences(
+        [
+          {
+            supplierQuoteId: 'q-1',
+            supplierQuoteItemId: 'sqi-1',
+            supplierQuoteMustBeSourceable: true,
+          },
+        ],
         testDb,
       ),
     ).rejects.toMatchObject({ statusCode: 409 });

@@ -356,7 +356,11 @@ describe('insertItems', () => {
   test('locks and revalidates supplier references before inserting offer items', async () => {
     exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
     exec.enqueue({ rows: [['sq-1']] });
-    exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
+    exec.enqueue({
+      rows: [
+        ['sqi-1', 'sq-1', 'Vendor', 'p-1', '5', 2, '2999-12-31', null, null, null, null, null],
+      ],
+    });
     exec.enqueue({ rows: [itemRow()] });
 
     await clientOffersRepo.insertItems(

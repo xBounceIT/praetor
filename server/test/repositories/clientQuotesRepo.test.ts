@@ -445,7 +445,11 @@ describe('replaceItems', () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
     exec.enqueue({ rows: [['sq-1']] });
-    exec.enqueue({ rows: [['sqi-1', 'sq-1']] });
+    exec.enqueue({
+      rows: [
+        ['sqi-1', 'sq-1', 'Vendor', 'p-1', '4', 2, '2999-12-31', null, null, null, null, null],
+      ],
+    });
     exec.enqueue({
       rows: [itemRow({ 0: 'b', 18: 1 }), itemRow({ 0: 'a', 18: 0 })],
     });

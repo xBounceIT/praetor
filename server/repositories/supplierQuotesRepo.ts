@@ -495,6 +495,10 @@ export const lockEffectiveStatusById = async (
 export type ClientDocumentSupplierReference = {
   supplierQuoteId?: string | null;
   supplierQuoteItemId?: string | null;
+  supplierQuoteExpectedProductId?: string | null;
+  supplierQuoteExpectedSupplierName?: string | null;
+  supplierQuoteExpectedUnitPrice?: number | null;
+  supplierQuoteMustBeSourceable?: boolean;
 };
 
 const supplierReferenceConflict = () =>
@@ -558,20 +562,24 @@ export const lockClientDocumentSupplierReferences = async (
     if (lockedQuotes.length !== quoteIds.length) throw supplierReferenceConflict();
 
     if (itemIds.length === 0) return;
-    const revalidatedItems = await tx
-      .select({ id: supplierQuoteItems.id, quoteId: supplierQuoteItems.quoteId })
-      .from(supplierQuoteItems)
-      .where(inArray(supplierQuoteItems.id, itemIds));
-    const revalidatedQuoteByItem = new Map(revalidatedItems.map((item) => [item.id, item.quoteId]));
+    const revalidatedSnapshots = await getQuoteItemSnapshots(itemIds, tx);
     for (const reference of references) {
       const itemId = reference.supplierQuoteItemId;
       if (!itemId) continue;
       const initialQuoteId = initialQuoteByItem.get(itemId);
-      const revalidatedQuoteId = revalidatedQuoteByItem.get(itemId);
+      const snapshot = revalidatedSnapshots.get(itemId);
       if (
         !initialQuoteId ||
-        revalidatedQuoteId !== initialQuoteId ||
-        (reference.supplierQuoteId && reference.supplierQuoteId !== revalidatedQuoteId)
+        !snapshot ||
+        snapshot.supplierQuoteId !== initialQuoteId ||
+        (reference.supplierQuoteId && reference.supplierQuoteId !== snapshot.supplierQuoteId) ||
+        (reference.supplierQuoteExpectedProductId !== undefined &&
+          reference.supplierQuoteExpectedProductId !== snapshot.productId) ||
+        (reference.supplierQuoteExpectedSupplierName !== undefined &&
+          reference.supplierQuoteExpectedSupplierName !== snapshot.supplierName) ||
+        (reference.supplierQuoteExpectedUnitPrice !== undefined &&
+          reference.supplierQuoteExpectedUnitPrice !== snapshot.netCost) ||
+        (reference.supplierQuoteMustBeSourceable === true && !snapshot.sourceable)
       ) {
         throw supplierReferenceConflict();
       }
