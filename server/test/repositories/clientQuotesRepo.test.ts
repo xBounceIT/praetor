@@ -174,14 +174,18 @@ describe('findCurrent', () => {
 
 describe('lockCurrentById', () => {
   test('uses FOR UPDATE in the emitted SQL', async () => {
-    exec.enqueue({ rows: [['sent', '0', 'percentage', '2026-06-01', null, null]] });
+    exec.enqueue({
+      rows: [['sent', '0', 'percentage', '2026-06-01', null, null, 'client-1', 'Acme']],
+    });
     await clientQuotesRepo.lockCurrentById('cq-1', testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[0].params).toContain('cq-1');
   });
 
-  test('returns parsed row including the linked supplier quote expiration', async () => {
-    exec.enqueue({ rows: [['draft', '7.25', 'currency', '2026-07-15', 'sq-9', '2026-05-01']] });
+  test('returns parsed row including linked supplier and client identity fields', async () => {
+    exec.enqueue({
+      rows: [['draft', '7.25', 'currency', '2026-07-15', 'sq-9', '2026-05-01', 'client-1', 'Acme']],
+    });
     const result = await clientQuotesRepo.lockCurrentById('cq-1', testDb);
     expect(result).toEqual({
       status: 'draft',
@@ -190,6 +194,8 @@ describe('lockCurrentById', () => {
       expirationDate: '2026-07-15',
       linkedSupplierQuoteId: 'sq-9',
       linkedSupplierQuoteExpiration: '2026-05-01',
+      clientId: 'client-1',
+      clientName: 'Acme',
     });
   });
 

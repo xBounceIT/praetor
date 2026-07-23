@@ -929,8 +929,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               id: offerId,
               description: (description as string | null | undefined) ?? null,
               linkedQuoteId: linkedQuoteIdResult.value,
-              clientId: clientIdResult.value,
-              clientName: clientNameResult.value,
+              clientId: lockedQuote.clientId,
+              clientName: lockedQuote.clientName,
               paymentTerms:
                 typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
               discount: discountResult.value || 0,
@@ -1029,7 +1029,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: createdOffer.id,
         details: {
           targetLabel: createdOffer.id,
-          secondaryLabel: clientNameResult.value,
+          secondaryLabel: createdOffer.clientName,
         },
       });
       return reply.code(201).send(projectOffer({ ...createdOffer, items: createdItems }));
