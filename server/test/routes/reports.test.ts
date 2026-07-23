@@ -487,6 +487,26 @@ describe('buildBusinessDataset modern sections', () => {
     );
   });
 
+  test('passes project-detail visibility into the projects dataset query', async () => {
+    getProjectsSectionMock.mockResolvedValue({ topByHours: [], topByCost: [] });
+
+    await buildBusinessDataset(
+      { user: { id: 'u1', permissions: ['projects.manage.view'] } } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+      new Set(['projects']),
+    );
+
+    expect(getProjectsSectionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewerId: 'u1',
+        canViewProjectDetails: false,
+      }),
+      expect.anything(),
+    );
+  });
+
   test('loads newly available sections only when their view permissions are granted', async () => {
     getClientOffersSectionMock.mockResolvedValue({ source: 'client-offers' });
     getSupplierOrdersSectionMock.mockResolvedValue({ source: 'supplier-orders' });

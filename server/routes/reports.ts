@@ -18,7 +18,10 @@ import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { fetchLocalAi, localAiEndpointUrl, localAiHeaders } from '../utils/local-ai-endpoint.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import {
+  requestHasPermission as hasPermission,
+  canViewProjectDetails as hasProjectDetailsAccess,
+} from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
@@ -1817,12 +1820,15 @@ export const buildBusinessDataset = async (
       );
 
       const canViewAllProjects = hasPermission(request, 'projects.manage_all.view');
+      const canViewProjectDetails = hasProjectDetailsAccess(request.user?.permissions);
+      if (canViewProjectDetails) permissionsApplied.add('projects.details.view');
       const projects = await reportsHoursRepo.getProjectsSection(
         {
           viewerId,
           fromDate,
           toDate,
           canViewAllProjects,
+          canViewProjectDetails,
           canViewTimesheets,
           canViewAllTimesheets,
           allowedTimesheetUserIds,
