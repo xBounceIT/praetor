@@ -28,6 +28,7 @@ import {
   externalGroupsYieldNoKnownRole,
 } from '../services/external-auth.ts';
 import { requiresTotpEnrollment } from '../services/totpEnforcement.ts';
+import { getUserVisibilityScope } from '../services/userVisibility.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
@@ -341,8 +342,7 @@ const canViewUserEmails = (request: FastifyRequest) =>
   hasPermission(request, 'administration.user_management.view');
 
 const canViewAllUsers = (request: FastifyRequest) =>
-  hasPermission(request, 'administration.user_management_all.view') ||
-  hasPermission(request, 'hr.work_units_all.view');
+  getUserVisibilityScope(request).canViewAllUsers;
 
 const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserId: string) => {
   if (request.user?.id === targetUserId) return true;
@@ -757,24 +757,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const canViewUserManagement = hasPermission(request, 'administration.user_management.view');
-      const canViewManagedUsers =
-        hasPermission(request, 'timesheets.tracker.view') ||
-        hasPermission(request, 'timesheets.tracker_all.view') ||
-        hasPermission(request, 'timesheets.ril.view') ||
-        hasPermission(request, 'hr.work_units.view') ||
-        hasPermission(request, 'hr.work_units_all.view') ||
-        canViewUserManagement;
-      const canViewInternal = hasPermission(request, 'hr.internal.view');
-      const canViewExternal = hasPermission(request, 'hr.external.view');
-
-      const users = canViewAllUsers(request)
+      const { canViewAllUsers: canViewAll, ...managerScope } = getUserVisibilityScope(request);
+      const users = canViewAll
         ? await usersRepo.listAllForAdmin()
-        : await usersRepo.listScopedForManager(request.user.id, {
-            canViewManagedUsers,
-            canViewInternal,
-            canViewExternal,
-          });
+        : await usersRepo.listScopedForManager(request.user.id, managerScope);
 
       const currentCosts = await userHourlyCostPeriodsRepo.listCostsForDate(
         users.filter((user) => canViewCostFor(request, user.id)).map((user) => user.id),

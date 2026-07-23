@@ -95,7 +95,7 @@ La sezione **Regole della commessa** nella pagina di dettaglio permette di crear
 
 ### Assegnazione utenti
 
-Dal comando **Assegna Utenti** gestisci chi è assegnato a una commessa o a una sua attività. L'accesso a questa finestra è governato dal permesso **Assegnazioni Progetto**: l'azione **View** consente di aprire le assegnazioni di qualsiasi commessa o attività indipendentemente dalla propria appartenenza, mentre **Update** consente di modificarle. I permessi di modifica delle attività non autorizzano la gestione delle assegnazioni. Manager e Top Manager dispongono di entrambi i permessi di assegnazione per impostazione predefinita, quindi possono gestire le assegnazioni anche quando non sono membri della commessa o dell'attività.
+Dal comando **Assegna Utenti** gestisci chi è assegnato a una commessa o a una sua attività. L'accesso a questa finestra è governato dal permesso **Assegnazioni Progetto**: l'azione **View** consente di aprire le assegnazioni di qualsiasi commessa o attività indipendentemente dalla propria appartenenza, mentre **Update** consente di modificarle. I permessi di modifica delle attività non autorizzano la gestione delle assegnazioni. Manager e Top Manager dispongono di entrambi i permessi di assegnazione per impostazione predefinita, quindi possono gestire le assegnazioni anche quando non sono membri della commessa o dell'attività. Per le attività, il server accetta soltanto utenti abilitati, visibili a chi esegue la modifica e idonei all'assegnazione; utenti disabilitati, Top Manager e utenti con il solo ruolo Admin vengono rifiutati anche nelle richieste API dirette.
 
 ## Competence Center
 

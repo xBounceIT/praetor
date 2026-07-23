@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
+import * as realTaskAssignmentEligibilityRepo from '../../repositories/taskAssignmentEligibilityRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -22,6 +23,7 @@ import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
+const taskAssignmentEligibilityRepoSnap = { ...realTaskAssignmentEligibilityRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
@@ -44,6 +46,9 @@ const findNameAndProjectIdMock = mock();
 const clearNonTopManagerAssignmentsMock = mock();
 const addManualAssignmentsMock = mock();
 const sumHoursByProjectsMock = mock();
+
+// taskAssignmentEligibilityRepo mocks
+const findIneligibleAssigneeIdsMock = mock();
 
 // projectsRepo
 const findClientIdMock = mock();
@@ -93,6 +98,10 @@ beforeAll(async () => {
     addManualAssignments: addManualAssignmentsMock,
     sumHoursByProjects: sumHoursByProjectsMock,
   }));
+  mock.module('../../repositories/taskAssignmentEligibilityRepo.ts', () => ({
+    ...taskAssignmentEligibilityRepoSnap,
+    findIneligibleAssigneeIds: findIneligibleAssigneeIdsMock,
+  }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
     findClientId: findClientIdMock,
@@ -126,6 +135,10 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module(
+    '../../repositories/taskAssignmentEligibilityRepo.ts',
+    () => taskAssignmentEligibilityRepoSnap,
+  );
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
@@ -191,6 +204,7 @@ const allMocks = [
   clearNonTopManagerAssignmentsMock,
   addManualAssignmentsMock,
   sumHoursByProjectsMock,
+  findIneligibleAssigneeIdsMock,
   findClientIdMock,
   findBillingByIdMock,
   assignClientToUserMock,
@@ -212,6 +226,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(TASKS_PERMS);
+  findIneligibleAssigneeIdsMock.mockResolvedValue([]);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   assignClientToUserMock.mockImplementation(async () => undefined);
@@ -1155,6 +1170,37 @@ describe('POST /api/tasks/:id/users', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'task.users_assigned', entityId: 't-1' }),
     );
+  });
+
+  test('400: rejects users outside the caller-visible eligible assignee set', async () => {
+    findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
+    findIneligibleAssigneeIdsMock.mockResolvedValue(['disabled-user']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks/t-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u2', 'disabled-user'] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'userIds contains users who are not eligible for task assignment',
+    });
+    expect(findIneligibleAssigneeIdsMock).toHaveBeenCalledWith(
+      ['u2', 'disabled-user'],
+      {
+        viewerId: 'u1',
+        canViewAllUsers: false,
+        canViewManagedUsers: false,
+        canViewInternal: false,
+        canViewExternal: false,
+      },
+      TX_SENTINEL,
+    );
+    expect(clearNonTopManagerAssignmentsMock).not.toHaveBeenCalled();
+    expect(addManualAssignmentsMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('400: empty userIds array', async () => {
