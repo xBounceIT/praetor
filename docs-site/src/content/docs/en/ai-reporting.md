@@ -35,6 +35,12 @@ The composer floats over the conversation: it stays compact on one line and grow
 
 Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting. Their contents become an explicit data source for analysis, calculations, and visualizations, while remaining data rather than instructions for the AI.
 
+## Usage limits
+
+To protect provider costs and server capacity, each user can start up to 10 AI generations per minute and run at most 2 generations at the same time. This shared budget covers new messages, streamed messages, and edited-message regeneration. A response is limited to 4,096 output tokens.
+
+When a limit is reached, Praetor returns a `429` response. Wait for an active generation to finish or for the one-minute budget to reset before retrying.
+
 ## Available business datasets
 
 For every request, AI Reporting builds a fresh dataset restricted to the view permissions granted to your role. Answers can use these sections:
