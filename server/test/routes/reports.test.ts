@@ -450,6 +450,8 @@ describe('determineRequestedSections', () => {
 
 describe('buildBusinessDataset modern sections', () => {
   test('passes client commercial permissions into catalog aggregation', async () => {
+    getCatalogSectionMock.mockResolvedValue({});
+
     await buildBusinessDataset(
       {
         user: {
@@ -467,7 +469,7 @@ describe('buildBusinessDataset modern sections', () => {
       {
         fromDate: '2026-04-01',
         toDate: '2026-07-31',
-        topLimit: 20,
+        topLimit: 50,
         canViewQuotes: false,
         canViewOrders: false,
         canViewInvoices: true,
