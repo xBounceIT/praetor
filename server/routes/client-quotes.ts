@@ -37,7 +37,7 @@ import {
   withCalculatedClientLineMol,
 } from '../utils/client-line-pricing.ts';
 import { isPastLocalDate } from '../utils/date.ts';
-import { getUniqueViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import {
   DOCUMENT_CODE_MAX_LENGTH,
@@ -1753,6 +1753,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quoteId: nextIdResult.value ?? 'auto',
         });
         if (autoOfferConflict) return autoOfferConflict;
+        const foreignKeyViolation = getForeignKeyViolation(err);
+        if (foreignKeyViolation?.constraint === 'quotes_client_id_clients_id_fk') {
+          return badRequest(reply, 'Client not found');
+        }
         if (err instanceof ConflictError) {
           return replyError(request, reply, {
             statusCode: err.statusCode,
@@ -1762,8 +1766,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             details: { secondaryLabel: 'supplier_quote_changed' },
           });
         }
-        request.log.error({ err }, 'CRITICAL ERROR creating quote');
-        return reply.code(500).send({ error: `Internal Server Error: ${(err as Error).message}` });
+        throw err;
       }
     },
   );
