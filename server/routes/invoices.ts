@@ -16,9 +16,15 @@ import {
   getUniqueViolation,
 } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { PATH_PARAMETER_MAX_LENGTH, requirePathSegment } from '../utils/path-segments.ts';
 import {
   inheritPricingSemanticsVersions,
   type PricingSemanticsVersion,
@@ -49,7 +55,7 @@ const isInvoiceIdConflict = (databaseError: DatabaseError) =>
 const idParamSchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: { type: 'string', maxLength: PATH_PARAMETER_MAX_LENGTH },
   },
   required: ['id'],
 } as const;
@@ -161,7 +167,13 @@ const invoiceItemBodySchema = {
 const invoiceCreateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+      description:
+        'Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens.',
+    },
     linkedSaleId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -178,7 +190,12 @@ const invoiceCreateBodySchema = {
 const invoiceUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      description:
+        'When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted.',
+    },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
@@ -447,7 +464,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, PAID_INVOICE_UNDERPAID_ERROR);
       }
 
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] } | null =
@@ -587,7 +604,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
         items: unknown;
       };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const existingStatus = await invoicesRepo.findStatus(idResult.value);
@@ -629,7 +646,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let nextIdValue: string | null = null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         if (nextIdResult.value) {
           if (await invoicesRepo.findIdConflict(nextIdResult.value, idResult.value)) {
@@ -886,7 +906,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const existing = await invoicesRepo.findStatusAndClientName(idResult.value);

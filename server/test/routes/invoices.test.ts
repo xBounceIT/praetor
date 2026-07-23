@@ -906,6 +906,19 @@ describe('POST /api/invoices', () => {
     expect(insertItemsMock).not.toHaveBeenCalled();
   });
 
+  test('400 rejects a manual invoice id that can escape its route segment', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: { ...validBody, id: '../clients-orders/ORD-1?' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Bad Request' });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('403 missing create permission', async () => {
     getRolePermissionsMock.mockResolvedValue(['accounting.clients_invoices.view']);
     const res = await testApp.inject({
@@ -1369,6 +1382,22 @@ describe('PUT /api/invoices/:id', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  test('400 rejects renaming an invoice to a route-confusing id', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: { id: '../clients-orders/ORD-1?' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'id can only contain letters, numbers, underscores, and hyphens',
+    });
+    expect(findIdConflictMock).not.toHaveBeenCalled();
+    expect(renameDraftMock).not.toHaveBeenCalled();
+  });
+
   test('409 unique violation on rename', async () => {
     findIdConflictMock.mockResolvedValue(true);
 
@@ -1402,6 +1431,21 @@ describe('DELETE /api/invoices/:id', () => {
         entityId: 'inv-1',
       }),
     );
+  });
+
+  test('204 keeps an encoded legacy id inside the invoice route', async () => {
+    const legacyId = '../clients-orders/ORD-1?';
+    deleteByIdMock.mockResolvedValue({ id: legacyId, clientName: 'Client' });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/invoices/..%2Fclients-orders%2FORD-1%3F',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(findStatusAndClientNameMock).toHaveBeenCalledWith(legacyId);
+    expect(deleteByIdMock).toHaveBeenCalledWith(legacyId);
   });
 
   test('404 not found', async () => {
