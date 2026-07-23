@@ -132,9 +132,10 @@ describe.skipIf(SHOULD_SKIP)('migration 0121: enforce time-entry keys on legacy 
             'Migration Client', 'mig0121_project', 'Migration Project', 'Inexact cost', 1, 10.01
           )
       `);
+      // Run the full migration (temp table + consolidation CTE) to trigger the locked cost guard.
       let costGuardErrorCode: string | undefined;
       try {
-        await client.query(oversizedGuard);
+        await executeMigrationStatements(client);
       } catch (error) {
         costGuardErrorCode = (error as { code?: string }).code;
       }
