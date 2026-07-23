@@ -66,7 +66,7 @@ AI Reporting is optional. If you enable it, configure the provider + API key + m
 official PG18 container layout. Do not point this compose file at an existing PostgreSQL 17
 data volume.</p>
 <p>The compose setup defaults backend <code>TRUST_PROXY=1</code> for the bundled Caddy -&gt; API hop.
-Set <code>DEMO_SEEDING=true</code> and a unique <code>DEMO_USER_PASSWORD</code> in <code>.env</code> when you want the stack to provision the canonical demo users and demo business data. The demo refresh fails before cleaning or reseeding demo data when the password is blank or matches the published legacy default.
+Set <code>DEMO_SEEDING=true</code> and a unique <code>DEMO_USER_PASSWORD</code> in <code>.env</code> when you want the stack to provision the canonical demo users and demo business data. The demo refresh fails before cleaning or reseeding demo data when the password is blank or matches the published legacy default, and it is refused outright when <code>NODE_ENV=production</code>.
 That refresh flow is intended for demo and test stacks, owns the canonical demo namespace,
 refreshes compatibility clients/projects/tasks, deletes financial documents and dependent
 resales backed by demo products, and resets the seeded demo users' assignments, notifications, and time entries so

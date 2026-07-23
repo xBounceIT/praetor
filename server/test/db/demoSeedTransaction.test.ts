@@ -122,6 +122,27 @@ beforeEach(() => {
 });
 
 describe('demo seed transaction finalization', () => {
+  test('refuses to seed in production before reading the password or touching the database', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      await expect(demoSeed.runDemoSeedRefresh({ source: 'startup' })).rejects.toThrow(
+        /NODE_ENV=production/,
+      );
+    } finally {
+      if (originalNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
+    }
+
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(ensureBootstrapAdminMock).not.toHaveBeenCalled();
+    expect(connectMock).not.toHaveBeenCalled();
+  });
+
   test('refuses to seed without an operator-provided demo password', async () => {
     delete process.env[DEMO_PASSWORD_ENV];
 
