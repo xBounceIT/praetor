@@ -503,6 +503,23 @@ describe('PUT /api/clients-orders/:id status transitions', () => {
     expect(coUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('does not rewrite an unchanged draft status after a concurrent terminalization', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'confirmed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { status: 'draft' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coLockExistingByIdMock).not.toHaveBeenCalled();
+    expect(coUpdateMock).toHaveBeenCalledWith('o-1', {}, TX_SENTINEL);
+    expect(JSON.parse(res.body).status).toBe('confirmed');
+  });
+
   for (const [currentStatus, requestedStatus] of [
     ['confirmed', 'draft'],
     ['confirmed', 'denied'],

@@ -1513,7 +1513,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             patch.discount = discountValue;
           }
           if (discountTypeValue !== undefined) patch.discountType = discountTypeValue;
-          if (requestedStatus !== undefined) patch.status = requestedStatus;
+          if (statusChanged && requestedStatus !== undefined) patch.status = requestedStatus;
           if (notes !== undefined) patch.notes = notes as string | null;
 
           let renamedOrder: clientsOrdersRepo.ClientOrder | null = null;
