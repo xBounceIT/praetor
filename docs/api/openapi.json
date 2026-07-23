@@ -22660,7 +22660,7 @@
     },
     "/api/settings/mcp-tokens": {
       "get": {
-        "summary": "List current user MCP tokens",
+        "summary": "List current user MCP tokens (session-only)",
         "tags": [
           "settings"
         ],
@@ -23448,7 +23448,7 @@
     },
     "/api/settings/personal-access-token": {
       "get": {
-        "summary": "Get current user personal access token metadata",
+        "summary": "Get current user personal access token metadata (session-only)",
         "tags": [
           "settings"
         ],
@@ -23621,7 +23621,7 @@
     },
     "/api/settings/personal-access-token/renew": {
       "post": {
-        "summary": "Renew current user personal access token",
+        "summary": "Renew current user personal access token (session-only)",
         "tags": [
           "settings"
         ],
