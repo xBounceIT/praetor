@@ -28,6 +28,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
   const updateDirectoryProfileMock = mock();
   const settingsUpsertForUserMock = mock();
   const createUserMock = mock();
+  const addUserRoleMock = mock();
   const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
   let ldapService: LdapServiceShape;
@@ -51,6 +52,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
       updateNameByUsername: updateNameByUsernameMock,
       updateDirectoryProfile: updateDirectoryProfileMock,
       createUser: createUserMock,
+      addUserRole: addUserRoleMock,
     }));
     ldapService = (await import('../../services/ldap.ts')).default as unknown as LdapServiceShape;
   });
@@ -70,9 +72,11 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     updateDirectoryProfileMock.mockReset();
     settingsUpsertForUserMock.mockReset();
     createUserMock.mockReset();
+    addUserRoleMock.mockReset();
 
     ldapRepoGetMock.mockResolvedValue(buildTestConfig({ autoProvisionAll: true }));
     findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    addUserRoleMock.mockResolvedValue(undefined);
     ldapService.invalidateConfig();
   });
 
@@ -103,12 +107,15 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
 
   test('existing user: refreshes provider profile instead of createUser', async () => {
     findLoginUserByNormalizedUsernameMock.mockImplementation(async (username: string) =>
-      username === 'alice' ? { id: 'u1', username, name: 'Old Name' } : null,
+      username === 'alice'
+        ? { id: 'u1', username, name: 'Old Name', role: 'user', authMethod: 'ldap' }
+        : null,
     );
 
     const result = await ldapService.syncUsers();
 
     expect(result).toEqual({ synced: 1, created: 1 });
+    expect(addUserRoleMock).toHaveBeenCalledWith('u1', 'user', expect.anything());
     expect(updateDirectoryProfileMock).toHaveBeenCalledTimes(1);
     expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
       'u1',
