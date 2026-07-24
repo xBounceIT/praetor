@@ -359,9 +359,10 @@ describe('updateIfCodeAvailable', () => {
   test('delegates patches that do not change supplierCode', async () => {
     exec.enqueue({ rows: [makeRow(SUPPLIER_ROW)] });
 
-    expect(
-      await suppliersRepo.updateIfCodeAvailable('s-1', { name: 'New Name' }, testDb),
-    ).toEqual({ ok: true, supplier: mappedRow });
+    expect(await suppliersRepo.updateIfCodeAvailable('s-1', { name: 'New Name' }, testDb)).toEqual({
+      ok: true,
+      supplier: mappedRow,
+    });
     expect(exec.calls).toHaveLength(1);
     expect(exec.calls[0].sql.toLowerCase()).toContain('update "suppliers"');
     expect(exec.calls[0].sql).not.toContain('pg_advisory_xact_lock');
