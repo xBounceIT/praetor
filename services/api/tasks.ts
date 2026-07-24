@@ -77,9 +77,7 @@ export const tasksApi = {
     if (projectIds.length === 0) return {};
 
     const chunks = chunkProjectIds(projectIds, HOURS_BATCH_MAX_PROJECT_IDS);
-    const settled = await Promise.allSettled(
-      chunks.map((chunk) => fetchHoursChunk(chunk, signal)),
-    );
+    const settled = await Promise.allSettled(chunks.map((chunk) => fetchHoursChunk(chunk, signal)));
 
     const merged: Record<string, Record<string, number>> = {};
     let successCount = 0;
