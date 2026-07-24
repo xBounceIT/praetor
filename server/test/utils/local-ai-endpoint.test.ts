@@ -32,11 +32,13 @@ describe('local AI endpoint utilities', () => {
     }
   });
 
-  test('blocks link-local IPv4 and IPv6 but permits loopback and private LAN addresses', () => {
+  test('blocks metadata and link-local addresses but permits loopback and private LAN addresses', () => {
     expect(isBlockedLocalAiAddress('169.254.169.254')).toBe(true);
     expect(isBlockedLocalAiAddress('100.100.100.200')).toBe(true);
     expect(isBlockedLocalAiAddress('::ffff:a9fe:a9fe')).toBe(true);
     expect(isBlockedLocalAiAddress('fe80::1')).toBe(true);
+    expect(isBlockedLocalAiAddress('fd00:ec2::254')).toBe(true);
+    expect(isBlockedLocalAiAddress('fd00:0ec2:0000:0000:0000:0000:0000:0254')).toBe(true);
     expect(isBlockedLocalAiAddress('fd20:00ce:0000:0000:0000:0000:0000:0254')).toBe(true);
     expect(isBlockedLocalAiAddress('127.0.0.1')).toBe(false);
     expect(isBlockedLocalAiAddress('10.0.0.8')).toBe(false);

@@ -13,7 +13,7 @@ const BLOCKED_METADATA_HOSTNAMES = new Set([
   'metadata.google.internal',
 ]);
 const BLOCKED_METADATA_IPV4 = '100.100.100.200';
-const BLOCKED_METADATA_IPV6 = 'fd20:ce::254';
+const BLOCKED_METADATA_IPV6_ADDRESSES = new Set(['fd00:ec2::254', 'fd20:ce::254']);
 
 const invalidBaseUrl = (message: string) => ({ ok: false as const, message });
 
@@ -66,7 +66,7 @@ export const isBlockedLocalAiAddress = (address: string): boolean => {
   if (isIP(address) !== 6) return false;
   const firstHextet = Number.parseInt(address.split(':')[0] || '0', 16);
   const normalized = new URL(`http://[${address}]/`).hostname.slice(1, -1);
-  return (firstHextet & 0xffc0) === 0xfe80 || normalized === BLOCKED_METADATA_IPV6;
+  return (firstHextet & 0xffc0) === 0xfe80 || BLOCKED_METADATA_IPV6_ADDRESSES.has(normalized);
 };
 
 const localAiHostname = (url: URL): string => url.hostname.replace(/^\[|\]$/g, '');
