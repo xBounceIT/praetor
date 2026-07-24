@@ -170,6 +170,28 @@ the application needs correction. A schema rollback requires restoring a pre-mig
 or first dropping `idx_time_entries_entry_key_unique` and deliberately restoring any archived
 rows whose key no longer conflicts; the previous image does not enforce update-time uniqueness.
 
+## Internal category name uniqueness rollout (migration 0123)
+
+Deploy migration `0123_enforce_internal_category_name_uniqueness.sql` with the application image.
+The migration briefly blocks writes to the small internal-category table, retains the oldest name
+in each `(lower(name), type)` group, and renames every later category with a deterministic
+`(duplicate N)` suffix. It preserves category and subcategory ids and updates matching internal
+products before replacing case-sensitive uniqueness with a case-insensitive unique index.
+`schema.sql` installs that uniqueness as a table constraint; drizzle-only installs may only have
+the unique index from migration 0016, so the migration drops both shapes before creating the new
+index. Supplier products are not changed because they do not use the internal catalog namespace.
+
+Older images remain compatible because they already preflight category names case-insensitively.
+The new image also maps a database conflict from a concurrent create or rename to the existing
+friendly validation response. Run `db:migrate`, `db:ready`, and `db:check`; the migration test can
+be replayed against PostgreSQL with `RUN_PRODUCT_CATEGORY_NAME_MIGRATION_TEST=1`.
+
+Prefer roll-forward if the application needs correction. Rolling back the image is safe while the
+new index remains. Reverting the schema requires dropping
+`internal_product_categories_name_type_key` and recreating its old raw `(name, type)` definition;
+the collision-renaming backfill is intentionally not reversed because doing so could recreate
+ambiguous category names and product mappings.
+
 ## Conventions for schema authors
 
 - **One file per table cluster.** `quotes.ts` defines both `quotes` and `quoteItems`; `tasks.ts` defines `tasks` and `userTasks`. Re-export everything from `schema/index.ts`.

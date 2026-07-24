@@ -6,6 +6,7 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import type { CostUnit } from '../utils/cost-unit.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -16,6 +17,13 @@ import {
   requireNonEmptyString,
   validateEnum,
 } from '../utils/validation.ts';
+
+const INTERNAL_CATEGORY_NAME_UNIQUE_INDEX = 'internal_product_categories_name_type_key';
+const INTERNAL_CATEGORY_NAME_CONFLICT_MESSAGE =
+  'Category with this name already exists for this type';
+
+const isInternalCategoryNameConflict = (error: unknown): boolean =>
+  getUniqueViolation(error)?.constraint === INTERNAL_CATEGORY_NAME_UNIQUE_INDEX;
 
 const idParamSchema = {
   type: 'object',
@@ -607,16 +615,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           null,
         )
       ) {
-        return badRequest(reply, 'Category with this name already exists for this type');
+        return badRequest(reply, INTERNAL_CATEGORY_NAME_CONFLICT_MESSAGE);
       }
 
       const id = generatePrefixedId('ipc');
-      const created = await productsRepo.insertInternalCategory(
-        id,
-        nameResult.value,
-        typeResult.value,
-        typeResult.costUnit,
-      );
+      let created: productsRepo.InternalCategoryRow;
+      try {
+        created = await productsRepo.insertInternalCategory(
+          id,
+          nameResult.value,
+          typeResult.value,
+          typeResult.costUnit,
+        );
+      } catch (error) {
+        if (isInternalCategoryNameConflict(error)) {
+          return badRequest(reply, INTERNAL_CATEGORY_NAME_CONFLICT_MESSAGE);
+        }
+        throw error;
+      }
 
       await logAudit({
         request,
@@ -690,7 +706,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           : Promise.resolve({ linked: false, count: 0 }),
       ]);
       if (nameTaken) {
-        return badRequest(reply, 'Category with this name already exists for this type');
+        return badRequest(reply, INTERNAL_CATEGORY_NAME_CONFLICT_MESSAGE);
       }
       if (linkedCheck.linked) {
         return replyError(request, reply, {
@@ -711,25 +727,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const updated = await withDbTransaction(async (tx) => {
-        const row = await productsRepo.updateInternalCategoryFields(
-          idResult.value,
-          newName,
-          expectedCostUnit,
-          tx,
-        );
-        if (!row) return null;
-        if (isRename) {
-          await productsRepo.propagateCategoryNameToProducts(
-            current.name,
+      let updated: productsRepo.InternalCategoryRow | null;
+      try {
+        updated = await withDbTransaction(async (tx) => {
+          const row = await productsRepo.updateInternalCategoryFields(
+            idResult.value,
             newName,
-            current.type,
             expectedCostUnit,
             tx,
           );
+          if (!row) return null;
+          if (isRename) {
+            await productsRepo.propagateCategoryNameToProducts(
+              current.name,
+              newName,
+              current.type,
+              expectedCostUnit,
+              tx,
+            );
+          }
+          return row;
+        });
+      } catch (error) {
+        if (isInternalCategoryNameConflict(error)) {
+          return badRequest(reply, INTERNAL_CATEGORY_NAME_CONFLICT_MESSAGE);
         }
-        return row;
-      });
+        throw error;
+      }
 
       if (!updated) {
         return replyError(request, reply, {

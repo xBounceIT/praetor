@@ -768,6 +768,29 @@ describe('POST /api/products/internal-categories', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  test('400 when a concurrent case-insensitive duplicate wins the insert race', async () => {
+    existsInternalCategoryByNameTypeMock.mockResolvedValue(false);
+    insertInternalCategoryMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'internal_product_categories_name_type_key',
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/products/internal-categories',
+      headers: authHeader(),
+      payload: { name: 'electronics', type: 'goods' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Category with this name already exists for this type',
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
   test('403 missing create', async () => {
     getRolePermissionsMock.mockResolvedValue(['catalog.internal_listing.view']);
     const res = await testApp.inject({
@@ -833,6 +856,32 @@ describe('PUT /api/products/internal-categories/:id', () => {
 
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toMatch(/Cannot rename category/);
+  });
+
+  test('400 when a concurrent case-insensitive duplicate wins the rename race', async () => {
+    findInternalCategoryByIdMock.mockResolvedValue({ ...SAMPLE_CATEGORY });
+    existsInternalCategoryByNameTypeMock.mockResolvedValue(false);
+    getCostUnitForTypeMock.mockResolvedValue('unit');
+    updateInternalCategoryFieldsMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'internal_product_categories_name_type_key',
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/products/internal-categories/ipc-1',
+      headers: authHeader(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Category with this name already exists for this type',
+    });
+    expect(propagateCategoryNameToProductsMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
 

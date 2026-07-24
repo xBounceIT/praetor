@@ -14,7 +14,10 @@ export const productCategories = pgTable(
   },
   (table) => [
     index('idx_internal_product_categories_type').on(table.type),
-    uniqueIndex('internal_product_categories_name_type_key').on(table.name, table.type),
+    uniqueIndex('internal_product_categories_name_type_key').on(
+      sql`lower(${table.name})`,
+      table.type,
+    ),
     check(
       'internal_product_categories_cost_unit_check',
       sql`${table.costUnit} IN ('unit', 'hours')`,
