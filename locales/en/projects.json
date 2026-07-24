@@ -47,13 +47,15 @@
       "da_fare": "Da fare",
       "in_corso": "In corso",
       "in_pausa": "In pausa",
-      "terminato": "Terminato"
+      "terminato": "Terminato",
+      "perpetuo": "Perpetuo"
     },
     "statusHelp": {
       "da_fare": "Planned job, time entries allowed.",
       "in_corso": "Active job, time entries allowed.",
       "in_pausa": "Suspended job, time entries blocked.",
-      "terminato": "Closed job, time entries blocked."
+      "terminato": "Closed job, time entries blocked.",
+      "perpetuo": "Permanent job, time entries allowed."
     },
     "inheritedFromDisabledClient": "Inherited from disabled Client: {{clientName}}",
     "allClients": "All Clients",
@@ -334,7 +336,8 @@
           "da_fare": "Da fare",
           "in_corso": "In corso",
           "in_pausa": "In pausa",
-          "terminato": "Terminato"
+          "terminato": "Terminato",
+          "perpetuo": "Perpetuo"
         }
       },
       "errors": {

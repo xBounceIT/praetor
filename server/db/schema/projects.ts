@@ -77,7 +77,7 @@ export const projects = pgTable(
     ),
     check(
       'projects_status_check',
-      sql`${table.status} IN ('da_fare', 'in_corso', 'in_pausa', 'terminato')`,
+      sql`${table.status} IN ('da_fare', 'in_corso', 'in_pausa', 'terminato', 'perpetuo')`,
     ),
     check(
       'projects_billing_frequency_check',

@@ -1,4 +1,10 @@
-export const PROJECT_STATUSES = ['da_fare', 'in_corso', 'in_pausa', 'terminato'] as const;
+export const PROJECT_STATUSES = [
+  'da_fare',
+  'in_corso',
+  'in_pausa',
+  'terminato',
+  'perpetuo',
+] as const;
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 

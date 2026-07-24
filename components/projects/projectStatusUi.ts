@@ -1,4 +1,11 @@
-import { Check, type LucideIcon, Pause, Play, Square } from 'lucide-react';
+import {
+  Check,
+  Infinity as InfinityIcon,
+  type LucideIcon,
+  Pause,
+  Play,
+  Square,
+} from 'lucide-react';
 import { createElement } from 'react';
 
 import type { ProjectStatus } from '../../types';
@@ -10,9 +17,10 @@ const PROJECT_STATUS_ICONS: Record<ProjectStatus, LucideIcon> = {
   in_corso: Play,
   in_pausa: Pause,
   terminato: Check,
+  perpetuo: InfinityIcon,
 };
 
-const FILLED_PROJECT_STATUS_ICONS = new Set<ProjectStatus>(['da_fare', 'in_corso']);
+const FILLED_PROJECT_STATUS_ICONS = new Set<ProjectStatus>(['da_fare', 'in_corso', 'perpetuo']);
 
 const resolveProjectStatus = (status: ProjectStatus | undefined) => status ?? LEGACY_PROJECT_STATUS;
 
@@ -41,6 +49,7 @@ export const getProjectStatusBadgeType = (status: ProjectStatus | undefined): St
     case 'da_fare':
       return 'pending';
     case 'in_corso':
+    case 'perpetuo':
       return 'active';
     case 'in_pausa':
       return 'disabled';
