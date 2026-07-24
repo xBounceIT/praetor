@@ -21,9 +21,14 @@ import {
 const INTERNAL_CATEGORY_NAME_UNIQUE_INDEX = 'internal_product_categories_name_type_key';
 const INTERNAL_CATEGORY_NAME_CONFLICT_MESSAGE =
   'Category with this name already exists for this type';
+const PRODUCT_TYPE_NAME_UNIQUE_INDEX = 'product_types_name_unique';
+const PRODUCT_TYPE_NAME_CONFLICT_MESSAGE = 'Product type with this name already exists';
 
 const isInternalCategoryNameConflict = (error: unknown): boolean =>
   getUniqueViolation(error)?.constraint === INTERNAL_CATEGORY_NAME_UNIQUE_INDEX;
+
+const isProductTypeNameConflict = (error: unknown): boolean =>
+  getUniqueViolation(error)?.constraint === PRODUCT_TYPE_NAME_UNIQUE_INDEX;
 
 const idParamSchema = {
   type: 'object',
@@ -1380,15 +1385,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
 
       if (await productsRepo.existsProductTypeByName(nameResult.value, null)) {
-        return badRequest(reply, 'Product type with this name already exists');
+        return badRequest(reply, PRODUCT_TYPE_NAME_CONFLICT_MESSAGE);
       }
 
       const id = generatePrefixedId('pt');
-      const created = await productsRepo.insertProductType(
-        id,
-        nameResult.value,
-        costUnitResult.value,
-      );
+      let created: productsRepo.ProductTypeRow;
+      try {
+        created = await productsRepo.insertProductType(id, nameResult.value, costUnitResult.value);
+      } catch (error) {
+        if (isProductTypeNameConflict(error)) {
+          return badRequest(reply, PRODUCT_TYPE_NAME_CONFLICT_MESSAGE);
+        }
+        throw error;
+      }
 
       await logAudit({
         request,
@@ -1448,37 +1457,54 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         requestedCostUnit = costUnitResult.value;
       }
 
-      const updateResult = await withDbTransaction(async (tx) => {
-        const current = await productsRepo.lockProductTypeById(idResult.value, tx);
-        if (!current) return { status: 'not_found' } as const;
+      type ProductTypeUpdateOutcome =
+        | { status: 'not_found' }
+        | { status: 'duplicate' }
+        | {
+            status: 'updated';
+            updated: productsRepo.ProductTypeRow;
+            newName: string;
+            newCostUnit: CostUnit;
+          };
 
-        const newName = requestedName ?? current.name;
-        const newCostUnit = requestedCostUnit ?? current.costUnit;
-        if (
-          newName !== current.name &&
-          (await productsRepo.existsProductTypeByName(newName, idResult.value, tx))
-        ) {
-          return { status: 'duplicate' } as const;
+      let updateResult: ProductTypeUpdateOutcome;
+      try {
+        updateResult = await withDbTransaction(async (tx): Promise<ProductTypeUpdateOutcome> => {
+          const current = await productsRepo.lockProductTypeById(idResult.value, tx);
+          if (!current) return { status: 'not_found' };
+
+          const newName = requestedName ?? current.name;
+          const newCostUnit = requestedCostUnit ?? current.costUnit;
+          if (
+            newName !== current.name &&
+            (await productsRepo.existsProductTypeByName(newName, idResult.value, tx))
+          ) {
+            return { status: 'duplicate' };
+          }
+          const updated = await productsRepo.updateProductTypeFields(
+            idResult.value,
+            newName,
+            newCostUnit,
+            tx,
+          );
+          if (!updated) return { status: 'not_found' };
+          if (newName !== current.name) {
+            await productsRepo.propagateProductTypeName(current.name, newName, tx);
+          }
+          if (newCostUnit !== current.costUnit) {
+            await productsRepo.propagateProductTypeCostUnit(newName, newCostUnit, tx);
+          }
+          return { status: 'updated', updated, newName, newCostUnit };
+        });
+      } catch (error) {
+        if (isProductTypeNameConflict(error)) {
+          return badRequest(reply, PRODUCT_TYPE_NAME_CONFLICT_MESSAGE);
         }
-        if (newName !== current.name) {
-          await productsRepo.propagateProductTypeName(current.name, newName, tx);
-        }
-        if (newCostUnit !== current.costUnit) {
-          await productsRepo.propagateProductTypeCostUnit(newName, newCostUnit, tx);
-        }
-        const updated = await productsRepo.updateProductTypeFields(
-          idResult.value,
-          newName,
-          newCostUnit,
-          tx,
-        );
-        return updated
-          ? ({ status: 'updated', updated, newName, newCostUnit } as const)
-          : ({ status: 'not_found' } as const);
-      });
+        throw error;
+      }
 
       if (updateResult.status === 'duplicate') {
-        return badRequest(reply, 'Product type with this name already exists');
+        return badRequest(reply, PRODUCT_TYPE_NAME_CONFLICT_MESSAGE);
       }
       if (updateResult.status === 'not_found') {
         return replyError(request, reply, {

@@ -1275,6 +1275,29 @@ describe('POST /api/products/internal-types', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  test('400 when a concurrent case-insensitive duplicate wins the insert race', async () => {
+    existsProductTypeByNameMock.mockResolvedValue(false);
+    insertProductTypeMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'product_types_name_unique',
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/products/internal-types',
+      headers: authHeader(),
+      payload: { name: 'Goods', costUnit: 'unit' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Product type with this name already exists',
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
   test('400 invalid costUnit', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -1344,6 +1367,31 @@ describe('PUT /api/products/internal-types/:id', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  test('400 when a concurrent case-insensitive duplicate wins the rename race', async () => {
+    lockProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
+    existsProductTypeByNameMock.mockResolvedValue(false);
+    updateProductTypeFieldsMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'product_types_name_unique',
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/products/internal-types/pt-1',
+      headers: authHeader(),
+      payload: { name: 'Taken' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Product type with this name already exists',
+    });
+    expect(propagateProductTypeNameMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
 

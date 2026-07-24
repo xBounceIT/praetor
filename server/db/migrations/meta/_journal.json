@@ -890,6 +890,13 @@
       "when": 1784860130386,
       "tag": "0126_enforce_customer_offer_item_product_cost_non_negative",
       "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1784861304806,
+      "tag": "0127_enforce_product_type_name_uniqueness",
+      "breakpoints": true
     }
   ]
 }
