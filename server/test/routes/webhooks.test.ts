@@ -104,7 +104,10 @@ const SAMPLE_WEBHOOK: realWebhooksRepo.Webhook = {
   authUsername: '',
   authHeaderName: '',
   authSecret: 'enc:ciphertext',
-  customHeaders: [],
+  customHeaders: [
+    { key: 'X-API-Key', value: 'encrypted-api-key', encrypted: true },
+    { key: 'X-Empty', value: '', encrypted: true },
+  ],
   enabled: true,
 };
 
@@ -139,7 +142,7 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('GET /api/webhooks', () => {
-  test('200 lists webhooks with the secret masked', async () => {
+  test('200 lists webhooks with all secret values masked', async () => {
     listMock.mockResolvedValue([SAMPLE_WEBHOOK]);
 
     const res = await testApp.inject({
@@ -153,6 +156,11 @@ describe('GET /api/webhooks', () => {
     expect(body).toHaveLength(1);
     expect(body[0].url).toBe(SAMPLE_WEBHOOK.url);
     expect(body[0].authSecret).toBe(MASKED_SECRET);
+    expect(body[0].customHeaders).toEqual([
+      { key: 'X-API-Key', value: MASKED_SECRET },
+      { key: 'X-Empty', value: '' },
+    ]);
+    expect(res.body).not.toContain('encrypted-api-key');
   });
 
   test('401 missing token', async () => {
@@ -172,7 +180,7 @@ describe('GET /api/webhooks', () => {
 });
 
 describe('GET /api/webhooks/:id', () => {
-  test('200 returns the masked webhook', async () => {
+  test('200 returns the webhook with all secret values masked', async () => {
     findByIdMock.mockResolvedValue(SAMPLE_WEBHOOK);
     const res = await testApp.inject({
       method: 'GET',
@@ -180,7 +188,10 @@ describe('GET /api/webhooks/:id', () => {
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).authSecret).toBe(MASKED_SECRET);
+    const body = JSON.parse(res.body);
+    expect(body.authSecret).toBe(MASKED_SECRET);
+    expect(body.customHeaders[0].value).toBe(MASKED_SECRET);
+    expect(res.body).not.toContain('encrypted-api-key');
   });
 
   test('404 when the webhook does not exist', async () => {
@@ -195,7 +206,7 @@ describe('GET /api/webhooks/:id', () => {
 });
 
 describe('POST /api/webhooks', () => {
-  test('201 creates, emits an audit row and returns masked', async () => {
+  test('201 creates, emits an audit row and returns every secret masked', async () => {
     createWebhookMock.mockResolvedValue(SAMPLE_WEBHOOK);
 
     const res = await testApp.inject({
@@ -208,6 +219,7 @@ describe('POST /api/webhooks', () => {
         httpMethod: 'POST',
         authType: 'bearer',
         authSecret: 'plain-token',
+        customHeaders: [{ key: 'X-API-Key', value: 'plain-api-key' }],
         enabled: true,
       },
     });
@@ -219,7 +231,10 @@ describe('POST /api/webhooks', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'webhook.created', entityType: 'webhook' }),
     );
-    expect(JSON.parse(res.body).authSecret).toBe(MASKED_SECRET);
+    const body = JSON.parse(res.body);
+    expect(body.authSecret).toBe(MASKED_SECRET);
+    expect(body.customHeaders[0].value).toBe(MASKED_SECRET);
+    expect(res.body).not.toContain('encrypted-api-key');
   });
 
   test('400 when the URL scheme is unsupported', async () => {
@@ -285,6 +300,22 @@ describe('POST /api/webhooks', () => {
       payload: { name: 'K', url: 'https://example.com/hook', authType: 'bogus' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  test('400 when a new custom header omits its value', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/webhooks',
+      headers: authHeader(),
+      payload: {
+        name: 'Missing header value',
+        url: 'https://example.com/hook',
+        customHeaders: [{ key: 'X-API-Key' }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createWebhookMock).not.toHaveBeenCalled();
   });
 
   test('400 (not 500) when the url exceeds the column length', async () => {
@@ -361,6 +392,21 @@ describe('PUT /api/webhooks/:id', () => {
       'webhook-1',
       expect.objectContaining({ authType: 'api_key', enabled: false }),
     );
+  });
+
+  test('200 allows a stored custom header value to be omitted and preserved', async () => {
+    updateWebhookMock.mockResolvedValue(SAMPLE_WEBHOOK);
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/webhooks/webhook-1',
+      headers: authHeader(),
+      payload: { customHeaders: [{ key: 'X-API-Key' }] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateWebhookMock).toHaveBeenCalledWith('webhook-1', {
+      customHeaders: [{ key: 'X-API-Key' }],
+    });
   });
 
   test('404 when the service reports the webhook is missing', async () => {

@@ -154,7 +154,7 @@ Each target defines:
 - **URL** — the public HTTPS endpoint Praetor calls. URLs with embedded credentials and loopback, private, link-local, or reserved destinations are rejected. Praetor resolves and pins the address before connecting and does not follow redirects.
 - **HTTP method** — `GET`, `POST` (default), `PUT`, `PATCH`, or `DELETE`.
 - **Authentication** — how Praetor authenticates to the target: **None**, **Bearer token**, **Basic** (username and password), or **API key** (a value sent under a custom header you name). The secret credential is encrypted at rest and never returned to the browser; when editing it shows a **Stored — Replace** badge, and the same Keep / Replace behavior as the other secret fields preserves it unless you explicitly replace or clear it.
-- **Custom headers** — optional key/value pairs attached to every request, layered on top of the authentication header. Use these for non-secret routing values such as a tenant id.
+- **Custom headers** — optional key/value pairs attached to every request, layered on top of the authentication header. Every value is encrypted at rest and masked in the API and browser. Editing uses **Stored — Replace** controls; leave a stored value untouched to preserve it, or choose **Replace** to set or clear it.
 - **Enabled** — a toggle that marks the target active or inactive.
 
 Create, edit, and delete actions are gated by the create, update, and delete permissions respectively, and every change is written to the audit log.
@@ -162,3 +162,5 @@ Create, edit, and delete actions are gated by the create, update, and delete per
 This page configures targets only; the events that trigger each webhook are wired up separately, for example in job-rule actions.
 
 > Upgrade note: `http://` targets saved by earlier versions are no longer dispatched. Update them to a public HTTPS endpoint before re-enabling rules that use them.
+>
+> When upgrading from a version that stored custom header values in plaintext, stop all older API instances and take a database backup before starting the new version. Startup encrypts existing values in place; an older image cannot dispatch those encrypted headers. Roll back by restoring the pre-upgrade backup before restarting the older image.

@@ -13701,6 +13701,7 @@
         "tags": [
           "projects"
         ],
+        "description": "Omits rules whose condition fields require permissions the caller does not have.",
         "parameters": [
           {
             "schema": {
@@ -44064,7 +44065,10 @@
                 ],
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Optional manual order code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
                   },
                   "description": {
                     "type": "string"
@@ -44636,7 +44640,8 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Order code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
                   },
                   "description": {
                     "type": [
@@ -46514,7 +46519,10 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens."
                   },
                   "linkedSaleId": {
                     "type": "string"
@@ -46903,7 +46911,9 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted."
                   },
                   "clientId": {
                     "type": "string"
@@ -46994,7 +47004,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 2048
             },
             "in": "path",
             "name": "id",
@@ -47288,7 +47299,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 2048
             },
             "in": "path",
             "name": "id",
@@ -54990,7 +55002,10 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Optional manual invoice code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
                   },
                   "linkedSaleId": {
                     "type": "string"
@@ -55366,7 +55381,8 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Invoice code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
                   },
                   "supplierId": {
                     "type": "string"
@@ -59331,6 +59347,27 @@
               }
             }
           },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "503": {
             "description": "Default Response",
             "content": {
@@ -59476,6 +59513,27 @@
             }
           },
           "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -59690,6 +59748,27 @@
             }
           },
           "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -62821,8 +62900,7 @@
                         }
                       },
                       "required": [
-                        "key",
-                        "value"
+                        "key"
                       ],
                       "additionalProperties": false
                     },

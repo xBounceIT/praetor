@@ -25,10 +25,13 @@ export const WEBHOOK_AUTH_TYPES = ['none', 'basic', 'bearer', 'api_key'] as cons
 export type WebhookAuthType = (typeof WEBHOOK_AUTH_TYPES)[number];
 
 // Arbitrary request headers attached to every dispatch, layered on top of (and lower priority
-// than) the headers the auth type contributes. Stored as a JSON array so order is preserved.
+// than) the headers the auth type contributes. Values are encrypted ciphertext (except the empty
+// string), and the JSON array preserves header order.
 export type StoredWebhookHeader = {
   key: string;
   value: string;
+  // Absent on legacy plaintext rows; true once `value` has been encrypted by the service.
+  encrypted?: true;
 };
 
 export const webhooks = pgTable(

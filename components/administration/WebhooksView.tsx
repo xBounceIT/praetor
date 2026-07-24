@@ -58,14 +58,29 @@ export interface WebhooksViewProps {
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
-// Editable header row. `uid` is a stable client-only key for React lists (the API shape is just
-// `{ key, value }`); it's stripped when building the request payload.
-type HeaderRow = { uid: string; key: string; value: string };
+// Editable custom header. Values returned by the API are masked, so stored rows use the same
+// explicit Keep / Replace state as the main authentication secret.
+type HeaderRow = {
+  uid: string;
+  key: string;
+  originalKey: string;
+  value: string;
+  isStored: boolean;
+  isReplacingValue: boolean;
+};
 
 let headerRowCounter = 0;
 const newHeaderRow = (key = '', value = ''): HeaderRow => {
   headerRowCounter += 1;
-  return { uid: `webhook-header-${headerRowCounter}`, key, value };
+  const isStored = isStoredSecret(value);
+  return {
+    uid: `webhook-header-${headerRowCounter}`,
+    key,
+    originalKey: key,
+    value: isStored ? '' : value,
+    isStored,
+    isReplacingValue: false,
+  };
 };
 
 const asSingleValue = (value: string | string[]): string =>
@@ -134,6 +149,8 @@ type FormAction =
   | { type: 'cancelReplaceSecret' }
   | { type: 'addHeader'; row: HeaderRow }
   | { type: 'updateHeader'; uid: string; field: 'key' | 'value'; value: string }
+  | { type: 'startReplaceHeader'; uid: string }
+  | { type: 'cancelReplaceHeader'; uid: string }
   | { type: 'removeHeader'; uid: string };
 
 const formReducer = (state: FormState, action: FormAction): FormState => {
@@ -188,8 +205,39 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
     case 'updateHeader':
       return {
         ...state,
+        customHeaders: state.customHeaders.map((header) => {
+          if (header.uid !== action.uid) return header;
+          if (action.field === 'value') return { ...header, value: action.value };
+          const keepsStoredValue =
+            header.isStored &&
+            action.value.trim().toLowerCase() === header.originalKey.trim().toLowerCase();
+          return {
+            ...header,
+            key: action.value,
+            value: keepsStoredValue ? '' : header.value,
+            isReplacingValue: header.isStored ? !keepsStoredValue : header.isReplacingValue,
+          };
+        }),
+      };
+    case 'startReplaceHeader':
+      return {
+        ...state,
         customHeaders: state.customHeaders.map((header) =>
-          header.uid === action.uid ? { ...header, [action.field]: action.value } : header,
+          header.uid === action.uid ? { ...header, isReplacingValue: true, value: '' } : header,
+        ),
+      };
+    case 'cancelReplaceHeader':
+      return {
+        ...state,
+        customHeaders: state.customHeaders.map((header) =>
+          header.uid === action.uid
+            ? {
+                ...header,
+                key: header.originalKey,
+                value: '',
+                isReplacingValue: false,
+              }
+            : header,
         ),
       };
     case 'removeHeader':
@@ -495,37 +543,52 @@ const WebhookFormModal: React.FC<{
                 ) : (
                   <div className="space-y-2">
                     {form.customHeaders.map((header) => (
-                      <div key={header.uid} className="flex items-center gap-2">
-                        <Input
-                          aria-label={t('administration:webhooks.fields.headerKey')}
-                          placeholder={t('administration:webhooks.placeholders.headerKey')}
-                          value={header.key}
-                          onChange={(event) =>
-                            dispatch({
-                              type: 'updateHeader',
-                              uid: header.uid,
-                              field: 'key',
-                              value: event.target.value,
-                            })
-                          }
-                        />
-                        <Input
-                          aria-label={t('administration:webhooks.fields.headerValue')}
-                          placeholder={t('administration:webhooks.placeholders.headerValue')}
+                      <div key={header.uid} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                        <Field>
+                          <FieldLabel>{t('administration:webhooks.fields.headerKey')}</FieldLabel>
+                          <Input
+                            aria-label={t('administration:webhooks.fields.headerKey')}
+                            placeholder={t('administration:webhooks.placeholders.headerKey')}
+                            value={header.key}
+                            onChange={(event) =>
+                              dispatch({
+                                type: 'updateHeader',
+                                uid: header.uid,
+                                field: 'key',
+                                value: event.target.value,
+                              })
+                            }
+                          />
+                        </Field>
+                        <SecretField
+                          label={t('administration:webhooks.fields.headerValue')}
                           value={header.value}
-                          onChange={(event) =>
+                          onChange={(value) =>
                             dispatch({
                               type: 'updateHeader',
                               uid: header.uid,
                               field: 'value',
-                              value: event.target.value,
+                              value,
                             })
                           }
+                          isStored={header.isStored}
+                          isReplacing={header.isReplacingValue}
+                          onStartReplace={() =>
+                            dispatch({ type: 'startReplaceHeader', uid: header.uid })
+                          }
+                          onCancelReplace={() =>
+                            dispatch({ type: 'cancelReplaceHeader', uid: header.uid })
+                          }
+                          storedLabel={t('administration:webhooks.secretStored')}
+                          storedHelp={t('administration:webhooks.secretStoredHelp')}
+                          placeholder={t('administration:webhooks.placeholders.headerValue')}
+                          testId={`webhook-header-${header.uid}`}
                         />
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon-sm"
+                          className="self-end"
                           aria-label={t('administration:webhooks.actions.removeHeader')}
                           onClick={() => dispatch({ type: 'removeHeader', uid: header.uid })}
                         >
@@ -655,7 +718,12 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
       customHeaders: form.customHeaders.reduce<NonNullable<WebhookPayload['customHeaders']>>(
         (headers, header) => {
           const key = header.key.trim();
-          if (key.length > 0) headers.push({ key, value: header.value });
+          if (key.length > 0) {
+            headers.push({
+              key,
+              ...(header.isStored && !header.isReplacingValue ? {} : { value: header.value }),
+            });
+          }
           return headers;
         },
         [],
@@ -686,7 +754,9 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
       errors.authHeaderName = t('administration:webhooks.errors.headerNameRequired');
     }
     if (
-      form.customHeaders.some((header) => header.value.trim() !== '' && header.key.trim() === '')
+      form.customHeaders.some(
+        (header) => (header.isStored || header.value.trim() !== '') && header.key.trim() === '',
+      )
     ) {
       errors.customHeaders = t('administration:webhooks.errors.headerKeyRequired');
     }

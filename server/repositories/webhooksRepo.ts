@@ -1,4 +1,4 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import {
   type StoredWebhookHeader,
@@ -9,9 +9,9 @@ import {
 
 export type WebhookHeader = StoredWebhookHeader;
 
-// Domain shape returned to routes. `authSecret` is the ciphertext as stored — the route masks it
-// with MASKED_SECRET before serializing, and a future dispatcher must `decrypt()` it. Timestamps
-// are intentionally omitted from the public shape (mirrors ssoProvidersRepo).
+// Domain shape returned to routes. Secret fields are ciphertext as stored; the route masks them
+// before serializing and the dispatcher decrypts them. Timestamps are intentionally omitted from
+// the public shape (mirrors ssoProvidersRepo).
 export type Webhook = {
   id: string;
   name: string;
@@ -81,6 +81,22 @@ export const list = async (exec: DbExecutor = db): Promise<Webhook[]> => {
   return rows.map(mapRow);
 };
 
+export const listBatchAfterId = async (
+  afterId: string | undefined,
+  limit: number,
+  exec: DbExecutor = db,
+): Promise<Webhook[]> => {
+  const rows = afterId
+    ? await exec
+        .select(WEBHOOK_PROJECTION)
+        .from(webhooks)
+        .where(gt(webhooks.id, afterId))
+        .orderBy(asc(webhooks.id))
+        .limit(limit)
+    : await exec.select(WEBHOOK_PROJECTION).from(webhooks).orderBy(asc(webhooks.id)).limit(limit);
+  return rows.map(mapRow);
+};
+
 export const findById = async (id: string, exec: DbExecutor = db): Promise<Webhook | null> => {
   const rows = await exec.select(WEBHOOK_PROJECTION).from(webhooks).where(eq(webhooks.id, id));
   return rows[0] ? mapRow(rows[0]) : null;
@@ -110,6 +126,20 @@ export const update = async (
     .where(eq(webhooks.id, id))
     .returning(WEBHOOK_PROJECTION);
   return rows[0] ? mapRow(rows[0]) : null;
+};
+
+export const replaceCustomHeadersIfUnchanged = async (
+  id: string,
+  expected: StoredWebhookHeader[],
+  replacement: StoredWebhookHeader[],
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await exec
+    .update(webhooks)
+    .set({ customHeaders: replacement, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(webhooks.id, id), eq(webhooks.customHeaders, expected)))
+    .returning({ id: webhooks.id });
+  return rows.length > 0;
 };
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

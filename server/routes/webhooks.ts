@@ -1,12 +1,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import {
-  type StoredWebhookHeader,
-  WEBHOOK_AUTH_TYPES,
-  WEBHOOK_HTTP_METHODS,
-} from '../db/schema/webhooks.ts';
+import { WEBHOOK_AUTH_TYPES, WEBHOOK_HTTP_METHODS } from '../db/schema/webhooks.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as webhooksRepo from '../repositories/webhooksRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { maskHeaders, type WebhookHeaderInput } from '../services/webhookHeaders.ts';
 import * as webhooksService from '../services/webhooks.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
@@ -27,14 +24,19 @@ const MAX_NAME_LEN = 255;
 const MAX_URL_LEN = 2000;
 const MAX_AUTH_FIELD_LEN = 255;
 
-const customHeaderSchema = {
+const customHeaderInputSchema = {
   type: 'object',
   properties: {
     key: { type: 'string' },
     value: { type: 'string' },
   },
-  required: ['key', 'value'],
+  required: ['key'],
   additionalProperties: false,
+} as const;
+
+const customHeaderResponseSchema = {
+  ...customHeaderInputSchema,
+  required: ['key', 'value'],
 } as const;
 
 // Full webhook as returned to the admin UI. `authSecret` is always masked here (never the
@@ -51,7 +53,7 @@ const webhookResponseSchema = {
     authUsername: { type: 'string' },
     authHeaderName: { type: 'string' },
     authSecret: { type: 'string' },
-    customHeaders: { type: 'array', items: customHeaderSchema },
+    customHeaders: { type: 'array', items: customHeaderResponseSchema },
     enabled: { type: 'boolean' },
   },
   required: [
@@ -82,7 +84,11 @@ const webhookBodyProperties = {
   authUsername: { type: 'string', maxLength: MAX_AUTH_FIELD_LEN },
   authHeaderName: { type: 'string', maxLength: MAX_AUTH_FIELD_LEN },
   authSecret: { type: 'string' },
-  customHeaders: { type: 'array', items: customHeaderSchema, maxItems: MAX_CUSTOM_HEADERS },
+  customHeaders: {
+    type: 'array',
+    items: customHeaderInputSchema,
+    maxItems: MAX_CUSTOM_HEADERS,
+  },
   enabled: { type: 'boolean' },
 } as const;
 
@@ -99,7 +105,14 @@ const webhookBodySchema = {
 // checks still live in validateWebhookBody.)
 const webhookCreateBodySchema = {
   type: 'object',
-  properties: webhookBodyProperties,
+  properties: {
+    ...webhookBodyProperties,
+    customHeaders: {
+      type: 'array',
+      items: customHeaderResponseSchema,
+      maxItems: MAX_CUSTOM_HEADERS,
+    },
+  },
   additionalProperties: false,
   required: ['name', 'url'],
 } as const;
@@ -121,22 +134,29 @@ const isValidWebhookUrl = (value: string): boolean => {
 
 const parseCustomHeaders = (
   value: unknown,
-): { ok: true; value: StoredWebhookHeader[] } | { ok: false; message: string } => {
+  options: { isCreate: boolean },
+): { ok: true; value: WebhookHeaderInput[] } | { ok: false; message: string } => {
   if (!Array.isArray(value)) {
     return { ok: false, message: 'customHeaders must be an array' };
   }
   if (value.length > MAX_CUSTOM_HEADERS) {
     return { ok: false, message: `customHeaders cannot exceed ${MAX_CUSTOM_HEADERS} entries` };
   }
-  const headers: StoredWebhookHeader[] = [];
+  const headers: WebhookHeaderInput[] = [];
   for (let i = 0; i < value.length; i++) {
     const entry = value[i] as { key?: unknown; value?: unknown };
     const key = requireNonEmptyString(entry?.key, `customHeaders[${i}].key`);
     if (!key.ok) return { ok: false, message: key.message };
-    if (typeof entry?.value !== 'string') {
+    if (entry?.value !== undefined && typeof entry.value !== 'string') {
       return { ok: false, message: `customHeaders[${i}].value must be a string` };
     }
-    headers.push({ key: key.value, value: entry.value });
+    if (options.isCreate && entry?.value === undefined) {
+      return { ok: false, message: `customHeaders[${i}].value is required` };
+    }
+    headers.push({
+      key: key.value,
+      ...(entry.value !== undefined ? { value: entry.value } : {}),
+    });
   }
   return { ok: true, value: headers };
 };
@@ -226,7 +246,7 @@ const validateWebhookBody = (
   }
 
   if (body.customHeaders !== undefined) {
-    const headers = parseCustomHeaders(body.customHeaders);
+    const headers = parseCustomHeaders(body.customHeaders, options);
     if (!headers.ok) {
       badRequest(reply, headers.message);
       return null;
@@ -262,6 +282,7 @@ const validateWebhookBody = (
 const serializeForResponse = (webhook: webhooksRepo.Webhook) => ({
   ...webhook,
   authSecret: webhook.authSecret ? MASKED_SECRET : '',
+  customHeaders: maskHeaders(webhook.customHeaders),
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {

@@ -155,6 +155,28 @@ describe('<WebhooksView />', () => {
     expect(screen.getByRole('button', { name: 'common:buttons.edit' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'common:buttons.delete' })).toBeDefined();
   });
+
+  test('keeps a masked custom header without exposing or echoing its value', async () => {
+    listMock.mockResolvedValue([
+      {
+        ...SAMPLE,
+        customHeaders: [{ key: 'Authorization', value: '********' }],
+      },
+    ]);
+    render(<WebhooksView permissions={FULL_PERMS} />);
+    await screen.findByText('Slack hook');
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.edit' }));
+    await screen.findByDisplayValue('Authorization');
+
+    expect(screen.queryByLabelText('administration:webhooks.fields.headerValue')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.update' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+
+    expect(updateMock.mock.calls[0][1].customHeaders).toEqual([{ key: 'Authorization' }]);
+    expect(JSON.stringify(updateMock.mock.calls[0][1])).not.toContain('********');
+  });
 });
 
 describe('resolveSecretForPayload', () => {
