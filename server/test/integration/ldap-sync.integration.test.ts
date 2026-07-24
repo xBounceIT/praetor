@@ -115,7 +115,7 @@ describe.skipIf(SHOULD_SKIP)('LDAP integration: syncUsers()', () => {
     const result = await ldapService.syncUsers();
 
     expect(result).toEqual({ synced: 1, created: 1 });
-    expect(addUserRoleMock).toHaveBeenCalledWith('u1', 'user');
+    expect(addUserRoleMock).toHaveBeenCalledWith('u1', 'user', expect.anything());
     expect(updateDirectoryProfileMock).toHaveBeenCalledTimes(1);
     expect(updateDirectoryProfileMock).toHaveBeenCalledWith(
       'u1',
