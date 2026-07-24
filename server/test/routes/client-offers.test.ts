@@ -611,6 +611,67 @@ describe('client-offer document discount validation', () => {
   });
 });
 
+describe('client-offer item productCost validation', () => {
+  test('400 rejects a negative item productCost on update', async () => {
+    coFindExistingMock.mockResolvedValue(gate());
+
+    const res = await putOffer({
+      items: [
+        {
+          productName: 'Service',
+          quantity: 2,
+          unitPrice: 100,
+          productCost: -5,
+          unitType: 'hours',
+          discount: 0,
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('productCost');
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('POST: 400 rejects a negative item productCost on create', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [
+          {
+            productName: 'Service',
+            quantity: 2,
+            unitPrice: 100,
+            productCost: -5,
+            unitType: 'hours',
+            discount: 0,
+            durationMonths: 1,
+            durationUnit: 'months',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('productCost');
+    expect(coCreateMock).not.toHaveBeenCalled();
+    expect(coInsertItemsMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('client-offer immutable revisions', () => {
   test('locks and snapshots an actual draft → sent transition', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));

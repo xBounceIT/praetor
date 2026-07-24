@@ -883,6 +883,13 @@
       "when": 1784859000000,
       "tag": "0125_enforce_supplier_code_uniqueness",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1784860130386,
+      "tag": "0126_enforce_customer_offer_item_product_cost_non_negative",
+      "breakpoints": true
     }
   ]
 }
