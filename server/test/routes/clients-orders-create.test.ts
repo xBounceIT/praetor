@@ -396,6 +396,23 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(coCreateMock).not.toHaveBeenCalled();
   });
 
+  test('400 rejects a traversal-shaped manual order code', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: '../supplier-orders/SORD-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coCreateMock).not.toHaveBeenCalled();
+  });
+
   test('201 auto-generates an order id when the create payload omits it', async () => {
     coCreateMock.mockImplementation((input: Record<string, unknown>) =>
       Promise.resolve({ ...CREATED_ORDER, id: input.id }),

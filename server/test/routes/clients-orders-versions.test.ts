@@ -384,6 +384,38 @@ describe('DELETE /api/clients-orders/:id', () => {
 });
 
 describe('PUT /api/clients-orders/:id document discount validation', () => {
+  test('400 rejects renaming an order to a traversal-shaped code', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { id: '../supplier-orders/SORD-1' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coFindIdConflictMock).not.toHaveBeenCalled();
+    expect(coRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows an unchanged legacy order code to be resubmitted', async () => {
+    const legacyId = 'legacy/../client-order';
+    const legacyOrder = { ...SAMPLE_ORDER, id: legacyId };
+    coFindExistingMock.mockResolvedValue(legacyOrder);
+    coUpdateMock.mockResolvedValue(legacyOrder);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/clients-orders/${encodeURIComponent(legacyId)}`,
+      headers: authHeader(),
+      payload: { id: legacyId },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coFindExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(coFindIdConflictMock).toHaveBeenCalledWith(legacyId, legacyId);
+    expect(coRenameMock).not.toHaveBeenCalled();
+  });
+
   test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
     coFindExistingMock.mockResolvedValue({
       ...SAMPLE_ORDER,
@@ -575,6 +607,22 @@ describe('PUT /api/clients-orders/:id status transitions', () => {
 });
 
 describe('GET /api/clients-orders/:id/versions', () => {
+  test('decodes the dot-only legacy order transport escape', async () => {
+    coExistsByIdMock.mockResolvedValue(true);
+    ovListForOrderMock.mockResolvedValue([]);
+    const escapedDotId = `${'~'.repeat(101)}..`;
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: `/api/clients-orders/${escapedDotId}/versions`,
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coExistsByIdMock).toHaveBeenCalledWith('..');
+    expect(ovListForOrderMock).toHaveBeenCalledWith('..');
+  });
+
   test('200 returns versions newest-first when order exists', async () => {
     coExistsByIdMock.mockResolvedValue(true);
     ovListForOrderMock.mockResolvedValue([SAMPLE_VERSION_ROW]);

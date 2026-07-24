@@ -23,9 +23,15 @@ import { logAudit } from '../utils/audit.ts';
 import { withCalculatedClientLineMol } from '../utils/client-line-pricing.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import { requestHasPermission } from '../utils/permissions.ts';
 import {
   inheritPricingSemanticsVersions,
@@ -107,6 +113,20 @@ const idParamSchema = {
     id: { type: 'string' },
   },
   required: ['id'],
+} as const;
+
+const manualOrderCodeCreateSchema = {
+  type: 'string',
+  maxLength: DOCUMENT_CODE_MAX_LENGTH,
+  pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  description:
+    'Optional manual order code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code.',
+} as const;
+
+const manualOrderCodeUpdateSchema = {
+  type: 'string',
+  description:
+    'Order code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted.',
 } as const;
 
 const clientOrderItemSchema = {
@@ -254,7 +274,7 @@ const clientOrderCreateBodySchema = {
   type: 'object',
   allOf: [createDocumentDiscountConstraint],
   properties: {
-    id: { type: 'string' },
+    id: manualOrderCodeCreateSchema,
     description: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     linkedOfferId: { type: 'string' },
@@ -273,7 +293,7 @@ const clientOrderCreateBodySchema = {
 const clientOrderUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: manualOrderCodeUpdateSchema,
     description: { type: ['string', 'null'] },
     linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
@@ -798,7 +818,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!linkedOfferIdResult.ok) return badRequest(reply, linkedOfferIdResult.message);
       const linkedQuoteIdResult = optionalNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
@@ -1103,12 +1123,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         status: ClientOrderStatus | undefined;
         notes: unknown;
       };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       let nextIdValue: string | null = null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
         if (nextIdResult.value) {
@@ -1809,7 +1832,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -1848,9 +1871,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await orderVersionsRepo.findById(idResult.value, versionIdResult.value);
@@ -1884,9 +1907,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const [current, version] = await Promise.all([
@@ -2091,7 +2114,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as unknown as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const deleted = await clientsOrdersRepo.deleteDraftById(idResult.value);
