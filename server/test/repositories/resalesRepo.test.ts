@@ -1,11 +1,19 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
-import { computeSupplierOrderTotal, listOrderOptions } from '../../repositories/resalesRepo.ts';
+import {
+  computeSupplierOrderTotal,
+  deleteCategoryIfUnused,
+  listOrderOptions,
+} from '../../repositories/resalesRepo.ts';
 import type { SupplierOrder, SupplierOrderItem } from '../../repositories/supplierOrdersRepo.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
 let testDb: DbExecutor;
+
+beforeEach(() => {
+  ({ exec, testDb } = setupTestDb());
+});
 
 const makeOrder = (overrides: Partial<Pick<SupplierOrder, 'discount' | 'discountType'>>) =>
   ({
@@ -125,7 +133,6 @@ describe('computeSupplierOrderTotal', () => {
 
 describe('listOrderOptions', () => {
   test('includes draft client orders when they have linked supplier orders', async () => {
-    ({ exec, testDb } = setupTestDb());
     exec.enqueue({
       rows: [
         {
@@ -149,5 +156,43 @@ describe('listOrderOptions', () => {
         supplierOrders: [{ id: 'so-1', supplierName: 'CloudSeat Licensing', total: 9 }],
       },
     ]);
+  });
+});
+
+describe('deleteCategoryIfUnused', () => {
+  test('deletes with a conditional NOT EXISTS guard in one statement', async () => {
+    exec.enqueue({ rows: [{ id: 'rvc-1' }] });
+
+    const result = await deleteCategoryIfUnused('rvc-1', testDb);
+
+    expect(result).toEqual({ status: 'deleted' });
+    expect(exec.calls).toHaveLength(1);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('delete from resale_categories');
+    expect(sql).toContain('not exists');
+    expect(sql).toContain('resale_activities');
+    expect(sql).toContain('returning');
+    expect(exec.calls[0].params).toContain('rvc-1');
+  });
+
+  test('returns in_use when activities reference the category (no unconditional delete)', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['2']] });
+
+    const result = await deleteCategoryIfUnused('rvc-1', testDb);
+
+    expect(result).toEqual({ status: 'in_use', activityCount: 2 });
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('not exists');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('resale_activities');
+  });
+
+  test('returns not_found when the category is missing and unused', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['0']] });
+
+    const result = await deleteCategoryIfUnused('missing', testDb);
+
+    expect(result).toEqual({ status: 'not_found' });
   });
 });

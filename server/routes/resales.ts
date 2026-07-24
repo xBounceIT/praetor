@@ -419,19 +419,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const linkedCount = await resalesRepo.countActivitiesByCategory(idResult.value);
-      if (linkedCount > 0) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Cannot delete a category used by resale activities',
-          action: 'resale_category.delete.conflict',
-          entityType: 'resale_category',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'in_use', counts: { activities: linkedCount } },
-        });
-      }
-      const deleted = await resalesRepo.deleteCategoryById(idResult.value);
-      if (!deleted) {
+
+      const result = await resalesRepo.deleteCategoryIfUnused(idResult.value);
+      if (result.status === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Category not found',
@@ -440,6 +430,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
+      if (result.status === 'in_use') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Cannot delete a category used by resale activities',
+          action: 'resale_category.delete.conflict',
+          entityType: 'resale_category',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: 'in_use',
+            counts: { activities: result.activityCount },
+          },
+        });
+      }
+
       await logAudit({
         request,
         action: 'resale_category.deleted',

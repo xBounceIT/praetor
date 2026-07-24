@@ -31,6 +31,7 @@ const findByIdMock = mock();
 const existsCategoryByNameMock = mock();
 const createCategoryMock = mock();
 const updateCategoryMock = mock();
+const deleteCategoryIfUnusedMock = mock();
 const txExecutor = {};
 const withDbTransactionMock = mock(async (callback: (tx: unknown) => Promise<unknown>) =>
   callback(txExecutor),
@@ -130,6 +131,7 @@ beforeAll(async () => {
     existsCategoryByName: existsCategoryByNameMock,
     createCategory: createCategoryMock,
     updateCategory: updateCategoryMock,
+    deleteCategoryIfUnused: deleteCategoryIfUnusedMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -162,6 +164,7 @@ beforeEach(async () => {
     existsCategoryByNameMock,
     createCategoryMock,
     updateCategoryMock,
+    deleteCategoryIfUnusedMock,
     withDbTransactionMock,
     logAuditMock,
   ]) {
@@ -179,6 +182,7 @@ beforeEach(async () => {
   existsCategoryByNameMock.mockResolvedValue(false);
   createCategoryMock.mockResolvedValue(SAMPLE_CATEGORY);
   updateCategoryMock.mockResolvedValue({ ...SAMPLE_CATEGORY, name: 'Licenza' });
+  deleteCategoryIfUnusedMock.mockResolvedValue({ status: 'deleted' });
   withDbTransactionMock.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback(txExecutor),
   );
@@ -402,5 +406,79 @@ describe('resale category routes', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Category name must be unique' });
     expect(existsCategoryByNameMock).toHaveBeenCalledWith('LICENZA', 'rvc-1');
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /categories/:id', () => {
+  test('204 deletes an unused category via the atomic repo helper', async () => {
+    currentPermissions = ['projects.resales.delete'];
+    deleteCategoryIfUnusedMock.mockResolvedValue({ status: 'deleted' });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/projects/resales/categories/rvc-1',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(deleteCategoryIfUnusedMock).toHaveBeenCalledWith('rvc-1');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'resale_category.deleted', entityId: 'rvc-1' }),
+    );
+  });
+
+  test('409 when activities reference the category (including concurrent insert races)', async () => {
+    currentPermissions = ['projects.resales.delete'];
+    deleteCategoryIfUnusedMock.mockResolvedValue({ status: 'in_use', activityCount: 1 });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/projects/resales/categories/rvc-1',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toMatchObject({
+      error: 'Cannot delete a category used by resale activities',
+    });
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'resale_category.delete.conflict',
+        entityId: 'rvc-1',
+        details: { secondaryLabel: 'in_use', counts: { activities: 1 } },
+      }),
+    );
+  });
+
+  test('404 when the category does not exist', async () => {
+    currentPermissions = ['projects.resales.delete'];
+    deleteCategoryIfUnusedMock.mockResolvedValue({ status: 'not_found' });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/projects/resales/categories/missing',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'resale_category.delete.not_found',
+        entityId: 'missing',
+      }),
+    );
+  });
+
+  test('403 without delete permission', async () => {
+    currentPermissions = ['projects.resales.view'];
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/projects/resales/categories/rvc-1',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(deleteCategoryIfUnusedMock).not.toHaveBeenCalled();
   });
 });
