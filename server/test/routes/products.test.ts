@@ -52,14 +52,14 @@ const listAllProductTypesWithCountsMock = mock();
 const findProductTypeByNameMock = mock();
 const getCostUnitForTypeMock = mock();
 const existsProductTypeByNameMock = mock();
-const findProductTypeByIdMock = mock();
+const lockProductTypeByIdMock = mock();
 const insertProductTypeMock = mock();
 const updateProductTypeFieldsMock = mock();
 const propagateProductTypeNameMock = mock();
 const propagateProductTypeCostUnitMock = mock();
 const countProductsForTypeMock = mock();
 const countCategoriesForTypeMock = mock();
-const deleteProductTypeByIdMock = mock();
+const deleteProductTypeIfUnusedMock = mock();
 
 const listInternalCategoriesByTypeMock = mock();
 const findInternalCategoryByIdMock = mock();
@@ -118,14 +118,14 @@ beforeAll(async () => {
     findProductTypeByName: findProductTypeByNameMock,
     getCostUnitForType: getCostUnitForTypeMock,
     existsProductTypeByName: existsProductTypeByNameMock,
-    findProductTypeById: findProductTypeByIdMock,
+    lockProductTypeById: lockProductTypeByIdMock,
     insertProductType: insertProductTypeMock,
     updateProductTypeFields: updateProductTypeFieldsMock,
     propagateProductTypeName: propagateProductTypeNameMock,
     propagateProductTypeCostUnit: propagateProductTypeCostUnitMock,
     countProductsForType: countProductsForTypeMock,
     countCategoriesForType: countCategoriesForTypeMock,
-    deleteProductTypeById: deleteProductTypeByIdMock,
+    deleteProductTypeIfUnused: deleteProductTypeIfUnusedMock,
     listInternalCategoriesByType: listInternalCategoriesByTypeMock,
     findInternalCategoryById: findInternalCategoryByIdMock,
     findCategoryIdByNameAndType: findCategoryIdByNameAndTypeMock,
@@ -247,14 +247,14 @@ const allMocks = [
   findProductTypeByNameMock,
   getCostUnitForTypeMock,
   existsProductTypeByNameMock,
-  findProductTypeByIdMock,
+  lockProductTypeByIdMock,
   insertProductTypeMock,
   updateProductTypeFieldsMock,
   propagateProductTypeNameMock,
   propagateProductTypeCostUnitMock,
   countProductsForTypeMock,
   countCategoriesForTypeMock,
-  deleteProductTypeByIdMock,
+  deleteProductTypeIfUnusedMock,
   listInternalCategoriesByTypeMock,
   findInternalCategoryByIdMock,
   findCategoryIdByNameAndTypeMock,
@@ -1176,7 +1176,7 @@ describe('POST /api/products/internal-types', () => {
 
 describe('PUT /api/products/internal-types/:id', () => {
   test('200 updates type', async () => {
-    findProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
+    lockProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
     existsProductTypeByNameMock.mockResolvedValue(false);
     updateProductTypeFieldsMock.mockResolvedValue({ ...SAMPLE_TYPE, name: 'svc' });
     countProductsForTypeMock.mockResolvedValue(0);
@@ -1190,13 +1190,15 @@ describe('PUT /api/products/internal-types/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(lockProductTypeByIdMock).toHaveBeenCalledWith('pt-1', expect.anything());
+    expect(existsProductTypeByNameMock).toHaveBeenCalledWith('svc', 'pt-1', expect.anything());
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'product_type.updated' }),
     );
   });
 
   test('404 type not found', async () => {
-    findProductTypeByIdMock.mockResolvedValue(null);
+    lockProductTypeByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1209,7 +1211,7 @@ describe('PUT /api/products/internal-types/:id', () => {
   });
 
   test('400 duplicate name', async () => {
-    findProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
+    lockProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
     existsProductTypeByNameMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
@@ -1225,10 +1227,10 @@ describe('PUT /api/products/internal-types/:id', () => {
 
 describe('DELETE /api/products/internal-types/:id', () => {
   test('204 deletes type', async () => {
-    findProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
-    countProductsForTypeMock.mockResolvedValue(0);
-    countCategoriesForTypeMock.mockResolvedValue(0);
-    deleteProductTypeByIdMock.mockResolvedValue(undefined);
+    deleteProductTypeIfUnusedMock.mockResolvedValue({
+      status: 'deleted',
+      type: SAMPLE_TYPE,
+    });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1237,13 +1239,16 @@ describe('DELETE /api/products/internal-types/:id', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(deleteProductTypeIfUnusedMock).toHaveBeenCalledWith('pt-1');
+    expect(countProductsForTypeMock).not.toHaveBeenCalled();
+    expect(countCategoriesForTypeMock).not.toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'product_type.deleted' }),
     );
   });
 
   test('404 not found', async () => {
-    findProductTypeByIdMock.mockResolvedValue(null);
+    deleteProductTypeIfUnusedMock.mockResolvedValue({ status: 'not_found' });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1255,9 +1260,12 @@ describe('DELETE /api/products/internal-types/:id', () => {
   });
 
   test('409 products linked', async () => {
-    findProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
-    countProductsForTypeMock.mockResolvedValue(3);
-    countCategoriesForTypeMock.mockResolvedValue(0);
+    deleteProductTypeIfUnusedMock.mockResolvedValue({
+      status: 'in_use',
+      type: SAMPLE_TYPE,
+      productCount: 3,
+      categoryCount: 0,
+    });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1270,9 +1278,12 @@ describe('DELETE /api/products/internal-types/:id', () => {
   });
 
   test('409 categories linked', async () => {
-    findProductTypeByIdMock.mockResolvedValue({ ...SAMPLE_TYPE });
-    countProductsForTypeMock.mockResolvedValue(0);
-    countCategoriesForTypeMock.mockResolvedValue(2);
+    deleteProductTypeIfUnusedMock.mockResolvedValue({
+      status: 'in_use',
+      type: SAMPLE_TYPE,
+      productCount: 0,
+      categoryCount: 2,
+    });
 
     const res = await testApp.inject({
       method: 'DELETE',
