@@ -109,6 +109,8 @@ Creando un ordine da un preventivo fornitore (con il pulsante dedicato o nella c
 
 Le fatture clienti e fornitori devono riflettere ordini e consegne effettive. Controlla imponibili, IVA, totale e riferimenti al documento collegato.
 
+Quando assegni o modifichi manualmente il codice di una fattura fornitore, usa solo lettere, numeri, trattini e trattini bassi, per un massimo di 100 caratteri. Le fatture storiche con codici diversi restano consultabili e modificabili senza rinominarle.
+
 Quando una fattura esce dallo stato bozza diventa in sola lettura: non può essere riportata in bozza o eliminata. Elimina solo le bozze create per errore, prima dell'emissione.
 
 L'importo pagato non può superare il totale della fattura. Quando una fattura viene impostata su **pagata**, l'importo pagato deve coprire almeno l'intero totale; in caso contrario Praetor respinge il salvataggio per mantenere coerenti scadenziari, saldi e report.

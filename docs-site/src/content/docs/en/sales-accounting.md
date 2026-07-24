@@ -109,6 +109,8 @@ When you create an order from a supplier quote (with the dedicated button or thr
 
 Customer and supplier invoices should match actual orders and deliveries. Check taxable amounts, VAT, totals, and references to the linked document.
 
+When assigning or changing a supplier-invoice code manually, use only letters, numbers, hyphens, and underscores, up to 100 characters. Historical invoices with other codes remain accessible and can be edited without renaming them.
+
 After an invoice leaves draft status it becomes read-only: it cannot be moved back to draft or deleted. Delete only draft invoices that were created by mistake, before issuing them.
 
 The amount paid cannot exceed the invoice total. When an invoice is set to **paid**, the amount paid must cover at least the full total; otherwise Praetor rejects the save so aging, balances, and reports stay consistent.

@@ -576,6 +576,23 @@ describe('POST /api/supplier-invoices', () => {
     expect(body.id).toBe('CUSTOM-1');
   });
 
+  test('400 rejects a manual invoice id that is unsafe in a URL path segment', async () => {
+    const unsafeId = '../supplier-orders/SORD-1?force=true';
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, id: unsafeId });
+    insertItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, invoiceId: unsafeId }]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: { ...validBody, id: unsafeId },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(insertItemsMock).not.toHaveBeenCalled();
+  });
+
   test('400 missing supplierId', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -772,6 +789,50 @@ describe('POST /api/supplier-invoices', () => {
 });
 
 describe('PUT /api/supplier-invoices/:id', () => {
+  test('200 lets an existing unsafe invoice id be resubmitted unchanged', async () => {
+    const legacyId = '../supplier-orders/SORD-1?force=true';
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ id: legacyId }));
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ id: legacyId }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, id: legacyId, notes: 'updated' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/..%2Fsupplier-orders%2FSORD-1%3Fforce%3Dtrue',
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(renameMock).not.toHaveBeenCalled();
+  });
+
+  test('200 decodes the transport escape for an existing dot-only invoice id', async () => {
+    const legacyId = '..';
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate({ id: legacyId }));
+    lockExistingByIdMock.mockResolvedValue({
+      ...existingInvoiceForUpdate({ id: legacyId }),
+      supplierName: 'Acme Supply',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, id: legacyId, notes: 'updated' });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/supplier-invoices/${'~'.repeat(101)}..`,
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(renameMock).not.toHaveBeenCalled();
+  });
+
   test('200 partial update on draft invoice', async () => {
     findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     updateMock.mockResolvedValue({ ...SAMPLE_INVOICE, status: 'sent' });
@@ -1070,6 +1131,22 @@ describe('PUT /api/supplier-invoices/:id', () => {
 
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body)).toEqual({ error: 'Invoice ID already exists' });
+  });
+
+  test('400 rejects renaming an invoice to an id that is unsafe in a URL path segment', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { id: '../supplier-orders/SORD-1?force=true' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'id can only contain letters, numbers, underscores, and hyphens',
+    });
+    expect(findExistingMock).not.toHaveBeenCalled();
+    expect(renameMock).not.toHaveBeenCalled();
   });
 
   test('400 dueDate before issueDate using effective dates', async () => {
