@@ -198,6 +198,29 @@ describe('/api/sales/quote-communication-channels', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('POST returns 400 when a concurrent case-insensitive duplicate wins the insert race', async () => {
+    existsByNameMock.mockResolvedValue(false);
+    createMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'quote_communication_channels_name_unique',
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/quote-communication-channels',
+      headers: authHeader(),
+      payload: { name: 'email' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Communication channel with this name already exists',
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
   test('POST rejects icons outside the supported set', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -233,6 +256,30 @@ describe('/api/sales/quote-communication-channels', () => {
 
     expect(res.statusCode).toBe(200);
     expect(updateMock).toHaveBeenCalledWith('qcc_email', 'PEC', 'envelope');
+  });
+
+  test('PUT returns 400 when a concurrent case-insensitive rename wins the update race', async () => {
+    existsByNameMock.mockResolvedValue(false);
+    updateMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'quote_communication_channels_name_unique',
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/quote-communication-channels/qcc_email',
+      headers: authHeader(),
+      payload: { name: 'EMAIL', icon: 'video' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Communication channel with this name already exists',
+    });
+    expect(existsByNameMock).toHaveBeenCalledWith('EMAIL', 'qcc_email');
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('PUT blocks changes to default channels', async () => {
