@@ -277,6 +277,60 @@ const syncDirectoryProfileTx = async (
 const syncDirectoryProfile = (userId: string, profile: DirectoryProfile): Promise<void> =>
   withDbTransaction((tx) => syncDirectoryProfileTx(userId, profile, tx));
 
+// LDAP auto-provision must create the users row, settings row, and user_roles assignment in
+// one transaction. createUser alone does not write user_roles; a crash/error between that
+// insert and applyExternalRolesForUser would leave a stranded LDAP user that later logins
+// intentionally skip (bootstrap-only role mapping) and that auth middleware rejects via
+// user_roles membership checks.
+type NewLdapUserProvision = {
+  id: string;
+  name: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  username: string;
+  primaryRole: string;
+  email?: string | null;
+  groups: string[];
+  roleMappings: ExternalRoleMapping[];
+};
+
+const provisionNewLdapUser = async (input: NewLdapUserProvision): Promise<void> => {
+  await withDbTransaction(async (tx) => {
+    await usersRepo.createUser(
+      {
+        id: input.id,
+        name: input.name,
+        firstName: input.firstName?.trim() || null,
+        lastName: input.lastName?.trim() || null,
+        username: input.username,
+        passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+        role: input.primaryRole,
+        avatarInitials: computeAvatarInitials(input.name),
+        authMethod: 'ldap',
+        authProviderId: null,
+      },
+      tx,
+    );
+    await settingsRepo.upsertForUser(
+      input.id,
+      {
+        fullName: input.name,
+        email: input.email?.trim() || '',
+        language: null,
+      },
+      tx,
+    );
+    await applyExternalRolesForUser(input.id, input.groups, input.roleMappings, tx);
+  });
+};
+
+// Repair path for LDAP users stranded without a user_roles row (e.g. historical crash between
+// createUser and role write). ON CONFLICT DO NOTHING keeps this a no-op when membership already
+// exists, so every existing-user login/sync can cheaply enforce the invariant without clobbering
+// additional admin-assigned roles.
+const ensurePrimaryRoleMembership = (userId: string, primaryRoleId: string): Promise<void> =>
+  usersRepo.addUserRole(userId, primaryRoleId);
+
 const isUniqueViolationError = (err: unknown): boolean => {
   if (!err || typeof err !== 'object') return false;
   const code = (err as { code?: unknown }).code;
@@ -504,6 +558,9 @@ class LDAPService {
           result.groups,
         );
       }
+      // Repair stranded users that have users.role but no matching user_roles row (e.g.
+      // historical non-atomic auto-provision). Does not replace or remove other roles.
+      await ensurePrimaryRoleMembership(existingByCanonical.id, existingByCanonical.role);
       await syncDirectoryProfile(existingByCanonical.id, {
         name: result.displayName,
         firstName: result.firstName,
@@ -544,17 +601,16 @@ class LDAPService {
     const primaryRole = filteredRoleIds[0];
 
     try {
-      await usersRepo.createUser({
+      await provisionNewLdapUser({
         id,
         name,
-        firstName: result.firstName?.trim() || null,
-        lastName: result.lastName?.trim() || null,
+        firstName: result.firstName,
+        lastName: result.lastName,
         username: canonicalUsername,
-        passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
-        role: primaryRole,
-        avatarInitials: computeAvatarInitials(name),
-        authMethod: 'ldap',
-        authProviderId: null,
+        primaryRole,
+        email: result.email,
+        groups: result.groups,
+        roleMappings,
       });
     } catch (err) {
       if (isUniqueViolationError(err)) {
@@ -570,6 +626,7 @@ class LDAPService {
           // is acceptable; the bootstrap-only invariant only forbids re-applying mapping
           // for users that already existed BEFORE this provisioning request started.
           await applyExternalRolesForUserIfMatched(racedUser.id, result.groups, roleMappings);
+          await ensurePrimaryRoleMembership(racedUser.id, racedUser.role);
           await syncDirectoryProfile(racedUser.id, {
             name: result.displayName,
             firstName: result.firstName,
@@ -592,12 +649,6 @@ class LDAPService {
       throw err;
     }
 
-    await settingsRepo.upsertForUser(id, {
-      fullName: name,
-      email: result.email?.trim() || '',
-      language: null,
-    });
-    await applyExternalRolesForUser(id, result.groups, roleMappings);
     return { authenticated: true, userId: id, created: true, canonicalUsername };
   }
 
@@ -891,6 +942,7 @@ class LDAPService {
               'LDAP sync skipped role-mapping diagnostic for user: group search failed',
             );
             // Still refresh the display name — that bit doesn't depend on group state.
+            await ensurePrimaryRoleMembership(existing.id, existing.role);
             await syncDirectoryProfile(existing.id, {
               name: profile.name,
               firstName: profile.firstName,
@@ -902,6 +954,7 @@ class LDAPService {
           }
           // Refresh by id so pre-migration mixed-case usernames and provider email claims
           // both land on the already matched row.
+          await ensurePrimaryRoleMembership(existing.id, existing.role);
           await syncDirectoryProfile(existing.id, {
             name: profile.name,
             firstName: profile.firstName,
@@ -941,26 +994,17 @@ class LDAPService {
           }
           const roleIds = mapExternalGroupsToRoleIds(groups, roleMappings);
           const id = generatePrefixedId('u');
-          await usersRepo.createUser({
+          await provisionNewLdapUser({
             id,
             name,
-            firstName: profile.firstName?.trim() || null,
-            lastName: profile.lastName?.trim() || null,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
             username,
-            passwordHash: usersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
-            role: roleIds[0],
-            avatarInitials: computeAvatarInitials(name),
-            authMethod: 'ldap',
-            authProviderId: null,
+            primaryRole: roleIds[0],
+            email,
+            groups,
+            roleMappings,
           });
-          await Promise.all([
-            settingsRepo.upsertForUser(id, {
-              fullName: name,
-              email: email?.trim() || '',
-              language: null,
-            }),
-            applyExternalRolesForUser(id, groups, roleMappings),
-          ]);
           createdCount++;
         }
       }

@@ -162,9 +162,6 @@ const writeExternalRoleIdsTx = async (
   await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
 };
 
-const writeExternalRoleIds = (userId: string, roleIds: string[]): Promise<void> =>
-  withDbTransaction((tx) => writeExternalRoleIdsTx(userId, roleIds, tx));
-
 const syncExternalProfileTx = async (
   userId: string,
   input: Pick<ResolveExternalIdentityInput, 'name' | 'email'>,
@@ -189,9 +186,13 @@ const syncExternalProfileTx = async (
 const applyExternalRoleIdsForUser = async (
   userId: string,
   roleIds: string[],
+  exec: DbExecutor = db,
 ): Promise<string[]> => {
   const mappedRoleIds = await filterExistingRoleIds(roleIds);
-  await writeExternalRoleIds(userId, mappedRoleIds);
+  // runAtomically reuses the caller's transaction when one is passed (so LDAP auto-provision
+  // can create the user, settings row, and user_roles assignment atomically), or opens its own
+  // when called standalone — `exec` defaults to `db`, so existing callers are unaffected.
+  await runAtomically(exec, (tx) => writeExternalRoleIdsTx(userId, mappedRoleIds, tx));
   return mappedRoleIds;
 };
 
@@ -199,8 +200,9 @@ export const applyExternalRolesForUser = (
   userId: string,
   groups: string[],
   mappings: ExternalRoleMapping[],
+  exec: DbExecutor = db,
 ): Promise<string[]> =>
-  applyExternalRoleIdsForUser(userId, mapExternalGroupsToRoleIds(groups, mappings));
+  applyExternalRoleIdsForUser(userId, mapExternalGroupsToRoleIds(groups, mappings), exec);
 
 // True when the user's external groups produce zero usable roles AND the admin has at
 // least one role mapping configured — i.e., the admin's stated intent is "users should
