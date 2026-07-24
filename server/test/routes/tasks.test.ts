@@ -701,9 +701,9 @@ describe('POST /api/tasks', () => {
 describe('GET /api/tasks/hours/batch', () => {
   test('200: tasks_all without tracker_all remains scoped to the entry owner', async () => {
     sumHoursByProjectsMock.mockResolvedValue([
-      { projectId: 'p-1', task: 'Dev', total: 4 },
-      { projectId: 'p-1', task: 'QA', total: 2 },
-      { projectId: 'p-2', task: 'Dev', total: 1 },
+      { projectId: 'p-1', taskId: 't-dev', total: 4 },
+      { projectId: 'p-1', taskId: 't-qa', total: 2 },
+      { projectId: 'p-2', taskId: 't-p2-dev', total: 1 },
     ]);
 
     const res = await testApp.inject({
@@ -714,8 +714,8 @@ describe('GET /api/tasks/hours/batch', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({
-      'p-1': { Dev: 4, QA: 2 },
-      'p-2': { Dev: 1 },
+      'p-1': { 't-dev': 4, 't-qa': 2 },
+      'p-2': { 't-p2-dev': 1 },
     });
     expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1', 'p-2'], {
       taskAssigneeId: undefined,
@@ -789,10 +789,10 @@ describe('GET /api/tasks/hours/batch', () => {
 });
 
 describe('GET /api/tasks/hours', () => {
-  test('200: returns owner-scoped hours for a single project without tracker_all', async () => {
+  test('200: keys renamed and duplicate-name task totals by task id', async () => {
     sumHoursByProjectsMock.mockResolvedValue([
-      { projectId: 'p-1', task: 'Dev', total: 4 },
-      { projectId: 'p-1', task: 'QA', total: 2 },
+      { projectId: 'p-1', taskId: 't-renamed', total: 4 },
+      { projectId: 'p-1', taskId: 't-duplicate', total: 2 },
     ]);
 
     const res = await testApp.inject({
@@ -802,7 +802,23 @@ describe('GET /api/tasks/hours', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ Dev: 4, QA: 2 });
+    expect(JSON.parse(res.body)).toEqual({ 't-renamed': 4, 't-duplicate': 2 });
+  });
+
+  test('200: returns owner-scoped hours for a single project without tracker_all', async () => {
+    sumHoursByProjectsMock.mockResolvedValue([
+      { projectId: 'p-1', taskId: 't-dev', total: 4 },
+      { projectId: 'p-1', taskId: 't-qa', total: 2 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/tasks/hours?projectId=p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ 't-dev': 4, 't-qa': 2 });
     expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], {
       taskAssigneeId: undefined,
       timeEntries: { kind: 'owner', userId: 'u1' },

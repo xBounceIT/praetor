@@ -5,6 +5,7 @@ import { useLatestRef } from '../../hooks/useLatestRef';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type { SupplierQuoteAttachment } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
+import { downloadBlob } from '../../utils/download';
 import {
   attachmentValidationMessage,
   formatAttachmentFileSize,
@@ -127,14 +128,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
     async (attachment: SupplierQuoteAttachment) => {
       try {
         const blob = await supplierQuotesApi.downloadAttachment(quoteId, attachment.id);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = attachment.fileName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
+        downloadBlob(attachment.fileName, blob);
       } catch (e) {
         dispatchAttachments({
           type: 'error',

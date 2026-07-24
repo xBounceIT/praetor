@@ -365,12 +365,12 @@ export const sumHoursByProjects = async (
   projectIds: string[],
   scope: TaskHoursScope,
   exec: DbExecutor = db,
-): Promise<Array<{ projectId: string; task: string; total: number }>> => {
+): Promise<Array<{ projectId: string; taskId: string; total: number }>> => {
   if (projectIds.length === 0) return [];
-  const taskVisibilityJoin = scope.taskAssigneeId
+  const taskJoin = scope.taskAssigneeId
     ? sql`${timeEntriesTasksJoin}
           JOIN user_tasks ut ON ut.task_id = ${tasksT.id}`
-    : sql``;
+    : timeEntriesTasksJoin;
   const conditions = [inArray(timeEntriesTe.projectId, projectIds)];
 
   if (scope.taskAssigneeId) {
@@ -385,11 +385,11 @@ export const sumHoursByProjects = async (
     );
   }
 
-  const query = sql`SELECT ${timeEntriesTe.projectId} AS "projectId", ${timeEntriesTe.task}, COALESCE(SUM(${timeEntriesTe.duration}), 0)::float AS total
+  const query = sql`SELECT ${timeEntriesTe.projectId} AS "projectId", ${tasksT.id} AS "taskId", COALESCE(SUM(${timeEntriesTe.duration}), 0)::float AS total
                       FROM time_entries te
-                      ${taskVisibilityJoin}
+                      ${taskJoin}
                      WHERE ${and(...conditions)}
-                     GROUP BY ${timeEntriesTe.projectId}, ${timeEntriesTe.task}`;
-  const rows = await executeRows<{ projectId: string; task: string; total: number }>(exec, query);
-  return rows.map((r) => ({ projectId: r.projectId, task: r.task, total: Number(r.total) }));
+                     GROUP BY ${timeEntriesTe.projectId}, ${tasksT.id}`;
+  const rows = await executeRows<{ projectId: string; taskId: string; total: number }>(exec, query);
+  return rows.map((r) => ({ projectId: r.projectId, taskId: r.taskId, total: Number(r.total) }));
 };

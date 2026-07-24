@@ -18856,7 +18856,7 @@
         "tags": [
           "tasks"
         ],
-        "description": "Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.",
+        "description": "Returns project maps keyed by stable task ID. Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.",
         "parameters": [
           {
             "schema": {
@@ -19019,7 +19019,7 @@
         "tags": [
           "tasks"
         ],
-        "description": "Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.",
+        "description": "Returns totals keyed by stable task ID. Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.",
         "parameters": [
           {
             "schema": {

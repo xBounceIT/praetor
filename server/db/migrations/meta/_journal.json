@@ -855,6 +855,13 @@
       "when": 1784749181085,
       "tag": "0121_enforce_time_entry_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1784855620187,
+      "tag": "0122_enforce_resale_category_name_uniqueness",
+      "breakpoints": true
     }
   ]
 }
