@@ -20,7 +20,7 @@ const PROJECT_STATUS_ICONS: Record<ProjectStatus, LucideIcon> = {
   perpetuo: InfinityIcon,
 };
 
-const FILLED_PROJECT_STATUS_ICONS = new Set<ProjectStatus>(['da_fare', 'in_corso', 'perpetuo']);
+const FILLED_PROJECT_STATUS_ICONS = new Set<ProjectStatus>(['da_fare', 'in_corso']);
 
 const resolveProjectStatus = (status: ProjectStatus | undefined) => status ?? LEGACY_PROJECT_STATUS;
 
