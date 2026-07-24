@@ -44,9 +44,11 @@ export const tasksApi = {
 
   delete: (id: string): Promise<void> => fetchApi(`/tasks/${id}`, { method: 'DELETE' }),
 
+  /** Totals keyed by stable task id (not task name). */
   getHours: (projectId: string, signal?: AbortSignal): Promise<Record<string, number>> =>
     fetchApi(`/tasks/hours?projectId=${encodeURIComponent(projectId)}`, { signal }),
 
+  /** Per-project maps of totals keyed by stable task id (not task name). */
   getHoursForProjects: (
     projectIds: string[],
     signal?: AbortSignal,
