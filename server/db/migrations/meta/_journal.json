@@ -862,6 +862,13 @@
       "when": 1784855620187,
       "tag": "0122_enforce_resale_category_name_uniqueness",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1784854566841,
+      "tag": "0123_enforce_internal_category_name_uniqueness",
+      "breakpoints": true
     }
   ]
 }
