@@ -699,7 +699,7 @@ describe('POST /api/tasks', () => {
 });
 
 describe('GET /api/tasks/hours/batch', () => {
-  test('200: returns hours by project + task (with tasks_all.view → no userId filter)', async () => {
+  test('200: tasks_all without tracker_all remains scoped to the entry owner', async () => {
     sumHoursByProjectsMock.mockResolvedValue([
       { projectId: 'p-1', task: 'Dev', total: 4 },
       { projectId: 'p-1', task: 'QA', total: 2 },
@@ -717,10 +717,13 @@ describe('GET /api/tasks/hours/batch', () => {
       'p-1': { Dev: 4, QA: 2 },
       'p-2': { Dev: 1 },
     });
-    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1', 'p-2'], undefined);
+    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1', 'p-2'], {
+      taskAssigneeId: undefined,
+      timeEntries: { kind: 'owner', userId: 'u1' },
+    });
   });
 
-  test('200: without tasks_all.view → scoped by user.id', async () => {
+  test('200: without tasks_all.view scopes both assigned tasks and owned entries', async () => {
     getRolePermissionsMock.mockResolvedValue(USER_PERMS);
     sumHoursByProjectsMock.mockResolvedValue([]);
 
@@ -731,7 +734,27 @@ describe('GET /api/tasks/hours/batch', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], 'u1');
+    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], {
+      taskAssigneeId: 'u1',
+      timeEntries: { kind: 'owner', userId: 'u1' },
+    });
+  });
+
+  test('200: tracker view includes only the actor and managed users', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);
+    sumHoursByProjectsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/tasks/hours/batch?projectIds=p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], {
+      taskAssigneeId: 'u1',
+      timeEntries: { kind: 'manager', managerId: 'u1' },
+    });
   });
 
   test('400: empty projectIds query', async () => {
@@ -766,7 +789,7 @@ describe('GET /api/tasks/hours/batch', () => {
 });
 
 describe('GET /api/tasks/hours', () => {
-  test('200: returns hours for a single project', async () => {
+  test('200: returns owner-scoped hours for a single project without tracker_all', async () => {
     sumHoursByProjectsMock.mockResolvedValue([
       { projectId: 'p-1', task: 'Dev', total: 4 },
       { projectId: 'p-1', task: 'QA', total: 2 },
@@ -780,10 +803,13 @@ describe('GET /api/tasks/hours', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ Dev: 4, QA: 2 });
-    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], undefined);
+    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], {
+      taskAssigneeId: undefined,
+      timeEntries: { kind: 'owner', userId: 'u1' },
+    });
   });
 
-  test('200: scoped by user without tasks_all', async () => {
+  test('200: scopes both tasks and entries without tasks_all', async () => {
     getRolePermissionsMock.mockResolvedValue(USER_PERMS);
     sumHoursByProjectsMock.mockResolvedValue([]);
 
@@ -794,7 +820,27 @@ describe('GET /api/tasks/hours', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], 'u1');
+    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], {
+      taskAssigneeId: 'u1',
+      timeEntries: { kind: 'owner', userId: 'u1' },
+    });
+  });
+
+  test('200: tracker_all widens entry ownership but not task visibility', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.view']);
+    sumHoursByProjectsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/tasks/hours?projectId=p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sumHoursByProjectsMock).toHaveBeenCalledWith(['p-1'], {
+      taskAssigneeId: 'u1',
+      timeEntries: { kind: 'all' },
+    });
   });
 
   test('401: missing token', async () => {

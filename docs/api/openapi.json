@@ -18855,6 +18855,7 @@
         "tags": [
           "tasks"
         ],
+        "description": "Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.",
         "parameters": [
           {
             "schema": {
@@ -19017,6 +19018,7 @@
         "tags": [
           "tasks"
         ],
+        "description": "Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.",
         "parameters": [
           {
             "schema": {
