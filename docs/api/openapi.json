@@ -54882,7 +54882,14 @@
                         "format": "date"
                       },
                       "status": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": [
+                          "draft",
+                          "sent",
+                          "paid",
+                          "overdue",
+                          "cancelled"
+                        ]
                       },
                       "subtotal": {
                         "type": "number"
@@ -55174,7 +55181,14 @@
                     "format": "date"
                   },
                   "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "sent",
+                      "paid",
+                      "overdue",
+                      "cancelled"
+                    ]
                   },
                   "subtotal": {
                     "type": "number"
@@ -55281,7 +55295,14 @@
                       "format": "date"
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "paid",
+                        "overdue",
+                        "cancelled"
+                      ]
                     },
                     "subtotal": {
                       "type": "number"
@@ -55548,7 +55569,14 @@
                     "format": "date"
                   },
                   "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "sent",
+                      "paid",
+                      "overdue",
+                      "cancelled"
+                    ]
                   },
                   "subtotal": {
                     "type": "number"
@@ -55658,7 +55686,14 @@
                       "format": "date"
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "paid",
+                        "overdue",
+                        "cancelled"
+                      ]
                     },
                     "subtotal": {
                       "type": "number"

@@ -702,6 +702,18 @@ describe('POST /api/supplier-invoices', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('400 rejects an invalid status instead of reaching the database CHECK', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: { ...validBody, status: 'void' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('404 linkedSaleId points to missing source order', async () => {
     findOrderByIdMock.mockResolvedValue(null);
     findInvoiceForLinkedSaleMock.mockResolvedValue(null);
@@ -851,6 +863,18 @@ describe('PUT /api/supplier-invoices/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'supplier_invoice.updated' }),
     );
+  });
+
+  test('400 rejects an invalid status instead of reaching the database CHECK', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: { status: 'void' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('200 update with new items uses replaceItems', async () => {

@@ -33,6 +33,7 @@ import {
   optionalDateString,
   optionalDurationMonths,
   optionalDurationUnit,
+  optionalEnum,
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
   parseDateString,
@@ -40,6 +41,8 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+
+const SUPPLIER_INVOICE_STATUSES = ['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const;
 
 const AMOUNT_PAID_EXCEEDS_TOTAL_ERROR = 'amountPaid cannot exceed total';
 const PAID_INVOICE_UNDERPAID_ERROR = 'amountPaid must be at least total when status is paid';
@@ -122,7 +125,7 @@ const invoiceSchema = {
     supplierName: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: [...SUPPLIER_INVOICE_STATUSES] },
     subtotal: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
@@ -181,7 +184,7 @@ const createBodySchema = {
     supplierName: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: [...SUPPLIER_INVOICE_STATUSES] },
     subtotal: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
@@ -199,7 +202,7 @@ const updateBodySchema = {
     supplierName: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
     dueDate: { type: 'string', format: 'date' },
-    status: { type: 'string' },
+    status: { type: 'string', enum: [...SUPPLIER_INVOICE_STATUSES] },
     subtotal: { type: 'number' },
     total: { type: 'number' },
     amountPaid: { type: 'number' },
@@ -400,10 +403,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!totalResult.ok) return badRequest(reply, totalResult.message);
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
+      const statusResult = optionalEnum(status, SUPPLIER_INVOICE_STATUSES, 'status');
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const subtotalValue = roundCurrency(subtotalResult.value ?? 0);
       const totalValue = roundCurrency(totalResult.value ?? 0);
       const amountPaidValue = roundCurrency(amountPaidResult.value ?? 0);
-      const statusValue = typeof status === 'string' && status.length > 0 ? status : 'draft';
+      const statusValue = statusResult.value ?? 'draft';
 
       if (amountPaidValue > totalValue) {
         return badRequest(reply, AMOUNT_PAID_EXCEEDS_TOTAL_ERROR);
@@ -742,7 +747,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           patch.amountPaid = roundCurrency(amountPaidResult.value);
       }
 
-      if (typeof status === 'string') patch.status = status;
+      const statusResult = optionalEnum(status, SUPPLIER_INVOICE_STATUSES, 'status');
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
+      if (statusResult.value !== null) patch.status = statusResult.value;
       if (typeof notes === 'string') patch.notes = notes;
 
       let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
@@ -899,7 +906,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const { invoice: updated, items: resultItems, previousStatus } = transactionResult;
-      const didStatusChange = typeof status === 'string' && previousStatus !== updated.status;
+      const didStatusChange = statusResult.value !== null && previousStatus !== updated.status;
       await logAudit({
         request,
         action: 'supplier_invoice.updated',
