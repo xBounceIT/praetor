@@ -41,7 +41,7 @@ Non è possibile eliminare un cliente o un fornitore se sono presenti documenti 
 
 Il catalogo contiene prodotti, categorie, unità di misura e logiche di prezzo. Le informazioni del catalogo alimentano preventivi, offerte e documenti contabili.
 
-Nel modulo di creazione o modifica di un prodotto, il pulsante **Gestisci** sopra i campi **Tipo**, **Categoria** e **Sottocategoria** apre l'elenco delle relative voci. Da qui puoi aggiungere o rinominare una voce e, quando non è protetta da collegamenti esistenti, eliminarla.
+Nel modulo di creazione o modifica di un prodotto, il pulsante **Gestisci** sopra i campi **Tipo**, **Categoria** e **Sottocategoria** apre l'elenco delle relative voci. Da qui puoi aggiungere o rinominare una voce e, quando non è protetta da collegamenti esistenti, eliminarla. I nomi di tipo e di categoria devono essere univoci senza distinzione tra maiuscole e minuscole.
 
 Aggiorna il listino quando cambiano costi, margini o condizioni di vendita, così i nuovi documenti partono da dati affidabili.
 
