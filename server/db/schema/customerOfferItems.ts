@@ -53,6 +53,7 @@ export const customerOfferItems = pgTable(
       'chk_customer_offer_items_unit_type',
       sql`${table.unitType} IN ('hours', 'days', 'unit')`,
     ),
+    check('chk_customer_offer_items_product_cost_non_negative', sql`${table.productCost} >= 0`),
     check('chk_customer_offer_items_duration_months', sql`${table.durationMonths} >= 1`),
     check(
       'chk_customer_offer_items_duration_unit',

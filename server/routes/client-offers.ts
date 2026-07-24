@@ -348,6 +348,16 @@ const normalizeItems = (
       badRequest(reply, unitPriceResult.message);
       return null;
     }
+    // Mirror client quotes: productCost must be non-negative so offers cannot persist invalid
+    // costs that null out margin math and copy into generated order items on accept.
+    const productCostResult = optionalLocalizedNonNegativeNumber(
+      item.productCost,
+      `items[${i}].productCost`,
+    );
+    if (!productCostResult.ok) {
+      badRequest(reply, productCostResult.message);
+      return null;
+    }
     // Mirror the client-quote path: a retained supplier-sourced line can carry an edited
     // supplierQuoteUnitPrice that the #779 forward sync writes back onto the supplier quote item,
     // so it must be validated non-negative here. normalizeNullableNumber alone let a direct PUT
@@ -403,7 +413,7 @@ const normalizeItems = (
       productName: productNameResult.value,
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
-      productCost: Number(item.productCost ?? 0),
+      productCost: productCostResult.value ?? 0,
       productMolPercentage: normalizeNullableNumber(item.productMolPercentage),
       supplierQuoteId: normalizeNullableString(item.supplierQuoteId),
       supplierQuoteItemId: normalizeNullableString(item.supplierQuoteItemId),
