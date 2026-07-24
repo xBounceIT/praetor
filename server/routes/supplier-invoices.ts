@@ -12,9 +12,15 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import { defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -37,6 +43,20 @@ import {
 
 const AMOUNT_PAID_EXCEEDS_TOTAL_ERROR = 'amountPaid cannot exceed total';
 const PAID_INVOICE_UNDERPAID_ERROR = 'amountPaid must be at least total when status is paid';
+
+const manualInvoiceCodeCreateSchema = {
+  type: 'string',
+  maxLength: DOCUMENT_CODE_MAX_LENGTH,
+  pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  description:
+    'Optional manual invoice code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code.',
+} as const;
+
+const manualInvoiceCodeUpdateSchema = {
+  type: 'string',
+  description:
+    'Invoice code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted.',
+} as const;
 
 const duplicateInvoiceError = (databaseError: DatabaseError) => {
   if (databaseError.constraint === 'idx_supplier_invoices_linked_sale_id_unique') {
@@ -155,7 +175,7 @@ const invoiceItemBodySchema = {
 const createBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: manualInvoiceCodeCreateSchema,
     linkedSaleId: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
@@ -174,7 +194,7 @@ const createBodySchema = {
 const updateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: manualInvoiceCodeUpdateSchema,
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     issueDate: { type: 'string', format: 'date' },
@@ -350,7 +370,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       const issueDateResult = parseDateString(issueDate, 'issueDate');
@@ -615,7 +635,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items: SupplierInvoiceItemInput[] | unknown;
       };
 
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const patch: supplierInvoicesRepo.SupplierInvoiceUpdate = {};
@@ -634,7 +654,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let nextIdValue: string | null = null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
       }
@@ -912,7 +935,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const existing = await supplierInvoicesRepo.findStatusAndSupplierName(idResult.value);
