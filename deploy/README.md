@@ -20,6 +20,11 @@ Set at least:
 - `FRONTEND_URL`
 - `ADMIN_DEFAULT_PASSWORD` for a fresh installation
 
+Keep `NODE_ENV=production` (the compose default) for customer deployments. Optional backend
+env vars forwarded from `.env` include `LOG_LEVEL`, `LOG_PRETTY`, `SSO_CALLBACK_BASE_URL`,
+`DB_SSL`, `DB_SSL_CA`, and `DB_SSL_CA_FILE`. Leave `DEMO_SEEDING=false`; demo seeding is
+refused when `NODE_ENV=production`.
+
 Generate a unique `POSTGRES_PASSWORD`; do not leave the published example placeholder in place.
 The backend always requires an explicit database password and, outside explicit local
 development or test runtimes, refuses to start with a known default.

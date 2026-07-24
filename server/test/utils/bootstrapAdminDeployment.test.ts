@@ -92,6 +92,38 @@ describe('deployment password configuration', () => {
     expect(readRepositoryFile(path)).toMatch(/DEMO_USER_PASSWORD:\s+'\$\{DEMO_USER_PASSWORD:-\}'/);
   });
 
+  test.each([
+    'docker-compose.yml',
+    'deploy/docker-compose.customer.yml',
+  ])('%s forwards NODE_ENV with a production default', (path) => {
+    expect(readRepositoryFile(path)).toContain('NODE_ENV: ${NODE_ENV:-production}');
+  });
+
+  test.each([
+    'docker-compose.yml',
+    'deploy/docker-compose.customer.yml',
+  ])('%s forwards logging, SSO callback, and DB SSL env to the backend', (path) => {
+    const source = readRepositoryFile(path);
+
+    expect(source).toContain('LOG_LEVEL: ${LOG_LEVEL:-info}');
+    expect(source).toMatch(/LOG_PRETTY:\s+'\$\{LOG_PRETTY:-\}'/);
+    expect(source).toMatch(/SSO_CALLBACK_BASE_URL:\s+'\$\{SSO_CALLBACK_BASE_URL:-\}'/);
+    expect(source).toMatch(/DB_SSL:\s+'\$\{DB_SSL:-\}'/);
+    expect(source).toMatch(/DB_SSL_CA:\s+'\$\{DB_SSL_CA:-\}'/);
+    expect(source).toMatch(/DB_SSL_CA_FILE:\s+'\$\{DB_SSL_CA_FILE:-\}'/);
+  });
+
+  test.each([
+    ['.env.example', 'production'],
+    ['deploy/.env.customer.example', 'production'],
+    ['server/.env.example', 'development'],
+  ])('%s sets NODE_ENV=%s', (path, expected) => {
+    const source = readRepositoryFile(path);
+    const configuredValue = source.match(/^NODE_ENV=(.*)$/m)?.[1].trim();
+
+    expect(configuredValue).toBe(expected);
+  });
+
   test('committed frontend docs do not advertise the removed password fallback', () => {
     const source = readRepositoryFile('docs/frontend/index.html');
 
@@ -108,6 +140,7 @@ describe('deployment password configuration', () => {
 
     expect(readme).toContain('For this direct-server command');
     expect(readme).toContain('`server/.env`');
+    expect(readme).toContain('NODE_ENV');
     expect(frontendDocs).toContain('For this direct-server command');
     expect(frontendDocs).toContain('<code>server/.env</code>');
   });
