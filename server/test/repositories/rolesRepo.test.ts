@@ -157,6 +157,21 @@ describe('findById', () => {
   });
 });
 
+describe('lockById', () => {
+  test('uses FOR UPDATE and returns the mapped row when found', async () => {
+    exec.enqueue({ rows: [['manager', 'Manager', false, false]] });
+    const result = await rolesRepo.lockById('manager', testDb);
+    expect(result).toEqual({ id: 'manager', name: 'Manager', isSystem: false, isAdmin: false });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[0].params).toContain('manager');
+  });
+
+  test('returns null when the row does not exist', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await rolesRepo.lockById('missing', testDb)).toBeNull();
+  });
+});
+
 describe('listExplicitPermissions', () => {
   test('returns the permission strings in row order', async () => {
     exec.enqueue({ rows: [['projects.view'], ['clients.update']] });

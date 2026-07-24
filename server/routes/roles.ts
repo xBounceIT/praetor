@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
+import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import {
   ADMIN_BASE_PERMISSIONS,
@@ -299,8 +300,48 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const roleRow = await rolesRepo.findById(idResult.value);
-      if (!roleRow) {
+      // Lock the role row, re-check in-use refs, and delete in one transaction so a concurrent
+      // secondary assignment cannot land between the precheck and DELETE (and then get
+      // silently cascade-removed). user_roles.role_id is also ON DELETE RESTRICT as a
+      // belt-and-suspenders FK guard — translate 23503 to the same 409.
+      type DeleteOutcome =
+        | { kind: 'not_found' }
+        | { kind: 'denied'; isAdmin: boolean }
+        | { kind: 'in_use' }
+        | { kind: 'deleted'; roleName: string };
+
+      let outcome: DeleteOutcome;
+      try {
+        outcome = await withDbTransaction(async (tx): Promise<DeleteOutcome> => {
+          const roleRow = await rolesRepo.lockById(idResult.value, tx);
+          if (!roleRow) return { kind: 'not_found' };
+
+          if (roleRow.isAdmin || roleRow.isSystem) {
+            return { kind: 'denied', isAdmin: roleRow.isAdmin };
+          }
+
+          if (await rolesRepo.isRoleInUse(idResult.value, tx)) {
+            return { kind: 'in_use' };
+          }
+
+          await rolesRepo.deleteRole(idResult.value, tx);
+          return { kind: 'deleted', roleName: roleRow.name };
+        });
+      } catch (err) {
+        if (getForeignKeyViolation(err)) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Role is in use by existing users',
+            action: 'role.delete.conflict',
+            entityType: 'role',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'role_in_use' },
+          });
+        }
+        throw err;
+      }
+
+      if (outcome.kind === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Role not found',
@@ -310,18 +351,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      if (roleRow.isAdmin || roleRow.isSystem) {
+      if (outcome.kind === 'denied') {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'System roles cannot be deleted',
           action: 'role.delete.denied',
           entityType: 'role',
           entityId: idResult.value,
-          details: { secondaryLabel: roleRow.isAdmin ? 'admin_role' : 'system_role' },
+          details: { secondaryLabel: outcome.isAdmin ? 'admin_role' : 'system_role' },
         });
       }
 
-      if (await rolesRepo.isRoleInUse(idResult.value)) {
+      if (outcome.kind === 'in_use') {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Role is in use by existing users',
@@ -332,14 +373,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      await rolesRepo.deleteRole(idResult.value);
       await logAudit({
         request,
         action: 'role.deleted',
         entityType: 'role',
         entityId: idResult.value,
         details: {
-          targetLabel: roleRow.name,
+          targetLabel: outcome.roleName,
         },
       });
       return reply.code(204).send();

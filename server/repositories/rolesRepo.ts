@@ -113,6 +113,14 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<Role 
   return rows[0] ? mapRole(rows[0]) : null;
 };
 
+// SELECT ... FOR UPDATE. Must be called inside `withDbTransaction` so concurrent secondary
+// role assignments serialize against the in-use check + delete (user_roles → roles FK uses
+// FOR KEY SHARE, which conflicts with FOR UPDATE).
+export const lockById = async (id: string, exec: DbExecutor = db): Promise<Role | null> => {
+  const rows = await exec.select(ROLE_PROJECTION).from(roles).where(eq(roles.id, id)).for('update');
+  return rows[0] ? mapRole(rows[0]) : null;
+};
+
 export const listExplicitPermissions = async (
   roleId: string,
   exec: DbExecutor = db,

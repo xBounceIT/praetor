@@ -869,6 +869,13 @@
       "when": 1784854566841,
       "tag": "0123_enforce_internal_category_name_uniqueness",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1784856758772,
+      "tag": "0124_restrict_user_roles_role_id_fk",
+      "breakpoints": true
     }
   ]
 }
