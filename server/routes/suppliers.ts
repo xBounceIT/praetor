@@ -680,8 +680,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (Object.hasOwn(body, 'paymentTerms')) patch.paymentTerms = paymentTermsResult.value;
       if (Object.hasOwn(body, 'notes')) patch.notes = notesResult.value;
 
-      const updated = await suppliersRepo.update(idResult.value, patch);
-      if (!updated) {
+      const updateResult = await suppliersRepo.updateIfCodeAvailable(idResult.value, patch);
+      if (!updateResult.ok) {
+        if (updateResult.reason === 'duplicate_code') {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: SUPPLIER_CODE_EXISTS_MESSAGE,
+            action: 'supplier.update.conflict',
+            entityType: 'supplier',
+            entityId: idResult.value,
+            details: {
+              secondaryLabel: supplierCodeResult.value ?? undefined,
+            },
+          });
+        }
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Supplier not found',
@@ -690,6 +702,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
+      const updated = updateResult.supplier;
 
       const changedFields = [
         Object.hasOwn(body, 'name') ? 'name' : null,

@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 // Legacy rows may contain partially shaped JSON; the repository sanitizes every
 // contact before exposing it through the API.
@@ -29,5 +38,10 @@ export const suppliers = pgTable(
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [index('idx_suppliers_name').on(table.name)],
+  (table) => [
+    index('idx_suppliers_name').on(table.name),
+    uniqueIndex('idx_suppliers_supplier_code_unique')
+      .on(sql`LOWER(${table.supplierCode})`)
+      .where(sql`${table.supplierCode} IS NOT NULL AND ${table.supplierCode} <> ''`),
+  ],
 );
