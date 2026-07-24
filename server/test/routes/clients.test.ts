@@ -49,8 +49,7 @@ const cpoFindByCategoryAndValueMock = mock();
 const cpoGetNextSortOrderMock = mock();
 const cpoCreateMock = mock();
 const cpoUpdateMock = mock();
-const cpoGetUsageCountMock = mock();
-const cpoDeleteByIdMock = mock();
+const cpoDeleteUnusedMock = mock();
 
 // userAssignmentsRepo
 const assignClientToUserMock = mock(async () => undefined);
@@ -97,8 +96,7 @@ beforeAll(async () => {
     getNextSortOrder: cpoGetNextSortOrderMock,
     create: cpoCreateMock,
     update: cpoUpdateMock,
-    getUsageCount: cpoGetUsageCountMock,
-    deleteById: cpoDeleteByIdMock,
+    deleteUnused: cpoDeleteUnusedMock,
   }));
   mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
     ...userAssignmentsRepoSnap,
@@ -212,8 +210,7 @@ const allMocks = [
   cpoGetNextSortOrderMock,
   cpoCreateMock,
   cpoUpdateMock,
-  cpoGetUsageCountMock,
-  cpoDeleteByIdMock,
+  cpoDeleteUnusedMock,
   assignClientToUserMock,
   assignClientToTopManagersMock,
   isClientAssignedToUserMock,
@@ -1432,7 +1429,7 @@ describe('POST /api/clients/profile-options/:category', () => {
 });
 
 describe('PUT /api/clients/profile-options/:category/:id', () => {
-  test('200 updates profile option', async () => {
+  test('200 updates profile option atomically without caller-supplied previous state', async () => {
     cpoFindByCategoryAndIdMock.mockResolvedValue({ id: 'cpo-1', value: 'Tech' });
     cpoFindByCategoryAndValueMock.mockResolvedValue(false);
     cpoUpdateMock.mockResolvedValue({ ...SAMPLE_PROFILE_OPTION, value: 'Tech v2' });
@@ -1446,7 +1443,12 @@ describe('PUT /api/clients/profile-options/:category/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(cpoUpdateMock).toHaveBeenCalled();
+    expect(cpoUpdateMock).toHaveBeenCalledWith(
+      'sector',
+      'cpo-1',
+      { value: 'Tech v2', sortOrder: null },
+      TX_SENTINEL,
+    );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.profile_option.updated' }),
     );
@@ -1464,6 +1466,8 @@ describe('PUT /api/clients/profile-options/:category/:id', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Profile option not found' });
+    expect(cpoFindByCategoryAndValueMock).not.toHaveBeenCalled();
+    expect(cpoUpdateMock).not.toHaveBeenCalled();
   });
 
   test('400 duplicate value collision with another row', async () => {
@@ -1494,10 +1498,8 @@ describe('PUT /api/clients/profile-options/:category/:id', () => {
 });
 
 describe('DELETE /api/clients/profile-options/:category/:id', () => {
-  test('204 deletes profile option when unused', async () => {
-    cpoFindByCategoryAndIdMock.mockResolvedValue({ id: 'cpo-1', value: 'Tech' });
-    cpoGetUsageCountMock.mockResolvedValue(0);
-    cpoDeleteByIdMock.mockResolvedValue(true);
+  test('204 atomically deletes profile option when unused', async () => {
+    cpoDeleteUnusedMock.mockResolvedValue({ status: 'deleted', value: 'Tech' });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1507,13 +1509,15 @@ describe('DELETE /api/clients/profile-options/:category/:id', () => {
 
     expect(res.statusCode).toBe(204);
     expect(res.body).toBe('');
+    expect(cpoDeleteUnusedMock).toHaveBeenCalledWith('sector', 'cpo-1', TX_SENTINEL);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.profile_option.deleted' }),
     );
   });
 
   test('404 when option not found', async () => {
-    cpoFindByCategoryAndIdMock.mockResolvedValue(null);
+    cpoDeleteUnusedMock.mockResolvedValue({ status: 'not_found' });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1526,8 +1530,11 @@ describe('DELETE /api/clients/profile-options/:category/:id', () => {
   });
 
   test('409 when option still in use', async () => {
-    cpoFindByCategoryAndIdMock.mockResolvedValue({ id: 'cpo-1', value: 'Tech' });
-    cpoGetUsageCountMock.mockResolvedValue(3);
+    cpoDeleteUnusedMock.mockResolvedValue({
+      status: 'in_use',
+      value: 'Tech',
+      usageCount: 3,
+    });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1539,7 +1546,7 @@ describe('DELETE /api/clients/profile-options/:category/:id', () => {
     expect(JSON.parse(res.body)).toEqual({
       error: 'Cannot delete option "Tech" because it is used by 3 client(s)',
     });
-    expect(cpoDeleteByIdMock).not.toHaveBeenCalled();
+    expect(cpoDeleteUnusedMock).toHaveBeenCalledWith('sector', 'cpo-1', TX_SENTINEL);
   });
 
   test('401 missing token', async () => {

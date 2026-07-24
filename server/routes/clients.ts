@@ -1220,11 +1220,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const valueResult = requireNonEmptyString(value, 'value');
       if (!valueResult.ok) return badRequest(reply, valueResult.message);
 
-      const existing = await clientProfileOptionsRepo.findByCategoryAndId(
-        categoryResult.value,
-        idResult.value,
-      );
-      if (!existing) {
+      if (
+        !(await clientProfileOptionsRepo.findByCategoryAndId(categoryResult.value, idResult.value))
+      ) {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Profile option not found',
@@ -1252,7 +1250,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           {
             value: valueResult.value,
             sortOrder: sortOrderValue,
-            previousValue: existing.value,
           },
           tx,
         ),
@@ -1312,11 +1309,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(params.id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const existing = await clientProfileOptionsRepo.findByCategoryAndId(
-        categoryResult.value,
-        idResult.value,
+      const result = await withDbTransaction((tx) =>
+        clientProfileOptionsRepo.deleteUnused(categoryResult.value, idResult.value, tx),
       );
-      if (!existing) {
+      if (result.status === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Profile option not found',
@@ -1326,26 +1322,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const usageCount = await clientProfileOptionsRepo.getUsageCount(
-        categoryResult.value,
-        idResult.value,
-      );
-      if (usageCount > 0) {
+      if (result.status === 'in_use') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: `Cannot delete option "${existing.value}" because it is used by ${usageCount} client(s)`,
+          message: `Cannot delete option "${result.value}" because it is used by ${result.usageCount} client(s)`,
           action: 'client_profile_option.delete.conflict',
           entityType: 'client_profile_option',
           entityId: idResult.value,
           details: {
-            targetLabel: existing.value,
+            targetLabel: result.value,
             secondaryLabel: 'option_in_use',
-            counts: { clients: usageCount },
+            counts: { clients: result.usageCount },
           },
         });
       }
-
-      await clientProfileOptionsRepo.deleteById(idResult.value);
 
       await logAudit({
         request,
@@ -1353,7 +1343,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityType: 'client_profile_option',
         entityId: idResult.value,
         details: {
-          targetLabel: existing.value,
+          targetLabel: result.value,
           secondaryLabel: categoryResult.value,
         },
       });
