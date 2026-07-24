@@ -13,6 +13,8 @@ Prima di salvare, verifica che le date siano corrette e che l'attività apparten
 
 Il tracker consente sempre registrazioni su sabati, domeniche e festività italiane. Quando il totale giornaliero supera **8 ore**, oppure quando vengono registrate ore in un weekend o in una festività italiana, Praetor crea una notifica di straordinario per i responsabili del centro di competenza dell'utente e per i Top Manager. Ogni evento viene notificato una sola volta per utente, data e origine tracker.
 
+Dalla lista attività della vista giornaliera puoi **Duplicare** una registrazione esistente: si apre un dialog in cui selezioni uno o più giorni di destinazione. Praetor crea subito nuove entry con lo stesso cliente, progetto, attività, ore, note e luogo (`isPlaceholder` sempre `false`). Il giorno di origine e i giorni che hanno già la stessa combinazione progetto/attività non sono selezionabili. Se una data collisione non era nota in anticipo, `POST /api/entries` risponde comunque con `409` e la duplicazione riporta un esito parziale.
+
 Praetor non consente una seconda registrazione per lo stesso utente, data, progetto e attività: `POST /api/entries` risponde con `409` se la combinazione esiste già e `PUT /api/entries/:id` risponde con `409` se una modifica di data, progetto o attività produrrebbe la stessa combinazione. Aggiorna la registrazione esistente invece di crearne una duplicata.
 
 La durata di una singola registrazione è limitata a 24 ore: sia `POST /api/entries` sia `PUT /api/entries/:id` rifiutano qualsiasi `duration` superiore a `24`. Suddividi il lavoro su più date invece di registrare durate impossibili.

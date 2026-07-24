@@ -9,6 +9,11 @@ type TimeEntryDraft = Omit<
 >;
 type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
 
+export type AddBulkResult = {
+  created: TimeEntry[];
+  failed: unknown[];
+};
+
 export type EntryHandlersDeps = {
   currentUser: User | null;
   viewingUserId: string;
@@ -40,8 +45,11 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     }
   };
 
-  const addBulk = async (newEntries: TimeEntryDraft[]) => {
-    if (!currentUser) return;
+  const addBulk = async (
+    newEntries: TimeEntryDraft[],
+    options?: { silent?: boolean },
+  ): Promise<AddBulkResult> => {
+    if (!currentUser) return { created: [], failed: [] };
     const targetUserId = viewingUserId || currentUser.id;
     const results = await Promise.allSettled(
       newEntries.map((entry) =>
@@ -65,8 +73,12 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
 
     if (failures.length > 0) {
       for (const err of failures) console.error('Failed to add bulk entry:', err);
-      toastError('Failed to add some time entries');
+      if (!options?.silent) {
+        toastError('Failed to add some time entries');
+      }
     }
+
+    return { created, failed: failures };
   };
 
   const remove = async (id: string) => {

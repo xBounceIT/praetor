@@ -13,6 +13,8 @@ Before saving, verify that dates are correct and that the task belongs to the se
 
 The tracker always allows entries on Saturdays, Sundays, and Italian holidays. When the daily total exceeds **8 hours**, or when any time is recorded on a weekend or Italian holiday, Praetor creates an overtime notification for the user's competence-center managers and all Top Managers. Each event is notified only once per user, date, and tracker source.
 
+From the daily activity list you can **Duplicate** an existing entry: a dialog lets you pick one or more target days. Praetor immediately creates new entries with the same client, project, task, hours, notes, and location (`isPlaceholder` always `false`). The source day and days that already have the same project/task combination cannot be selected. If a collision was not known upfront, `POST /api/entries` still returns `409` and the duplication reports a partial result.
+
 Praetor does not allow a second entry for the same user, date, project, and task: `POST /api/entries` returns `409` when that combination already exists, and `PUT /api/entries/:id` returns `409` when a date, project, or task change would produce it. Update the existing entry instead of creating a duplicate.
 
 Single-entry duration is capped at 24 hours: both `POST /api/entries` and `PUT /api/entries/:id` reject any `duration` greater than `24`. Split work across separate dates instead of recording impossibly long durations.

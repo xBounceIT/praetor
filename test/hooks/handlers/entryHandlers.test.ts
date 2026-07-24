@@ -116,13 +116,37 @@ describe('makeEntryHandlers', () => {
       setEntries: entries.setter,
     });
 
-    await handlers.addBulk([{ duration: 1 } as never, { duration: 2 } as never]);
+    const result = await handlers.addBulk([{ duration: 1 } as never, { duration: 2 } as never]);
 
     expect(apiMocks.entriesCreate).toHaveBeenCalledTimes(2);
+    expect(result.created).toHaveLength(2);
+    expect(result.failed).toHaveLength(0);
     for (const call of apiMocks.entriesCreate.mock.calls) {
       expect((call[0] as { userId: string }).userId).toBe('other-user');
       expect(call[0] as Record<string, unknown>).not.toHaveProperty('hourlyCost');
     }
+  });
+
+  test('addBulk returns failures and can stay silent', async () => {
+    apiMocks.entriesCreate
+      .mockImplementationOnce((data: unknown) =>
+        Promise.resolve({ id: 'e-ok', createdAt: 1, ...(data as object) }),
+      )
+      .mockImplementationOnce(() => Promise.reject(new Error('conflict')));
+
+    const entries = makeStubSetter<TimeEntryLike>([]);
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'me' } as never,
+      viewingUserId: 'me',
+      setEntries: entries.setter,
+    });
+
+    const result = await handlers.addBulk([{ duration: 1 } as never, { duration: 2 } as never], {
+      silent: true,
+    });
+
+    expect(result.created).toHaveLength(1);
+    expect(result.failed).toHaveLength(1);
   });
 
   test('update calls api.entries.update and replaces matching entry', async () => {
