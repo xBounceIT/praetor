@@ -495,7 +495,7 @@ export const updateCategory = async (
   return row ? mapCategory(row) : null;
 };
 
-export const countActivitiesByCategory = async (
+const countActivitiesByCategory = async (
   categoryId: string,
   exec: DbExecutor = db,
 ): Promise<number> => {
@@ -506,9 +506,30 @@ export const countActivitiesByCategory = async (
   return row?.value ?? 0;
 };
 
-export const deleteCategoryById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
-  const result = await exec.delete(resaleCategories).where(eq(resaleCategories.id, id));
-  return (result.rowCount ?? 0) > 0;
+export type DeleteCategoryResult =
+  | { status: 'deleted' }
+  | { status: 'not_found' }
+  | { status: 'in_use'; activityCount: number };
+
+export const deleteCategoryIfUnused = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<DeleteCategoryResult> => {
+  const deleted = await executeRows<{ id: string }>(
+    exec,
+    sql`DELETE FROM resale_categories AS c
+        WHERE c.id = ${id}
+          AND NOT EXISTS (
+            SELECT 1 FROM resale_activities a WHERE a.category_id = c.id
+          )
+        RETURNING c.id`,
+  );
+  if (deleted.length > 0) return { status: 'deleted' };
+
+  const activityCount = await countActivitiesByCategory(id, exec);
+  if (activityCount > 0) return { status: 'in_use', activityCount };
+
+  return { status: 'not_found' };
 };
 
 export const listOrderOptions = async (exec: DbExecutor = db): Promise<ResaleOrderOption[]> => {
