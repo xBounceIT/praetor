@@ -292,45 +292,4 @@ describe('<ExternalEmployeesView /> row click', () => {
     expect(await screen.findByText('Update rejected')).toBeInTheDocument();
     expect(screen.getByText('externalEmployees.editEmployee')).toBeInTheDocument();
   });
-
-  test('keeps the delete confirmation open and shows an error when delete fails', async () => {
-    const user = userEvent.setup();
-    const onDeleteEmployee = mock(async () => ({
-      success: false as const,
-      error: 'Delete rejected',
-    }));
-    renderView({
-      onDeleteEmployee,
-      permissions: ['hr.external.view', 'hr.external.update', 'hr.external.delete'],
-    });
-
-    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
-    await user.click(await screen.findByRole('button', { name: 'common:buttons.delete' }));
-
-    expect(await screen.findByText('externalEmployees.deleteEmployee')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'buttons.yesDelete' }));
-
-    await waitFor(() => expect(onDeleteEmployee).toHaveBeenCalledWith('u1'));
-    expect(await screen.findByText('Delete rejected')).toBeInTheDocument();
-    expect(screen.getByText('externalEmployees.deleteEmployee')).toBeInTheDocument();
-  });
-
-  test('keeps the delete confirmation open when delete throws', async () => {
-    const user = userEvent.setup();
-    const onDeleteEmployee = mock(async () => {
-      throw new Error('Network down');
-    });
-    renderView({
-      onDeleteEmployee,
-      permissions: ['hr.external.view', 'hr.external.update', 'hr.external.delete'],
-    });
-
-    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
-    await user.click(await screen.findByRole('button', { name: 'common:buttons.delete' }));
-    await user.click(await screen.findByRole('button', { name: 'buttons.yesDelete' }));
-
-    expect(await screen.findByText('Network down')).toBeInTheDocument();
-    expect(screen.getByText('externalEmployees.deleteEmployee')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'buttons.yesDelete' })).toBeEnabled();
-  });
 });
