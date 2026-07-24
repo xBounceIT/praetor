@@ -260,7 +260,7 @@ const useProjectTaskColumns = ({
             return <span className="text-xs text-muted-foreground">...</span>;
           if (hoursState.loadState === 'error')
             return <span className="text-xs text-destructive">-</span>;
-          const logged = hoursState.hours[row.name] ?? 0;
+          const logged = hoursState.hours[row.id] ?? 0;
           const expected = row.expectedEffort ?? 0;
           const pct = expected > 0 ? Math.round((logged / expected) * 100) : 0;
           const overBudget = expected > 0 && logged > expected;

@@ -358,7 +358,7 @@ const useTaskColumns = ({
           }
           if (hoursLoadState === 'error') return <span className="text-red-500 text-xs">-</span>;
           const projectHours = taskHours[row.projectId] ?? {};
-          const logged = projectHours[row.name] ?? 0;
+          const logged = projectHours[row.id] ?? 0;
           const expected = row.expectedEffort ?? 0;
           if (!expected) return <span className="text-zinc-400 text-xs">-</span>;
           const pct = Math.round((logged / expected) * 100);

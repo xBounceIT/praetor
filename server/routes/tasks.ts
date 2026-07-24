@@ -405,7 +405,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['tasks'],
         summary: 'Get total logged hours per task for multiple projects',
         description:
-          'Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.',
+          'Returns project maps keyed by stable task ID. Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.',
         querystring: {
           type: 'object',
           required: ['projectIds'],
@@ -445,7 +445,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const hours: Record<string, Record<string, number>> = {};
       for (const row of rows) {
         if (!hours[row.projectId]) hours[row.projectId] = {};
-        hours[row.projectId][row.task] = row.total;
+        hours[row.projectId][row.taskId] = row.total;
       }
       return reply.send(hours);
     },
@@ -471,7 +471,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['tasks'],
         summary: 'Get total logged hours per task for a project',
         description:
-          'Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.',
+          'Returns totals keyed by stable task ID. Task visibility and time-entry ownership are scoped independently. Viewing totals across all entry owners requires timesheets.tracker_all.view.',
         querystring: {
           type: 'object',
           required: ['projectId'],
@@ -496,7 +496,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
 
       const hours: Record<string, number> = {};
-      for (const row of rows) hours[row.task] = row.total;
+      for (const row of rows) hours[row.taskId] = row.total;
       return reply.send(hours);
     },
   );

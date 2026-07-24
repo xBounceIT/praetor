@@ -448,7 +448,7 @@ const useProjectsController = ({
       const progressValues = projectTasks.reduce<number[]>((values, task) => {
         const effort = task.expectedEffort ?? 0;
         if (effort <= 0) return values;
-        const logged = hours[task.name] ?? 0;
+        const logged = hours[task.id] ?? 0;
         values.push((logged / effort) * 100);
         return values;
       }, []);

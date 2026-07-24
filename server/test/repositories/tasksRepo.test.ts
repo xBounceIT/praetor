@@ -274,11 +274,35 @@ describe('clearNonTopManagerAssignments / addManualAssignments', () => {
 });
 
 describe('hours aggregation', () => {
+  test('groups renamed and duplicate-name entries by stable task id', async () => {
+    exec.enqueue({
+      rows: [
+        { projectId: 'p-1', taskId: 't-renamed', total: '4' },
+        { projectId: 'p-1', taskId: 't-duplicate', total: '2' },
+      ],
+    });
+
+    const result = await tasksRepo.sumHoursByProjects(
+      ['p-1'],
+      { timeEntries: { kind: 'all' } },
+      testDb,
+    );
+    const sql = exec.calls[0].sql;
+
+    expect(sql).toContain('JOIN LATERAL');
+    expect(sql).toContain('"t"."id" AS "taskId"');
+    expect(sql).toContain('GROUP BY "te"."project_id", "t"."id"');
+    expect(result).toEqual([
+      { projectId: 'p-1', taskId: 't-renamed', total: 4 },
+      { projectId: 'p-1', taskId: 't-duplicate', total: 2 },
+    ]);
+  });
+
   test('sumHoursByProjects with all-entry scope returns mapped numeric totals', async () => {
     exec.enqueue({
       rows: [
-        { projectId: 'p-1', task: 'Dev', total: 4.5 },
-        { projectId: 'p-1', task: 'QA', total: '2' },
+        { projectId: 'p-1', taskId: 't-dev', total: 4.5 },
+        { projectId: 'p-1', taskId: 't-qa', total: '2' },
       ],
     });
     const result = await tasksRepo.sumHoursByProjects(
@@ -290,8 +314,8 @@ describe('hours aggregation', () => {
     expect(exec.calls[0].params).toContain('p-2');
     expect(exec.calls[0].sql).not.toContain('"te"."user_id"');
     expect(result).toEqual([
-      { projectId: 'p-1', task: 'Dev', total: 4.5 },
-      { projectId: 'p-1', task: 'QA', total: 2 },
+      { projectId: 'p-1', taskId: 't-dev', total: 4.5 },
+      { projectId: 'p-1', taskId: 't-qa', total: 2 },
     ]);
   });
 
@@ -355,7 +379,7 @@ describe('hours aggregation', () => {
   // that prevents it: a LATERAL subquery with LIMIT 1, ordering FK matches first then by
   // lowest task id (matching findIdByProjectAndName's contract).
   test('legacy fallback resolves duplicate task names to a single row (no multiplication)', async () => {
-    exec.enqueue({ rows: [{ projectId: 'p-1', task: 'Dev', total: 4 }] });
+    exec.enqueue({ rows: [{ projectId: 'p-1', taskId: 't-dev', total: 4 }] });
     const result = await tasksRepo.sumHoursByProjects(
       ['p-1'],
       {
@@ -369,7 +393,7 @@ describe('hours aggregation', () => {
     expect(sql).toContain('JOIN LATERAL');
     expect(sql).toMatch(/LIMIT\s+1/);
     expect(sql).toMatch(/ORDER BY[\s\S]*t_inner\.id/);
-    expect(result).toEqual([{ projectId: 'p-1', task: 'Dev', total: 4 }]);
+    expect(result).toEqual([{ projectId: 'p-1', taskId: 't-dev', total: 4 }]);
   });
 });
 
