@@ -1,5 +1,5 @@
 import { and, eq, ne, sql } from 'drizzle-orm';
-import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { clientProfileOptions } from '../db/schema/clientProfileOptions.ts';
 
 export const PROFILE_OPTION_CATEGORIES = [
@@ -105,6 +105,23 @@ export const findByCategoryAndId = async (
   return rows[0] ?? null;
 };
 
+const lockClientsForProfileOptionMutation = async (exec: DbExecutor): Promise<void> => {
+  await executeRows(exec, sql`LOCK TABLE clients IN SHARE ROW EXCLUSIVE MODE`);
+};
+
+const lockByCategoryAndId = async (
+  category: ProfileOptionCategory,
+  id: string,
+  exec: DbExecutor,
+): Promise<{ id: string; value: string } | null> => {
+  const rows = await exec
+    .select({ id: clientProfileOptions.id, value: clientProfileOptions.value })
+    .from(clientProfileOptions)
+    .where(and(eq(clientProfileOptions.id, id), eq(clientProfileOptions.category, category)))
+    .for('update');
+  return rows[0] ?? null;
+};
+
 export const findByCategoryAndValue = async (
   category: ProfileOptionCategory,
   value: string,
@@ -170,52 +187,58 @@ export const create = async (
 /**
  * Updates the option row and, when the value changed, cascades the new value to all clients
  * whose corresponding column held the old value. The cascade column is selected internally from
- * the category allowlist - no caller-supplied column names ever reach the SQL.
+ * the category allowlist - no caller-supplied column names ever reach the SQL. The clients table
+ * lock prevents a concurrent client write from restoring the old value between the option update
+ * and cascade. The option row is then locked and read in the same transaction so concurrent option
+ * updates always cascade from the latest committed value.
  */
 export const update = async (
   category: ProfileOptionCategory,
   id: string,
-  patch: { value: string; sortOrder: number | null; previousValue: string },
+  patch: { value: string; sortOrder: number | null },
   exec: DbExecutor = db,
-): Promise<ProfileOption | null> => {
-  const updateResult = await exec
-    .update(clientProfileOptions)
-    .set({
-      value: patch.value,
-      sortOrder: sql`COALESCE(${patch.sortOrder}, ${clientProfileOptions.sortOrder})`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
-    })
-    .where(and(eq(clientProfileOptions.id, id), eq(clientProfileOptions.category, category)));
+): Promise<ProfileOption | null> =>
+  runAtomically(exec, async (tx) => {
+    await lockClientsForProfileOptionMutation(tx);
+    const existing = await lockByCategoryAndId(category, id, tx);
+    if (!existing) return null;
 
-  if ((updateResult.rowCount ?? 0) === 0) return null;
+    await tx
+      .update(clientProfileOptions)
+      .set({
+        value: patch.value,
+        sortOrder: sql`COALESCE(${patch.sortOrder}, ${clientProfileOptions.sortOrder})`,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(and(eq(clientProfileOptions.id, id), eq(clientProfileOptions.category, category)));
 
-  if (patch.previousValue !== patch.value) {
-    const fieldName = VALUE_FIELD_BY_CATEGORY[category];
-    // Cross-table cascade into `clients`. `sql.identifier` pulls the column from the
-    // internal `VALUE_FIELD_BY_CATEGORY` allowlist - no caller input reaches the SQL
-    // identifier.
-    await executeRows(
-      exec,
-      sql`UPDATE clients SET ${sql.identifier(fieldName)} = ${patch.value}
-          WHERE ${sql.identifier(fieldName)} = ${patch.previousValue}`,
+    if (existing.value !== patch.value) {
+      const fieldName = VALUE_FIELD_BY_CATEGORY[category];
+      // Cross-table cascade into `clients`. `sql.identifier` pulls the column from the
+      // internal `VALUE_FIELD_BY_CATEGORY` allowlist - no caller input reaches the SQL
+      // identifier.
+      await executeRows(
+        tx,
+        sql`UPDATE clients SET ${sql.identifier(fieldName)} = ${patch.value}
+            WHERE ${sql.identifier(fieldName)} = ${existing.value}`,
+      );
+    }
+
+    const rows = await executeRows<ProfileOptionRow>(
+      tx,
+      sql`SELECT
+         o.id,
+         o.category,
+         o.value,
+         o.sort_order,
+         o.created_at,
+         o.updated_at,
+         ${usageCountSubquery(category)} as usage_count
+       FROM client_profile_options o
+       WHERE o.id = ${id} AND o.category = ${category}`,
     );
-  }
-
-  const rows = await executeRows<ProfileOptionRow>(
-    exec,
-    sql`SELECT
-       o.id,
-       o.category,
-       o.value,
-       o.sort_order,
-       o.created_at,
-       o.updated_at,
-       ${usageCountSubquery(category)} as usage_count
-     FROM client_profile_options o
-     WHERE o.id = ${id} AND o.category = ${category}`,
-  );
-  return rows[0] ? mapRow(rows[0]) : null;
-};
+    return rows[0] ? mapRow(rows[0]) : null;
+  });
 
 export const getUsageCount = async (
   category: ProfileOptionCategory,
@@ -235,3 +258,31 @@ export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boo
   const result = await exec.delete(clientProfileOptions).where(eq(clientProfileOptions.id, id));
   return (result.rowCount ?? 0) > 0;
 };
+
+export type DeleteUnusedResult =
+  | { status: 'not_found' }
+  | { status: 'in_use'; value: string; usageCount: number }
+  | { status: 'deleted'; value: string };
+
+/**
+ * Deletes an unused option under the same client-table and option-row locks used by update().
+ * This makes the usage check authoritative until the delete commits.
+ */
+export const deleteUnused = async (
+  category: ProfileOptionCategory,
+  id: string,
+  exec: DbExecutor = db,
+): Promise<DeleteUnusedResult> =>
+  runAtomically(exec, async (tx) => {
+    await lockClientsForProfileOptionMutation(tx);
+    const existing = await lockByCategoryAndId(category, id, tx);
+    if (!existing) return { status: 'not_found' };
+
+    const usageCount = await getUsageCount(category, id, tx);
+    if (usageCount > 0) {
+      return { status: 'in_use', value: existing.value, usageCount };
+    }
+
+    await deleteById(id, tx);
+    return { status: 'deleted', value: existing.value };
+  });

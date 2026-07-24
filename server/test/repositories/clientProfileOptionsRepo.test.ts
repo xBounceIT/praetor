@@ -10,7 +10,7 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// listByCategory/getUsageCount/update use executeRows for the usage_count subquery - rows
+// listByCategory/getUsageCount/update/deleteUnused use executeRows for raw SQL - rows
 // come back with snake_case named keys (matching the SQL aliases). findByCategoryAndId,
 // findByCategoryAndValue, getNextSortOrder, create, deleteById use the query builder
 // (rowMode: 'array' positional rows in schema declaration order).
@@ -139,59 +139,55 @@ describe('create', () => {
 
 describe('update', () => {
   test('updates option only when value did not change (no cascade)', async () => {
+    exec.enqueue({ rows: [] }); // LOCK clients table
+    exec.enqueue({ rows: [['cpo-1', 'tech']] }); // SELECT option FOR UPDATE
     exec.enqueue({ rows: [], rowCount: 1 }); // UPDATE option
     exec.enqueue({ rows: [optionAggRow] }); // SELECT updated row via executeRows
-    const result = await repo.update(
-      'sector',
-      'cpo-1',
-      { value: 'tech', sortOrder: null, previousValue: 'tech' },
-      testDb,
+    const result = await repo.update('sector', 'cpo-1', { value: 'tech', sortOrder: null }, testDb);
+    expect(exec.calls).toHaveLength(4);
+    expect(exec.calls[0].sql.toLowerCase()).toContain(
+      'lock table clients in share row exclusive mode',
     );
-    // 2 calls only - no cascade UPDATE clients
-    expect(exec.calls).toHaveLength(2);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('update "client_profile_options"');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[2].sql.toLowerCase()).toContain('update "client_profile_options"');
     expect(result?.value).toBe('tech');
   });
 
-  test('cascades to clients table via internal allowlist when value changes (sector)', async () => {
-    exec.enqueue({ rows: [], rowCount: 1 });
+  test('cascades from the locked current value instead of caller state', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['cpo-1', 'intermediate']] });
+    exec.enqueue({ rows: [], rowCount: 5 });
     exec.enqueue({ rows: [], rowCount: 5 });
     exec.enqueue({ rows: [{ ...optionAggRow, value: 'finance' }] });
-    await repo.update(
-      'sector',
-      'cpo-1',
-      { value: 'finance', sortOrder: null, previousValue: 'tech' },
-      testDb,
-    );
-    expect(exec.calls).toHaveLength(3);
-    expect(exec.calls[1].sql.toLowerCase()).toContain('update clients set "sector"');
-    expect(exec.calls[1].params).toContain('finance');
-    expect(exec.calls[1].params).toContain('tech');
+    await repo.update('sector', 'cpo-1', { value: 'finance', sortOrder: null }, testDb);
+    expect(exec.calls).toHaveLength(5);
+    expect(exec.calls[3].sql.toLowerCase()).toContain('update clients set "sector"');
+    expect(exec.calls[3].params).toContain('finance');
+    expect(exec.calls[3].params).toContain('intermediate');
+    expect(exec.calls[3].params).not.toContain('tech');
   });
 
   test('cascade for officeCountRange uses office_count_range column', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['cpo-2', '1']] });
     exec.enqueue({ rows: [], rowCount: 1 });
     exec.enqueue({ rows: [], rowCount: 1 });
     exec.enqueue({ rows: [{ ...optionAggRow, category: 'officeCountRange', value: '2-5' }] });
-    await repo.update(
-      'officeCountRange',
-      'cpo-2',
-      { value: '2-5', sortOrder: null, previousValue: '1' },
-      testDb,
-    );
-    expect(exec.calls[1].sql.toLowerCase()).toContain('update clients set "office_count_range"');
+    await repo.update('officeCountRange', 'cpo-2', { value: '2-5', sortOrder: null }, testDb);
+    expect(exec.calls[3].sql.toLowerCase()).toContain('update clients set "office_count_range"');
   });
 
-  test('returns null and skips cascade/select when option UPDATE matched no rows', async () => {
-    exec.enqueue({ rows: [], rowCount: 0 });
+  test('returns null and skips writes when the locked option does not exist', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
     const result = await repo.update(
       'sector',
       'cpo-x',
-      { value: 'finance', sortOrder: null, previousValue: 'tech' },
+      { value: 'finance', sortOrder: null },
       testDb,
     );
     expect(result).toBeNull();
-    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls).toHaveLength(2);
   });
 });
 
@@ -216,5 +212,48 @@ describe('deleteById', () => {
   test('returns false when no row matched', async () => {
     exec.enqueue({ rows: [], rowCount: 0 });
     expect(await repo.deleteById('cpo-x', testDb)).toBe(false);
+  });
+});
+
+describe('deleteUnused', () => {
+  test('locks clients and the option before checking usage and deleting', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['cpo-1', 'tech']] });
+    exec.enqueue({ rows: [{ usage_count: '0' }] });
+    exec.enqueue({ rows: [], rowCount: 1 });
+
+    expect(await repo.deleteUnused('sector', 'cpo-1', testDb)).toEqual({
+      status: 'deleted',
+      value: 'tech',
+    });
+    expect(exec.calls[0].sql.toLowerCase()).toContain(
+      'lock table clients in share row exclusive mode',
+    );
+    expect(exec.calls[1].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[2].sql.toLowerCase()).toContain('count(*)');
+    expect(exec.calls[3].sql.toLowerCase()).toContain('delete from "client_profile_options"');
+  });
+
+  test('reports current usage without deleting', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['cpo-1', 'tech']] });
+    exec.enqueue({ rows: [{ usage_count: '3' }] });
+
+    expect(await repo.deleteUnused('sector', 'cpo-1', testDb)).toEqual({
+      status: 'in_use',
+      value: 'tech',
+      usageCount: 3,
+    });
+    expect(exec.calls).toHaveLength(3);
+  });
+
+  test('reports not found after acquiring mutation locks', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+
+    expect(await repo.deleteUnused('sector', 'missing', testDb)).toEqual({
+      status: 'not_found',
+    });
+    expect(exec.calls).toHaveLength(2);
   });
 });
