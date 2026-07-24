@@ -43,7 +43,7 @@ describe('<TaskFormModal /> project lock (deepsec logic-bug-9a7143142c)', () => 
   });
 
   test('edit submit omits projectId from the update payload', async () => {
-    const onUpdate = mock(async () => {});
+    const onUpdate = mock(async (_id: string, _updates: Partial<ProjectTask>) => {});
     render(
       <TaskFormModal
         isOpen
@@ -65,7 +65,8 @@ describe('<TaskFormModal /> project lock (deepsec logic-bug-9a7143142c)', () => 
     fireEvent.click(screen.getByRole('button', { name: 'projects.saveChanges' }));
 
     await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
-    const [, updates] = onUpdate.mock.calls[0] as [string, Partial<ProjectTask>];
+    expect(onUpdate.mock.calls[0]?.[0]).toBe('t-1');
+    const updates = onUpdate.mock.calls[0]?.[1];
     expect(updates).toMatchObject({ name: 'Renamed task' });
     expect(updates).not.toHaveProperty('projectId');
   });
