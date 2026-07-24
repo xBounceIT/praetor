@@ -4,9 +4,7 @@ import { createDbPoolConfig } from '../../db/config.ts';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
 const SHOULD_SKIP = process.env.RUN_QUOTE_COMMUNICATION_CHANNEL_NAME_MIGRATION_TEST !== '1';
-const STATEMENTS = readMigrationFile(
-  '0127_enforce_quote_communication_channel_name_uniqueness.sql',
-)
+const STATEMENTS = readMigrationFile('0127_enforce_quote_communication_channel_name_uniqueness.sql')
   .split('--> statement-breakpoint')
   .filter((statement) => statement.trim().length > 0);
 
