@@ -10,6 +10,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
@@ -28,6 +29,7 @@ const getRolePermissionsMock = mock();
 // rolesRepo
 const listAllMock = mock();
 const findByIdMock = mock();
+const lockByIdMock = mock();
 const insertRoleMock = mock();
 const updateRoleNameMock = mock();
 const deleteRoleMock = mock();
@@ -55,6 +57,7 @@ beforeAll(async () => {
     userHasRole: userHasRoleMock,
     listAll: listAllMock,
     findById: findByIdMock,
+    lockById: lockByIdMock,
     insertRole: insertRoleMock,
     updateRoleName: updateRoleNameMock,
     deleteRole: deleteRoleMock,
@@ -133,6 +136,7 @@ const allMocks = [
   getRolePermissionsMock,
   listAllMock,
   findByIdMock,
+  lockByIdMock,
   insertRoleMock,
   updateRoleNameMock,
   deleteRoleMock,
@@ -477,8 +481,8 @@ describe('PUT /api/roles/:id', () => {
 // =========================================================================
 
 describe('DELETE /api/roles/:id', () => {
-  test('200 deletes unused custom role', async () => {
-    findByIdMock.mockResolvedValue({
+  test('204 deletes unused custom role inside a locked transaction', async () => {
+    lockByIdMock.mockResolvedValue({
       id: 'role-x',
       name: 'Custom',
       isSystem: false,
@@ -495,12 +499,15 @@ describe('DELETE /api/roles/:id', () => {
 
     expect(res.statusCode).toBe(204);
     expect(res.body).toBe('');
-    expect(deleteRoleMock).toHaveBeenCalledWith('role-x');
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(lockByIdMock).toHaveBeenCalledWith('role-x', TX_SENTINEL);
+    expect(isRoleInUseMock).toHaveBeenCalledWith('role-x', TX_SENTINEL);
+    expect(deleteRoleMock).toHaveBeenCalledWith('role-x', TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'role.deleted' }));
   });
 
   test('404 role not found', async () => {
-    findByIdMock.mockResolvedValue(null);
+    lockByIdMock.mockResolvedValue(null);
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -508,10 +515,11 @@ describe('DELETE /api/roles/:id', () => {
       headers: adminAuth(),
     });
     expect(res.statusCode).toBe(404);
+    expect(deleteRoleMock).not.toHaveBeenCalled();
   });
 
   test('403 cannot delete admin role', async () => {
-    findByIdMock.mockResolvedValue({
+    lockByIdMock.mockResolvedValue({
       id: 'admin',
       name: 'Admin',
       isSystem: true,
@@ -525,10 +533,11 @@ describe('DELETE /api/roles/:id', () => {
     });
 
     expect(res.statusCode).toBe(403);
+    expect(deleteRoleMock).not.toHaveBeenCalled();
   });
 
   test('403 cannot delete system role', async () => {
-    findByIdMock.mockResolvedValue({
+    lockByIdMock.mockResolvedValue({
       id: 'user',
       name: 'User',
       isSystem: true,
@@ -542,16 +551,47 @@ describe('DELETE /api/roles/:id', () => {
     });
 
     expect(res.statusCode).toBe(403);
+    expect(deleteRoleMock).not.toHaveBeenCalled();
   });
 
   test('409 role in use', async () => {
-    findByIdMock.mockResolvedValue({
+    lockByIdMock.mockResolvedValue({
       id: 'role-x',
       name: 'Custom',
       isSystem: false,
       isAdmin: false,
     });
     isRoleInUseMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/roles/role-x',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toMatch(/in use/);
+    expect(deleteRoleMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'role.delete.conflict',
+        entityType: 'role',
+        entityId: 'role-x',
+      }),
+    );
+  });
+
+  // Migration 0124 changed user_roles.role_id from CASCADE to RESTRICT. PG raises 23503 when a
+  // secondary assignment still references the role — the route catches it and surfaces 409.
+  test('409 when user_roles FK RESTRICT blocks delete', async () => {
+    lockByIdMock.mockResolvedValue({
+      id: 'role-x',
+      name: 'Custom',
+      isSystem: false,
+      isAdmin: false,
+    });
+    isRoleInUseMock.mockResolvedValue(false);
+    deleteRoleMock.mockRejectedValueOnce(makeDbError('23503', 'user_roles_role_id_roles_id_fk'));
 
     const res = await testApp.inject({
       method: 'DELETE',
