@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile, readSchemaFile } from '../helpers/schemaFiles.ts';
 
-const MIGRATION = readMigrationFile('0127_enforce_quote_communication_channel_name_uniqueness.sql');
+const MIGRATION = readMigrationFile('0128_enforce_quote_communication_channel_name_uniqueness.sql');
 const SCHEMA = readSchemaFile('quoteCommunicationChannels.ts');
 const JOURNAL = (await Bun.file(
   new URL('../../db/migrations/meta/_journal.json', import.meta.url),
 ).json()) as { entries: Array<{ idx: number; tag: string }> };
 
-describe('migration 0127 quote communication channel name uniqueness', () => {
+describe('migration 0128 quote communication channel name uniqueness', () => {
   test('models the channel index as case-insensitive in the live schema', () => {
     expect(SCHEMA).toContain('quote_communication_channels_name_unique');
     expect(SCHEMA).toMatch(/sql`lower\(\$\{table\.name\}\)`/);
@@ -34,21 +34,21 @@ describe('migration 0127 quote communication channel name uniqueness', () => {
     expect(MIGRATION).not.toMatch(/DELETE\s+FROM\s+"quote_communication_channels"/i);
   });
 
-  test('is registered immediately after migration 0126', () => {
+  test('is registered immediately after migration 0127', () => {
     const migrationIndex = JOURNAL.entries.findIndex(
-      ({ tag }) => tag === '0127_enforce_quote_communication_channel_name_uniqueness',
+      ({ tag }) => tag === '0128_enforce_quote_communication_channel_name_uniqueness',
     );
 
     expect(JOURNAL.entries[migrationIndex - 1]).toEqual(
       expect.objectContaining({
-        idx: 126,
-        tag: '0126_enforce_customer_offer_item_product_cost_non_negative',
+        idx: 127,
+        tag: '0127_enforce_product_type_name_uniqueness',
       }),
     );
     expect(JOURNAL.entries[migrationIndex]).toEqual(
       expect.objectContaining({
-        idx: 127,
-        tag: '0127_enforce_quote_communication_channel_name_uniqueness',
+        idx: 128,
+        tag: '0128_enforce_quote_communication_channel_name_uniqueness',
       }),
     );
   });

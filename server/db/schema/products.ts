@@ -22,7 +22,7 @@ export const products = pgTable(
     molPercentage: numeric('mol_percentage', { precision: 5, scale: 2 }).notNull().default('0'),
     costUnit: varchar('cost_unit', { length: 20 }).$type<CostUnit>().notNull().default('unit'),
     category: varchar('category', { length: 100 }),
-    type: varchar('type', { length: 20 }).notNull().default('item'),
+    type: varchar('type', { length: 50 }).notNull().default('item'),
     description: text('description'),
     subcategory: varchar('subcategory', { length: 100 }),
     isDisabled: boolean('is_disabled').default(false),

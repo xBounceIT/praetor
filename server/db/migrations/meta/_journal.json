@@ -894,8 +894,15 @@
     {
       "idx": 127,
       "version": "7",
-      "when": 1784861396479,
-      "tag": "0127_enforce_quote_communication_channel_name_uniqueness",
+      "when": 1784861304806,
+      "tag": "0127_enforce_product_type_name_uniqueness",
+      "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1784863021861,
+      "tag": "0128_enforce_quote_communication_channel_name_uniqueness",
       "breakpoints": true
     }
   ]

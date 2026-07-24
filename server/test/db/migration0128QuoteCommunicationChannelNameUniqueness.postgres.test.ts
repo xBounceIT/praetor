@@ -4,12 +4,12 @@ import { createDbPoolConfig } from '../../db/config.ts';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
 const SHOULD_SKIP = process.env.RUN_QUOTE_COMMUNICATION_CHANNEL_NAME_MIGRATION_TEST !== '1';
-const STATEMENTS = readMigrationFile('0127_enforce_quote_communication_channel_name_uniqueness.sql')
+const STATEMENTS = readMigrationFile('0128_enforce_quote_communication_channel_name_uniqueness.sql')
   .split('--> statement-breakpoint')
   .filter((statement) => statement.trim().length > 0);
 
 describe.skipIf(SHOULD_SKIP)(
-  'migration 0127: enforce case-insensitive quote communication channel names',
+  'migration 0128: enforce case-insensitive quote communication channel names',
   () => {
     test('preserves legacy rows and rejects new case-only collisions', async () => {
       const pool = new pg.Pool(createDbPoolConfig({ max: 1 }));

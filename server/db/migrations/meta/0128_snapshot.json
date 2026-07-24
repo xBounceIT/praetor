@@ -1,6 +1,6 @@
 {
-  "id": "98499da8-744c-4e0e-9fa6-a8f2e7d70845",
-  "prevId": "8119b870-645f-4d37-af01-a80eb4664f68",
+  "id": "ea47347a-7d08-4975-afea-774281ab39a7",
+  "prevId": "98499da8-744c-4e0e-9fa6-a8f2e7d70845",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3629,17 +3629,26 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "quote_communication_channels_name_unique": {
+          "name": "quote_communication_channels_name_unique",
+          "columns": [
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "quote_communication_channels_name_unique": {
-          "name": "quote_communication_channels_name_unique",
-          "nullsNotDistinct": false,
-          "columns": ["name"]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
