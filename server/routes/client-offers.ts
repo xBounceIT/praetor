@@ -146,6 +146,22 @@ const TERMINAL_REVERT_ERROR = 'Terminal offers must be reverted through the reve
 const TERMINAL_REVERT_ROLE_ERROR = 'Only Top Manager or Admin can revert terminal offers to draft';
 const TERMINAL_REVERT_LINKED_SALE_ERROR =
   'Cannot revert an offer once a sale order has been created from it';
+const CONCURRENT_OFFER_UPDATE_ERROR =
+  'The offer changed while it was being updated; reload and try again';
+
+const hasSameUpdateGuardState = (
+  initial: clientOffersRepo.ExistingOffer,
+  locked: clientOffersRepo.ExistingOffer,
+) =>
+  initial.linkedQuoteId === locked.linkedQuoteId &&
+  initial.linkedQuoteCandidateId === locked.linkedQuoteCandidateId &&
+  initial.clientId === locked.clientId &&
+  initial.clientName === locked.clientName &&
+  initial.discount === locked.discount &&
+  initial.discountType === locked.discountType &&
+  initial.status === locked.status &&
+  initial.deliveryDate === locked.deliveryDate &&
+  initial.expirationDate === locked.expirationDate;
 
 class AutoClientOrderConflictError extends Error {}
 
@@ -1325,13 +1341,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         deliveryDateValue = deliveryDateResult.value;
       }
 
-      const shouldStampDeliveryDate =
-        targetStatus === 'sent' &&
-        existingOffer.status !== 'sent' &&
-        !existingOffer.deliveryDate &&
-        !deliveryDateValue;
-      const automaticDeliveryDate = shouldStampDeliveryDate ? todayLocalDateOnly() : undefined;
-
       let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
       let previousSyncLines: PreviousClientLine[] = [];
       let persistedOfferItemIds: ReadonlySet<string> = new Set();
@@ -1370,7 +1379,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         offer: clientOffersRepo.ClientOffer | null;
         items: clientOffersRepo.ClientOfferItem[];
         syncAudits: SupplierItemSyncAudit[];
-        revisionConflict?: boolean;
+        updateConflict?: {
+          message: string;
+          secondaryLabel: string;
+          fromValue?: string;
+        };
+        previousStatus?: string;
         createdOrder?: {
           order: clientsOrdersRepo.ClientOrder;
           items: clientsOrdersRepo.ClientOrderItem[];
@@ -1378,25 +1392,70 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
-          // Accepting a draft is an implicit send: reserve its immutable revision before the
-          // acceptance creates a downstream order.
-          const revisionIntent =
-            normalizeQuoteStatus(existingOffer.status) === 'draft' &&
-            ['sent', 'accepted'].includes(
-              normalizeQuoteStatus(targetStatus ?? existingOffer.status),
-            );
-          const lockedOffer = revisionIntent
-            ? await clientOffersRepo.lockExistingById(idResult.value, tx)
-            : existingOffer;
+          // Sale-order creation takes the same offer-row lock before inserting its link.
+          // Lock every update, then verify the non-locking validation read is still current.
+          const lockedOffer = await clientOffersRepo.lockExistingById(idResult.value, tx);
           if (!lockedOffer) return { offer: null, items: [], syncAudits: [] };
-          if (revisionIntent && normalizeQuoteStatus(lockedOffer.status) !== 'draft') {
+          if (!hasSameUpdateGuardState(existingOffer, lockedOffer)) {
             return {
               offer: null,
               items: [],
               syncAudits: [],
-              revisionConflict: true,
+              updateConflict: {
+                message: CONCURRENT_OFFER_UPDATE_ERROR,
+                secondaryLabel: 'concurrent_update',
+                fromValue: existingOffer.status,
+              },
             };
           }
+          if (await clientOffersRepo.findLinkedSaleId(idResult.value, tx)) {
+            return {
+              offer: null,
+              items: [],
+              syncAudits: [],
+              updateConflict: {
+                message: 'Cannot update an offer once a sale order has been created from it',
+                secondaryLabel: 'sale_order_exists',
+              },
+            };
+          }
+
+          // The date-based guard can change without a database write while input validation runs.
+          const lockedEffective = effectiveQuoteStatusFromDate(
+            lockedOffer.status,
+            lockedOffer.expirationDate,
+          );
+          if (
+            lockedEffective === 'expired' &&
+            (hasNonExpirationContentUpdate ||
+              (targetStatus !== null && targetStatus !== normalizeQuoteStatus(lockedOffer.status)))
+          ) {
+            return {
+              offer: null,
+              items: [],
+              syncAudits: [],
+              updateConflict: {
+                message: EXPIRED_READ_ONLY_ERROR,
+                secondaryLabel: 'expired_read_only',
+                fromValue: 'expired',
+              },
+            };
+          }
+
+          // Accepting a draft is an implicit send: reserve its immutable revision before the
+          // acceptance creates a downstream order.
+          const revisionIntent =
+            normalizeQuoteStatus(lockedOffer.status) === 'draft' &&
+            ['sent', 'accepted'].includes(normalizeQuoteStatus(targetStatus ?? lockedOffer.status));
+          const createsClientOrder =
+            targetStatus === 'accepted' &&
+            targetStatus !== normalizeQuoteStatus(lockedOffer.status);
+          const shouldStampDeliveryDate =
+            targetStatus === 'sent' &&
+            lockedOffer.status !== 'sent' &&
+            !lockedOffer.deliveryDate &&
+            !deliveryDateValue;
+          const automaticDeliveryDate = shouldStampDeliveryDate ? todayLocalDateOnly() : undefined;
           const supplierRevisionStates = revisionIntent
             ? await lockSupplierRevisionStates(
                 await sourcedSupplierQuoteIds(
@@ -1503,7 +1562,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               tx,
             );
           }
-          return { offer: revisedOffer, items: updatedItems, syncAudits, createdOrder };
+          return {
+            offer: revisedOffer,
+            items: updatedItems,
+            syncAudits,
+            createdOrder,
+            previousStatus: lockedOffer.status,
+          };
         });
       } catch (err) {
         // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
@@ -1572,14 +1637,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOffer = result.offer;
       const updatedItems = result.items;
-      if (result.revisionConflict) {
+      if (result.updateConflict) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'The offer changed while it was being sent',
+          message: result.updateConflict.message,
           action: 'client_offer.update.conflict',
           entityType: 'client_offer',
           entityId: idResult.value,
-          details: { secondaryLabel: 'concurrent_send' },
+          details: {
+            secondaryLabel: result.updateConflict.secondaryLabel,
+            fromValue: result.updateConflict.fromValue,
+          },
         });
       }
       if (!updatedOffer) {
@@ -1621,7 +1689,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const nextStatus = targetStatus ?? updatedOffer.status;
-      const didStatusChange = targetStatus !== null && existingOffer.status !== nextStatus;
+      const previousStatus = result.previousStatus ?? existingOffer.status;
+      const didStatusChange = targetStatus !== null && previousStatus !== nextStatus;
       await logAudit({
         request,
         action: 'client_offer.updated',
@@ -1630,7 +1699,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         details: {
           targetLabel: updatedOffer.id,
           secondaryLabel: updatedOffer.clientName,
-          fromValue: didStatusChange ? existingOffer.status : undefined,
+          fromValue: didStatusChange ? previousStatus : undefined,
           toValue: didStatusChange ? nextStatus : undefined,
         },
       });

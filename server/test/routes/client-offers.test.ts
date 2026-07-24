@@ -401,10 +401,11 @@ beforeEach(async () => {
   }));
 
   // Sensible defaults; individual tests override what they care about.
-  coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+  coLockExistingByIdMock.mockImplementation((id: string) => coFindExistingMock(id));
   coFindFullForSnapshotMock.mockResolvedValue({ offer: updatedOffer(), items: [] });
   coFindItemsForOfferMock.mockResolvedValue([]);
   coFindIdConflictMock.mockResolvedValue(false);
+  coFindLinkedSaleIdMock.mockResolvedValue(null);
   ovInsertMock.mockResolvedValue(undefined);
   // Supplier resolution / forward-sync defaults: nothing linked, nothing pushed.
   coReplaceItemsMock.mockResolvedValue([]);
@@ -650,6 +651,35 @@ describe('client-offer immutable revisions', () => {
     );
     expect(clientOrderCreateMock).toHaveBeenCalled();
     expect(JSON.parse(res.body).revisionCode).toBe('REV1');
+  });
+});
+
+describe('client-offer transactional update guards', () => {
+  test('409 rejects a content update when the offer became terminal before the write', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coLockExistingByIdMock.mockResolvedValue(gate({ status: 'accepted' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted', notes: 'stale edit' }));
+
+    const res = await putOffer({ notes: 'stale edit' });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('changed');
+    expect(coLockExistingByIdMock).toHaveBeenCalledWith('off-1', expect.anything());
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('409 rejects an update when a sale order was linked before the write', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    coFindLinkedSaleIdMock.mockResolvedValue('order-1');
+    coUpdateMock.mockResolvedValue(updatedOffer({ notes: 'stale edit' }));
+
+    const res = await putOffer({ notes: 'stale edit' });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('sale order');
+    expect(coFindLinkedSaleIdMock).toHaveBeenCalledWith('off-1', expect.anything());
+    expect(coUpdateMock).not.toHaveBeenCalled();
   });
 });
 
