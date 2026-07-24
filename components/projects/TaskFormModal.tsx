@@ -459,6 +459,9 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
 
   const canSubmit = mode === 'edit' ? canUpdate : canCreate;
   const isEditing = mode === 'edit' && Boolean(editingTask);
+  // Task updates do not persist projectId server-side; keep the selector locked in edit mode
+  // so the UI cannot offer a silent no-op move.
+  const isProjectLocked = projectLocked || isEditing;
 
   const requestClose = useCallback(() => {
     if (isSubmitting) return;
@@ -484,7 +487,6 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
       if (isEditing && editingTask) {
         await onUpdate(editingTask.id, {
           name,
-          projectId,
           description,
           isDisabled: tempIsDisabled,
           ...details,
@@ -539,20 +541,20 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                   options={projectSelectOptions}
                   value={projectId}
                   onChange={(val) => {
-                    if (projectLocked) return;
+                    if (isProjectLocked) return;
                     const nextProjectId = val as string;
                     const nextProject = projects.find((item) => item.id === nextProjectId);
                     dispatch({
                       type: 'selectProject',
                       projectId: nextProjectId,
-                      billing: isEditing ? undefined : deriveBillingFromProject(nextProject),
+                      billing: deriveBillingFromProject(nextProject),
                     });
                   }}
                   label={t('tasks.project')}
                   required
                   placeholder={t('common:labels.selectOption')}
                   searchable={true}
-                  disabled={projectLocked}
+                  disabled={isProjectLocked}
                   buttonClassName="h-9"
                 />
 
