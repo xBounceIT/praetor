@@ -66,7 +66,12 @@ beforeAll(async () => {
     findById: findByIdMock,
     findExistingCodes: findExistingCodesMock,
     createIfCodeAvailable: createMock,
-    update: updateMock,
+    updateIfCodeAvailable: async (id: string, patch: unknown) => {
+      const result = await updateMock(id, patch);
+      if (result == null) return { ok: false, reason: 'not_found' as const };
+      if (typeof result === 'object' && result !== null && 'ok' in result) return result;
+      return { ok: true as const, supplier: result };
+    },
     deleteById: deleteByIdMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
@@ -967,6 +972,34 @@ describe('PUT /api/suppliers/:id', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Supplier not found' });
+  });
+
+  test('409 rejects a supplier code already used by another supplier', async () => {
+    updateMock.mockResolvedValue({ ok: false, reason: 'duplicate_code' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { supplierCode: 'TAKEN' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Supplier code already exists' });
+    expect(updateMock).toHaveBeenCalledWith(
+      's-1',
+      expect.objectContaining({ supplierCode: 'TAKEN' }),
+    );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'supplier.update.conflict',
+        entityType: 'supplier',
+        entityId: 's-1',
+      }),
+    );
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'supplier.updated' }),
+    );
   });
 
   test('400 invalid email', async () => {
