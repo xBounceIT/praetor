@@ -333,5 +333,4 @@ describe('<ExternalEmployeesView /> row click', () => {
     expect(screen.getByText('externalEmployees.deleteEmployee')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'buttons.yesDelete' })).toBeEnabled();
   });
-
 });
