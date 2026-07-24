@@ -23,6 +23,7 @@ import {
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
@@ -70,6 +71,7 @@ const updateInternalCategoryFieldsMock = mock();
 const propagateCategoryNameToProductsMock = mock();
 const clearProductsCategoryByNameMock = mock();
 const deleteInternalCategoryByIdMock = mock();
+const clearProductsCategoryAndDeleteInternalCategoryMock = mock();
 const countProductsForCategoryMock = mock();
 
 const listInternalSubcategoriesByTypeMock = mock();
@@ -135,6 +137,8 @@ beforeAll(async () => {
     propagateCategoryNameToProducts: propagateCategoryNameToProductsMock,
     clearProductsCategoryByName: clearProductsCategoryByNameMock,
     deleteInternalCategoryById: deleteInternalCategoryByIdMock,
+    clearProductsCategoryAndDeleteInternalCategory:
+      clearProductsCategoryAndDeleteInternalCategoryMock,
     countProductsForCategory: countProductsForCategoryMock,
     listInternalSubcategoriesByType: listInternalSubcategoriesByTypeMock,
     existsInternalSubcategoryByNameInCategory: existsInternalSubcategoryByNameInCategoryMock,
@@ -264,6 +268,7 @@ const allMocks = [
   propagateCategoryNameToProductsMock,
   clearProductsCategoryByNameMock,
   deleteInternalCategoryByIdMock,
+  clearProductsCategoryAndDeleteInternalCategoryMock,
   countProductsForCategoryMock,
   listInternalSubcategoriesByTypeMock,
   existsInternalSubcategoryByNameInCategoryMock,
@@ -823,6 +828,16 @@ describe('PUT /api/products/internal-categories/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    // TOCTOU: linked check must run inside the same transaction as the rename.
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      undefined,
+      TX_SENTINEL,
+    );
+    expect(updateInternalCategoryFieldsMock.mock.calls[0]?.[3]).toBe(TX_SENTINEL);
+    expect(propagateCategoryNameToProductsMock.mock.calls[0]?.[4]).toBe(TX_SENTINEL);
+    expect(withDbTransactionMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'internal_category.updated' }),
     );
@@ -856,6 +871,14 @@ describe('PUT /api/products/internal-categories/:id', () => {
 
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toMatch(/Cannot rename category/);
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      undefined,
+      TX_SENTINEL,
+    );
+    expect(updateInternalCategoryFieldsMock).not.toHaveBeenCalled();
+    expect(propagateCategoryNameToProductsMock).not.toHaveBeenCalled();
   });
 
   test('400 when a concurrent case-insensitive duplicate wins the rename race', async () => {
@@ -888,8 +911,7 @@ describe('PUT /api/products/internal-categories/:id', () => {
 describe('DELETE /api/products/internal-categories/:id', () => {
   test('204 deletes category', async () => {
     findInternalCategoryByIdMock.mockResolvedValue({ ...SAMPLE_CATEGORY });
-    clearProductsCategoryByNameMock.mockResolvedValue(undefined);
-    deleteInternalCategoryByIdMock.mockResolvedValue(undefined);
+    clearProductsCategoryAndDeleteInternalCategoryMock.mockResolvedValue(true);
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -898,6 +920,19 @@ describe('DELETE /api/products/internal-categories/:id', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      undefined,
+      TX_SENTINEL,
+    );
+    expect(clearProductsCategoryAndDeleteInternalCategoryMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      'ipc-1',
+      TX_SENTINEL,
+    );
+    expect(withDbTransactionMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'internal_category.deleted' }),
     );
@@ -926,6 +961,13 @@ describe('DELETE /api/products/internal-categories/:id', () => {
     });
 
     expect(res.statusCode).toBe(409);
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      undefined,
+      TX_SENTINEL,
+    );
+    expect(clearProductsCategoryAndDeleteInternalCategoryMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1025,6 +1067,15 @@ describe('PUT /api/products/internal-subcategories/:name', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      'Old',
+      TX_SENTINEL,
+    );
+    expect(updateInternalSubcategoryNameMock.mock.calls[0]?.[3]).toBe(TX_SENTINEL);
+    expect(propagateSubcategoryNameToProductsMock.mock.calls[0]?.[4]).toBe(TX_SENTINEL);
+    expect(withDbTransactionMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'internal_subcategory.renamed' }),
     );
@@ -1069,6 +1120,13 @@ describe('PUT /api/products/internal-subcategories/:name', () => {
     });
 
     expect(res.statusCode).toBe(409);
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      'Old',
+      TX_SENTINEL,
+    );
+    expect(updateInternalSubcategoryNameMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1084,12 +1142,20 @@ describe('DELETE /api/products/internal-subcategories/:name', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      'Sub',
+      TX_SENTINEL,
+    );
     expect(deleteInternalSubcategoryAndClearProductsMock).toHaveBeenCalledWith(
       'ipc-1',
       'Sub',
       'goods',
       'Electronics',
+      TX_SENTINEL,
     );
+    expect(withDbTransactionMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'internal_subcategory.deleted' }),
     );
@@ -1132,6 +1198,13 @@ describe('DELETE /api/products/internal-subcategories/:name', () => {
     });
 
     expect(res.statusCode).toBe(409);
+    expect(checkProductsLinkedToTransactionsMock).toHaveBeenCalledWith(
+      'Electronics',
+      'goods',
+      'Sub',
+      TX_SENTINEL,
+    );
+    expect(deleteInternalSubcategoryAndClearProductsMock).not.toHaveBeenCalled();
   });
 });
 
