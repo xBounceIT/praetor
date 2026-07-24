@@ -744,6 +744,48 @@ describe('client-offer transactional update guards', () => {
   });
 });
 
+describe('PUT /api/sales/client-offers/:id deliveryDate clear', () => {
+  test('200 clears deliveryDate when the body explicitly sends null', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ deliveryDate: '2026-05-14' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ deliveryDate: null }));
+
+    const res = await putOffer({ deliveryDate: null });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'off-1',
+      expect.objectContaining({ deliveryDate: null }),
+      expect.anything(),
+    );
+  });
+
+  test('omits deliveryDate from the patch when the body does not send it', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ deliveryDate: '2026-05-14' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ notes: 'edited', deliveryDate: '2026-05-14' }));
+
+    const res = await putOffer({ notes: 'edited' });
+
+    expect(res.statusCode).toBe(200);
+    const patch = coUpdateMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('deliveryDate');
+  });
+
+  test('draft→sent still auto-stamps today when deliveryDate is explicitly null', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft', deliveryDate: null }));
+    coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft', deliveryDate: null }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent' }));
+
+    const res = await putOffer({ status: 'sent', deliveryDate: null });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'off-1',
+      expect.objectContaining({ status: 'sent', deliveryDate: expect.any(String) }),
+      expect.anything(),
+    );
+  });
+});
+
 describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
   test('200 extends an expired sent offer via its expiration date and derives effectiveStatus', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));

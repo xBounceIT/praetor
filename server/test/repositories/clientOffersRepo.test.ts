@@ -248,7 +248,7 @@ describe('create', () => {
 });
 
 describe('update', () => {
-  test('binds 9 patch values via COALESCE, WHERE id last - no id in SET', async () => {
+  test('binds patch values via COALESCE, WHERE id last - no id in SET', async () => {
     exec.enqueue({ rows: [offerRow()] });
     await clientOffersRepo.update('co-1', { status: 'accepted' }, testDb);
     const sql = exec.calls[0].sql;
@@ -257,10 +257,28 @@ describe('update', () => {
     expect(sql).toContain('CURRENT_TIMESTAMP');
     // The SET clause must NOT touch the primary key column (issue #621).
     expect(sql).not.toMatch(/set[^"]*"id"\s*=/i);
-    expect(sql).toContain('"id" = $10');
-    expect(exec.calls[0].params).toHaveLength(10);
+    // Omitted deliveryDate keeps the column (no bound param); 8 COALESCE/direct args + WHERE id.
+    expect(sql).toContain('"id" = $9');
+    expect(exec.calls[0].params).toHaveLength(9);
     expect(exec.calls[0].params[5]).toBe('accepted'); // status
-    expect(exec.calls[0].params[9]).toBe('co-1'); // where id
+    expect(exec.calls[0].params[8]).toBe('co-1'); // where id
+  });
+
+  test('clears deliveryDate when the patch explicitly supplies null', async () => {
+    exec.enqueue({ rows: [offerRow()] });
+    await clientOffersRepo.update('co-1', { deliveryDate: null }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).not.toMatch(/"delivery_date"\s*=\s*coalesce/);
+    expect(exec.calls[0].params).toContain(null);
+    expect(exec.calls[0].params).toContain('co-1');
+  });
+
+  test('keeps deliveryDate when the patch omits it', async () => {
+    exec.enqueue({ rows: [offerRow()] });
+    await clientOffersRepo.update('co-1', { status: 'sent' }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).toMatch(/"delivery_date"\s*=\s*"customer_offers"\."delivery_date"/);
   });
 
   test('returns null when no row updated', async () => {

@@ -1466,6 +1466,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             !lockedOffer.deliveryDate &&
             !deliveryDateValue;
           const automaticDeliveryDate = shouldStampDeliveryDate ? todayLocalDateOnly() : undefined;
+          // When the client omits deliveryDate, leave it undefined so the repo keeps the column.
+          // When it sends null, still allow the draft→sent auto-stamp (same as create); otherwise
+          // write the explicit null so COALESCE can no longer trap clears on ordinary updates.
+          const resolvedDeliveryDate =
+            deliveryDate !== undefined
+              ? ((deliveryDateValue as string | null) ?? automaticDeliveryDate ?? null)
+              : automaticDeliveryDate;
           const supplierRevisionStates = revisionIntent
             ? await lockSupplierRevisionStates(
                 await sourcedSupplierQuoteIds(
@@ -1501,10 +1508,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     discount: (discountValue as number | null | undefined) ?? null,
                     discountType: discountTypeValue ?? null,
                     status: targetStatus,
-                    deliveryDate:
-                      (deliveryDateValue as string | null | undefined) ??
-                      automaticDeliveryDate ??
-                      null,
+                    ...(resolvedDeliveryDate !== undefined
+                      ? { deliveryDate: resolvedDeliveryDate }
+                      : {}),
                     expirationDate: (expirationDateValue as string | null | undefined) ?? null,
                     notes: (notes as string | null | undefined) ?? null,
                   },
