@@ -26,6 +26,7 @@ const listAttachmentsMock = mock<(id: string) => Promise<SupplierQuoteAttachment
 const uploadAttachmentMock = mock<(id: string, file: File) => Promise<SupplierQuoteAttachment>>();
 const downloadAttachmentMock = mock<(id: string, attachmentId: string) => Promise<Blob>>();
 const deleteAttachmentMock = mock<(id: string, attachmentId: string) => Promise<void>>();
+const downloadBlobMock = mock<(filename: string, blob: Blob) => void>();
 
 mock.module('../../services/api/supplierQuotes', () => ({
   supplierQuotesApi: {
@@ -34,6 +35,10 @@ mock.module('../../services/api/supplierQuotes', () => ({
     downloadAttachment: (id: string, aid: string) => downloadAttachmentMock(id, aid),
     deleteAttachment: (id: string, aid: string) => deleteAttachmentMock(id, aid),
   },
+}));
+
+mock.module('../../utils/download', () => ({
+  downloadBlob: (filename: string, blob: Blob) => downloadBlobMock(filename, blob),
 }));
 
 const realDate = await import('../../utils/date');
@@ -95,6 +100,7 @@ beforeEach(() => {
   uploadAttachmentMock.mockReset();
   downloadAttachmentMock.mockReset();
   deleteAttachmentMock.mockReset();
+  downloadBlobMock.mockReset();
   listAttachmentsMock.mockImplementation(() => Promise.resolve([]));
 });
 
@@ -149,6 +155,28 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
     expect(screen.queryByLabelText('Delete')).not.toBeInTheDocument();
     // Download stays visible - view-only users can still grab the file.
     expect(screen.getByLabelText('Download')).toBeInTheDocument();
+  });
+
+  test('downloads attachments through the shared blob helper', async () => {
+    const blob = new Blob(['quote contents'], { type: ATTACHMENT_A.mimeType });
+    listAttachmentsMock.mockImplementation(() => Promise.resolve([ATTACHMENT_A]));
+    downloadAttachmentMock.mockImplementation(() => Promise.resolve(blob));
+    render(
+      <SupplierQuoteAttachmentsSection
+        quoteId="sq-1"
+        isReadOnly={true}
+        readOnlyStatus="Read-only"
+        statusLabel="Status:"
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('first.xlsx')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText('Download'));
+
+    await waitFor(() =>
+      expect(downloadAttachmentMock).toHaveBeenCalledWith('sq-1', ATTACHMENT_A.id),
+    );
+    expect(downloadBlobMock).toHaveBeenCalledWith(ATTACHMENT_A.fileName, blob);
   });
 
   test('uploads a valid file and prepends it to the list', async () => {
