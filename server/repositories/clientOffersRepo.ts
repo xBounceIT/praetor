@@ -413,9 +413,7 @@ export const update = async (
       status: sql`COALESCE(${patch.status ?? null}, ${customerOffers.status})`,
       // Direct write (not COALESCE) so an explicit null clears the date; `undefined` keeps it.
       deliveryDate:
-        patch.deliveryDate === undefined
-          ? sql`${customerOffers.deliveryDate}`
-          : patch.deliveryDate,
+        patch.deliveryDate === undefined ? sql`${customerOffers.deliveryDate}` : patch.deliveryDate,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${customerOffers.expirationDate})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${customerOffers.notes})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
