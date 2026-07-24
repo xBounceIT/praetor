@@ -19,8 +19,14 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -51,6 +57,20 @@ const idParamSchema = {
     id: { type: 'string' },
   },
   required: ['id'],
+} as const;
+
+const manualSupplierOrderCodeCreateSchema = {
+  type: 'string',
+  maxLength: DOCUMENT_CODE_MAX_LENGTH,
+  pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  description:
+    'Optional manual supplier-order code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code.',
+} as const;
+
+const manualSupplierOrderCodeUpdateSchema = {
+  type: 'string',
+  description:
+    'Supplier-order code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted.',
 } as const;
 
 const itemSchema = {
@@ -148,7 +168,7 @@ const createBodySchema = {
   type: 'object',
   allOf: [createDocumentDiscountConstraint],
   properties: {
-    id: { type: 'string' },
+    id: manualSupplierOrderCodeCreateSchema,
     linkedQuoteId: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
@@ -165,7 +185,7 @@ const createBodySchema = {
 const updateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: manualSupplierOrderCodeUpdateSchema,
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     items: { type: 'array', items: itemBodySchema },
@@ -393,7 +413,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
@@ -655,14 +675,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes?: unknown;
       };
 
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const patch: supplierOrdersRepo.SupplierOrderUpdate = {};
 
       let nextIdValue: string | null = null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
       }
@@ -977,7 +1000,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -1017,9 +1040,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await supplierOrderVersionsRepo.findById(
@@ -1057,9 +1080,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       type RestoreOutcome =
@@ -1243,7 +1266,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       type DeleteOutcome =

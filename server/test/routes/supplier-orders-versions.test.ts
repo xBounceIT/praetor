@@ -306,6 +306,64 @@ afterEach(async () => {
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
+describe('supplier-order identifier safety', () => {
+  const validCreateBody = {
+    linkedQuoteId: 'sq-1',
+    supplierId: 's-1',
+    supplierName: 'Acme',
+    items: [{ productName: 'Widget', quantity: 2, unitPrice: 100 }],
+  };
+
+  test('400 rejects a new order id that can alter an API route', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: { ...validCreateBody, id: '../supplier-invoices/SINV-1?' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(soCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects renaming an order to an id that can alter an API route', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { id: '../supplier-invoices/SINV-1?' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'id can only contain letters, numbers, underscores, and hyphens',
+    });
+    expect(soFindExistingMock).not.toHaveBeenCalled();
+    expect(soRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('keeps an unchanged legacy order id operable through one encoded path segment', async () => {
+    const legacyId = 'legacy/../supplier-order';
+    const legacyOrder = { ...SAMPLE_ORDER, id: legacyId };
+    soFindExistingMock.mockResolvedValue(legacyOrder);
+    soLockExistingByIdMock.mockResolvedValue(legacyOrder);
+    soUpdateMock.mockResolvedValue({ ...legacyOrder, notes: 'updated' });
+    soFindItemsForOrderMock.mockResolvedValue([{ ...SAMPLE_ITEM, orderId: legacyId }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/accounting/supplier-orders/${encodeURIComponent(legacyId)}`,
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(soFindExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(soLockExistingByIdMock).toHaveBeenCalledWith(legacyId, TX_SENTINEL);
+    expect(soRenameMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('supplier-order mutation serialization', () => {
   test('PUT rechecks status under the row lock before editing draft-only fields', async () => {
     soLockExistingByIdMock.mockResolvedValue({ ...SAMPLE_ORDER, status: 'sent' });
