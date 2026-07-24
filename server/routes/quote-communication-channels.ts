@@ -55,6 +55,12 @@ const createPermissions = ['sales.client_quotes.create', 'sales.supplier_quotes.
 const updatePermissions = ['sales.client_quotes.update', 'sales.supplier_quotes.update'];
 const deletePermissions = ['sales.client_quotes.delete', 'sales.supplier_quotes.delete'];
 
+const CHANNEL_NAME_UNIQUE_INDEX = 'quote_communication_channels_name_unique';
+const CHANNEL_NAME_CONFLICT_MESSAGE = 'Communication channel with this name already exists';
+
+const isChannelNameConflict = (error: unknown): boolean =>
+  getUniqueViolation(error)?.constraint === CHANNEL_NAME_UNIQUE_INDEX;
+
 const resolveIcon = (
   value: unknown,
   fallback: channelsRepo.QuoteCommunicationChannelIcon,
@@ -112,7 +118,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!resolvedIcon) return badRequest(reply, 'Invalid communication channel icon');
 
       if (await channelsRepo.existsByName(nameResult.value, null)) {
-        return badRequest(reply, 'Communication channel with this name already exists');
+        return badRequest(reply, CHANNEL_NAME_CONFLICT_MESSAGE);
       }
 
       const id = generatePrefixedId('qcc');
@@ -127,9 +133,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return reply.code(201).send(created);
       } catch (err) {
-        const dup = getUniqueViolation(err);
-        if (dup) {
-          return badRequest(reply, 'Communication channel with this name already exists');
+        if (isChannelNameConflict(err)) {
+          return badRequest(reply, CHANNEL_NAME_CONFLICT_MESSAGE);
         }
         throw err;
       }
@@ -186,10 +191,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!resolvedIcon) return badRequest(reply, 'Invalid communication channel icon');
 
       if (await channelsRepo.existsByName(nameResult.value, idResult.value)) {
-        return badRequest(reply, 'Communication channel with this name already exists');
+        return badRequest(reply, CHANNEL_NAME_CONFLICT_MESSAGE);
       }
 
-      const updated = await channelsRepo.update(idResult.value, nameResult.value, resolvedIcon);
+      let updated: channelsRepo.QuoteCommunicationChannel | null;
+      try {
+        updated = await channelsRepo.update(idResult.value, nameResult.value, resolvedIcon);
+      } catch (err) {
+        if (isChannelNameConflict(err)) {
+          return badRequest(reply, CHANNEL_NAME_CONFLICT_MESSAGE);
+        }
+        throw err;
+      }
       if (!updated) {
         return replyError(request, reply, {
           statusCode: 404,

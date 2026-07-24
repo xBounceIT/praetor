@@ -44,6 +44,28 @@ describe('listAllWithCounts', () => {
   });
 });
 
+describe('existsByName', () => {
+  test('matches channel names case-insensitively', async () => {
+    exec.enqueue({ rows: [{ id: 'qcc_email' }] });
+
+    const exists = await repo.existsByName('EMAIL', null, testDb);
+
+    expect(exists).toBe(true);
+    expect(exec.calls[0].sql).toContain('LOWER(');
+    expect(exec.calls[0].params).toContain('EMAIL');
+  });
+
+  test('excludes the current channel id when checking renames', async () => {
+    exec.enqueue({ rows: [] });
+
+    const exists = await repo.existsByName('Email', 'qcc_email', testDb);
+
+    expect(exists).toBe(false);
+    expect(exec.calls[0].sql).toContain('"id" <>');
+    expect(exec.calls[0].params).toContain('qcc_email');
+  });
+});
+
 describe('default channel mutation guards', () => {
   test('update changes the icon only for non-default channels', async () => {
     const updated = await repo.update('qcc_custom', 'Video call', 'video', testDb);
