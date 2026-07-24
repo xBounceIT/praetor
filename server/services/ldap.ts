@@ -274,9 +274,6 @@ const syncDirectoryProfileTx = async (
   );
 };
 
-const syncDirectoryProfile = (userId: string, profile: DirectoryProfile): Promise<void> =>
-  withDbTransaction((tx) => syncDirectoryProfileTx(userId, profile, tx));
-
 // LDAP auto-provision must create the users row, settings row, and user_roles assignment in
 // one transaction. createUser alone does not write user_roles; a crash/error between that
 // insert and applyExternalRolesForUser would leave a stranded LDAP user that later logins
@@ -327,9 +324,18 @@ const provisionNewLdapUser = async (input: NewLdapUserProvision): Promise<void> 
 // Repair path for LDAP users stranded without a user_roles row (e.g. historical crash between
 // createUser and role write). ON CONFLICT DO NOTHING keeps this a no-op when membership already
 // exists, so every existing-user login/sync can cheaply enforce the invariant without clobbering
-// additional admin-assigned roles.
-const ensurePrimaryRoleMembership = (userId: string, primaryRoleId: string): Promise<void> =>
-  usersRepo.addUserRole(userId, primaryRoleId);
+// additional admin-assigned roles. Bundled with directory-profile refresh in one transaction so
+// a mid-flight failure does not leave the profile updated while the role repair is skipped.
+const refreshExistingLdapUser = async (
+  userId: string,
+  primaryRoleId: string,
+  profile: DirectoryProfile,
+): Promise<void> => {
+  await withDbTransaction(async (tx) => {
+    await usersRepo.addUserRole(userId, primaryRoleId, tx);
+    await syncDirectoryProfileTx(userId, profile, tx);
+  });
+};
 
 const isUniqueViolationError = (err: unknown): boolean => {
   if (!err || typeof err !== 'object') return false;
@@ -560,8 +566,7 @@ class LDAPService {
       }
       // Repair stranded users that have users.role but no matching user_roles row (e.g.
       // historical non-atomic auto-provision). Does not replace or remove other roles.
-      await ensurePrimaryRoleMembership(existingByCanonical.id, existingByCanonical.role);
-      await syncDirectoryProfile(existingByCanonical.id, {
+      await refreshExistingLdapUser(existingByCanonical.id, existingByCanonical.role, {
         name: result.displayName,
         firstName: result.firstName,
         lastName: result.lastName,
@@ -626,8 +631,7 @@ class LDAPService {
           // is acceptable; the bootstrap-only invariant only forbids re-applying mapping
           // for users that already existed BEFORE this provisioning request started.
           await applyExternalRolesForUserIfMatched(racedUser.id, result.groups, roleMappings);
-          await ensurePrimaryRoleMembership(racedUser.id, racedUser.role);
-          await syncDirectoryProfile(racedUser.id, {
+          await refreshExistingLdapUser(racedUser.id, racedUser.role, {
             name: result.displayName,
             firstName: result.firstName,
             lastName: result.lastName,
@@ -942,8 +946,7 @@ class LDAPService {
               'LDAP sync skipped role-mapping diagnostic for user: group search failed',
             );
             // Still refresh the display name — that bit doesn't depend on group state.
-            await ensurePrimaryRoleMembership(existing.id, existing.role);
-            await syncDirectoryProfile(existing.id, {
+            await refreshExistingLdapUser(existing.id, existing.role, {
               name: profile.name,
               firstName: profile.firstName,
               lastName: profile.lastName,
@@ -954,8 +957,7 @@ class LDAPService {
           }
           // Refresh by id so pre-migration mixed-case usernames and provider email claims
           // both land on the already matched row.
-          await ensurePrimaryRoleMembership(existing.id, existing.role);
-          await syncDirectoryProfile(existing.id, {
+          await refreshExistingLdapUser(existing.id, existing.role, {
             name: profile.name,
             firstName: profile.firstName,
             lastName: profile.lastName,

@@ -1933,7 +1933,7 @@ describe('authenticateAndProvision', () => {
       created: false,
       canonicalUsername: 'alice',
     });
-    expect(addUserRoleMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, 'manager');
+    expect(addUserRoleMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, 'manager', TX_SENTINEL);
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
@@ -1990,7 +1990,7 @@ describe('authenticateAndProvision', () => {
 
     await ldapService.syncUsers();
 
-    expect(addUserRoleMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, 'manager');
+    expect(addUserRoleMock).toHaveBeenCalledWith(LDAP_LOGIN_USER.id, 'manager', TX_SENTINEL);
     expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
   });
 
