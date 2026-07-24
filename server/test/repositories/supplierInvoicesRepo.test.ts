@@ -100,6 +100,53 @@ describe('listAllItems', () => {
   });
 });
 
+describe('listAllWithItems', () => {
+  test('queries items only for the capped invoice ids with deterministic ordering', async () => {
+    exec.enqueue({
+      rows: [invoiceRow({ 0: 'SINV-2' }), invoiceRow({ 0: 'SINV-1' })],
+    });
+    exec.enqueue({ rows: [] });
+
+    await supplierInvoicesRepo.listAllWithItems(testDb);
+
+    const itemQuery = exec.calls[1];
+    expect(itemQuery.sql.toLowerCase()).toContain('where "supplier_invoice_items"."invoice_id" in');
+    expect(itemQuery.params).toContain('SINV-2');
+    expect(itemQuery.params).toContain('SINV-1');
+    expect(itemQuery.sql.toLowerCase()).toMatch(/order by.*"created_at".*,.*"id"/);
+  });
+
+  test('groups items by invoiceId and preserves invoice order', async () => {
+    exec.enqueue({
+      rows: [invoiceRow({ 0: 'SINV-1' }), invoiceRow({ 0: 'SINV-2' })],
+    });
+    exec.enqueue({
+      rows: [
+        itemRow({ 0: 'i-a', 1: 'SINV-2' }),
+        itemRow({ 0: 'i-b', 1: 'SINV-1' }),
+        itemRow({ 0: 'i-c', 1: 'SINV-1' }),
+      ],
+    });
+    const result = await supplierInvoicesRepo.listAllWithItems(testDb);
+    expect(result.map((i) => i.id)).toEqual(['SINV-1', 'SINV-2']);
+    expect(result[0].items.map((i) => i.id)).toEqual(['i-b', 'i-c']);
+    expect(result[1].items.map((i) => i.id)).toEqual(['i-a']);
+  });
+
+  test('returns empty items array when no items exist', async () => {
+    exec.enqueue({ rows: [invoiceRow()] });
+    exec.enqueue({ rows: [] });
+    const result = await supplierInvoicesRepo.listAllWithItems(testDb);
+    expect(result[0].items).toEqual([]);
+  });
+
+  test('skips the item query when the capped invoice list is empty', async () => {
+    exec.enqueue({ rows: [] });
+    expect(await supplierInvoicesRepo.listAllWithItems(testDb)).toEqual([]);
+    expect(exec.calls).toHaveLength(1);
+  });
+});
+
 describe('findItemsForInvoice', () => {
   test('filters by invoice_id and maps rows', async () => {
     exec.enqueue({ rows: [itemRow()] });

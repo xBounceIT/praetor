@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { supplierInvoiceItems, supplierInvoices } from '../db/schema/supplierInvoices.ts';
 import { requireDateOnly } from '../utils/date.ts';
@@ -40,6 +40,8 @@ export type SupplierInvoiceItem = {
   durationUnit: DurationUnit;
   pricingSemanticsVersion: PricingSemanticsVersion;
 };
+
+export type SupplierInvoiceWithItems = SupplierInvoice & { items: SupplierInvoiceItem[] };
 
 const mapInvoice = (row: typeof supplierInvoices.$inferSelect): SupplierInvoice => ({
   id: row.id,
@@ -90,6 +92,42 @@ export const listAllItems = async (exec: DbExecutor = db): Promise<SupplierInvoi
     .from(supplierInvoiceItems)
     .orderBy(asc(supplierInvoiceItems.createdAt), asc(supplierInvoiceItems.id));
   return rows.map(mapItem);
+};
+
+const listItemsForInvoices = async (
+  invoiceIds: string[],
+  exec: DbExecutor,
+): Promise<SupplierInvoiceItem[]> => {
+  const rows = await exec
+    .select()
+    .from(supplierInvoiceItems)
+    .where(inArray(supplierInvoiceItems.invoiceId, invoiceIds))
+    .orderBy(asc(supplierInvoiceItems.createdAt), asc(supplierInvoiceItems.id));
+  return rows.map(mapItem);
+};
+
+// Loads the capped invoice list, then fetches items only for those invoice ids so list
+// endpoints do not scan/allocate the entire supplier_invoice_items table.
+export const listAllWithItems = async (
+  exec: DbExecutor = db,
+): Promise<SupplierInvoiceWithItems[]> => {
+  const invoiceList = await listAll(exec);
+  if (invoiceList.length === 0) return [];
+
+  const items = await listItemsForInvoices(
+    invoiceList.map((invoice) => invoice.id),
+    exec,
+  );
+  const itemsByInvoice = new Map<string, SupplierInvoiceItem[]>();
+  for (const item of items) {
+    const list = itemsByInvoice.get(item.invoiceId);
+    if (list) list.push(item);
+    else itemsByInvoice.set(item.invoiceId, [item]);
+  }
+  return invoiceList.map((invoice) => ({
+    ...invoice,
+    items: itemsByInvoice.get(invoice.id) ?? [],
+  }));
 };
 
 export const findById = async (
