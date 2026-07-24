@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntryLocation } from '../../types';
+import { formatDateOnlyForLocale } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import TaskFormModal, {
   type RecurringConfig,
@@ -81,8 +82,6 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
     return created;
   };
 
-  const dateForDisplay = new Date(selectedDate);
-
   return (
     <div className="rounded-lg border border-border bg-background shadow-sm p-5">
       <div className="flex justify-between items-center gap-4 mb-4">
@@ -93,10 +92,10 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
             </span>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
               <span className="text-base sm:text-lg font-black text-praetor uppercase">
-                {dateForDisplay.toLocaleDateString(undefined, { weekday: 'long' })}
+                {formatDateOnlyForLocale(selectedDate, undefined, { weekday: 'long' })}
               </span>
               <span className="text-sm sm:text-base font-medium text-muted-foreground">
-                {dateForDisplay.toLocaleDateString(undefined, {
+                {formatDateOnlyForLocale(selectedDate, undefined, {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
