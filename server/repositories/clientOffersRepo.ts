@@ -411,7 +411,11 @@ export const update = async (
       discount: sql`COALESCE(${numericForDb(patch.discount) ?? null}::numeric, ${customerOffers.discount})`,
       discountType: sql`COALESCE(${patch.discountType ?? null}, ${customerOffers.discountType})`,
       status: sql`COALESCE(${patch.status ?? null}, ${customerOffers.status})`,
-      deliveryDate: sql`COALESCE(${patch.deliveryDate ?? null}::date, ${customerOffers.deliveryDate})`,
+      // Direct write (not COALESCE) so an explicit null clears the date; `undefined` keeps it.
+      deliveryDate:
+        patch.deliveryDate === undefined
+          ? sql`${customerOffers.deliveryDate}`
+          : patch.deliveryDate,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${customerOffers.expirationDate})`,
       notes: sql`COALESCE(${patch.notes ?? null}, ${customerOffers.notes})`,
       updatedAt: sql`CURRENT_TIMESTAMP`,
