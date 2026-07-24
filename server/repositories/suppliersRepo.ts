@@ -1,6 +1,7 @@
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { suppliers } from '../db/schema/suppliers.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 
 export type SupplierContact = {
   fullName: string;
@@ -118,9 +119,17 @@ export const findNameById = async (id: string, exec: DbExecutor = db): Promise<s
   return rows[0]?.name ?? null;
 };
 
+export const isSupplierCodeUniqueViolation = (err: unknown): boolean => {
+  const dup = getUniqueViolation(err);
+  if (!dup) return false;
+  if (dup.constraint === 'idx_suppliers_supplier_code_unique') return true;
+  return Boolean(dup.detail?.toLowerCase().includes('supplier_code'));
+};
+
 export const findExistingCodes = async (
   codes: readonly string[],
   exec: DbExecutor = db,
+  excludeId?: string | null,
 ): Promise<Set<string>> => {
   const normalized = [
     ...new Set(
@@ -132,10 +141,13 @@ export const findExistingCodes = async (
   ];
   if (normalized.length === 0) return new Set();
 
+  const predicates = [inArray(sql<string>`LOWER(${suppliers.supplierCode})`, normalized)];
+  if (excludeId) predicates.push(ne(suppliers.id, excludeId));
+
   const rows = await exec
     .select({ supplierCode: suppliers.supplierCode })
     .from(suppliers)
-    .where(inArray(sql<string>`LOWER(${suppliers.supplierCode})`, normalized));
+    .where(and(...predicates));
   return new Set(rows.flatMap((row) => (row.supplierCode ? [row.supplierCode.toLowerCase()] : [])));
 };
 
@@ -180,6 +192,18 @@ export const create = async (input: NewSupplier, exec: DbExecutor = db): Promise
 
 const SUPPLIER_CODE_LOCK_NAMESPACE = 'praetor:supplier-code';
 
+const withSupplierCodeLock = <T>(
+  normalizedCode: string,
+  exec: DbExecutor,
+  fn: (tx: DbExecutor) => Promise<T>,
+): Promise<T> =>
+  runAtomically(exec, async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${SUPPLIER_CODE_LOCK_NAMESPACE}), hashtext(${normalizedCode}))`,
+    );
+    return fn(tx);
+  });
+
 export const createIfCodeAvailable = async (
   input: NewSupplier,
   exec: DbExecutor = db,
@@ -187,12 +211,14 @@ export const createIfCodeAvailable = async (
   if (!input.supplierCode) return create(input, exec);
 
   const normalizedCode = input.supplierCode.toLowerCase();
-  return runAtomically(exec, async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${SUPPLIER_CODE_LOCK_NAMESPACE}), hashtext(${normalizedCode}))`,
-    );
+  return withSupplierCodeLock(normalizedCode, exec, async (tx) => {
     if ((await findExistingCodes([normalizedCode], tx)).has(normalizedCode)) return null;
-    return create(input, tx);
+    try {
+      return await create(input, tx);
+    } catch (err) {
+      if (isSupplierCodeUniqueViolation(err)) return null;
+      throw err;
+    }
   });
 };
 
@@ -237,6 +263,36 @@ export const update = async (
 
   const rows = await exec.update(suppliers).set(set).where(eq(suppliers.id, id)).returning();
   return rows[0] ? mapRow(rows[0]) : null;
+};
+
+export type SupplierCodeUpdateResult =
+  | { ok: true; supplier: Supplier }
+  | { ok: false; reason: 'not_found' | 'duplicate_code' };
+
+export const updateIfCodeAvailable = async (
+  id: string,
+  patch: SupplierUpdate,
+  exec: DbExecutor = db,
+): Promise<SupplierCodeUpdateResult> => {
+  const nextCode = patch.supplierCode;
+  if (nextCode === undefined || nextCode === null) {
+    const supplier = await update(id, patch, exec);
+    return supplier ? { ok: true, supplier } : { ok: false, reason: 'not_found' };
+  }
+
+  const normalizedCode = nextCode.toLowerCase();
+  return withSupplierCodeLock(normalizedCode, exec, async (tx) => {
+    if ((await findExistingCodes([normalizedCode], tx, id)).has(normalizedCode)) {
+      return { ok: false, reason: 'duplicate_code' };
+    }
+    try {
+      const supplier = await update(id, patch, tx);
+      return supplier ? { ok: true, supplier } : { ok: false, reason: 'not_found' };
+    } catch (err) {
+      if (isSupplierCodeUniqueViolation(err)) return { ok: false, reason: 'duplicate_code' };
+      throw err;
+    }
+  });
 };
 
 export const deleteById = async (

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as suppliersRepo from '../../repositories/suppliersRepo.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
@@ -185,6 +186,30 @@ describe('findExistingCodes', () => {
     expect(await suppliersRepo.findExistingCodes(['', '   '], testDb)).toEqual(new Set());
     expect(exec.calls).toHaveLength(0);
   });
+
+  test('excludes the current supplier id when checking updates', async () => {
+    exec.enqueue({ rows: [] });
+
+    expect(await suppliersRepo.findExistingCodes(['ACM'], testDb, 's-1')).toEqual(new Set());
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"id"');
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['acm', 's-1']));
+  });
+});
+
+describe('isSupplierCodeUniqueViolation', () => {
+  test('recognizes the supplier-code unique index', () => {
+    expect(
+      suppliersRepo.isSupplierCodeUniqueViolation(
+        makeDbError('23505', 'idx_suppliers_supplier_code_unique'),
+      ),
+    ).toBe(true);
+  });
+
+  test('returns false for unrelated unique violations', () => {
+    expect(
+      suppliersRepo.isSupplierCodeUniqueViolation(makeDbError('23505', 'suppliers_pkey')),
+    ).toBe(false);
+  });
 });
 
 describe('create', () => {
@@ -277,6 +302,17 @@ describe('createIfCodeAvailable', () => {
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls.some((call) => call.sql.toLowerCase().includes('insert into'))).toBe(false);
   });
+
+  test('returns null when insert races into the unique index', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue(() => {
+      throw makeDbError('23505', 'idx_suppliers_supplier_code_unique');
+    });
+
+    expect(await suppliersRepo.createIfCodeAvailable(input, testDb)).toBeNull();
+    expect(exec.calls[2].sql.toLowerCase()).toContain('insert into "suppliers"');
+  });
 });
 
 describe('update', () => {
@@ -316,6 +352,68 @@ describe('update', () => {
     expect(exec.calls[0].sql).toContain('"payment_terms"');
     expect(exec.calls[0].params).toContain(null);
     expect(exec.calls[0].params).toContain('s-1');
+  });
+});
+
+describe('updateIfCodeAvailable', () => {
+  test('delegates patches that do not change supplierCode', async () => {
+    exec.enqueue({ rows: [makeRow(SUPPLIER_ROW)] });
+
+    expect(
+      await suppliersRepo.updateIfCodeAvailable('s-1', { name: 'New Name' }, testDb),
+    ).toEqual({ ok: true, supplier: mappedRow });
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('update "suppliers"');
+    expect(exec.calls[0].sql).not.toContain('pg_advisory_xact_lock');
+  });
+
+  test('locks and rechecks a normalized code before updating', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [makeRow(SUPPLIER_ROW)] });
+
+    expect(
+      await suppliersRepo.updateIfCodeAvailable('s-1', { supplierCode: 'Acm' }, testDb),
+    ).toEqual({ ok: true, supplier: mappedRow });
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[0].sql).toContain('pg_advisory_xact_lock');
+    expect(exec.calls[0].params).toContain('acm');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('lower("suppliers"."supplier_code")');
+    expect(exec.calls[1].params).toEqual(expect.arrayContaining(['acm', 's-1']));
+    expect(exec.calls[2].sql.toLowerCase()).toContain('update "suppliers"');
+  });
+
+  test('returns duplicate_code without updating when another supplier owns the code', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['ACM']] });
+
+    expect(
+      await suppliersRepo.updateIfCodeAvailable('s-2', { supplierCode: 'acm' }, testDb),
+    ).toEqual({ ok: false, reason: 'duplicate_code' });
+    expect(exec.calls.some((call) => call.sql.toLowerCase().includes('update "suppliers"'))).toBe(
+      false,
+    );
+  });
+
+  test('returns duplicate_code when update races into the unique index', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue(() => {
+      throw makeDbError('23505', 'idx_suppliers_supplier_code_unique');
+    });
+
+    expect(
+      await suppliersRepo.updateIfCodeAvailable('s-1', { supplierCode: 'NEW' }, testDb),
+    ).toEqual({ ok: false, reason: 'duplicate_code' });
+  });
+
+  test('returns not_found when the supplier row is missing', async () => {
+    exec.enqueue({ rows: [] });
+
+    expect(await suppliersRepo.updateIfCodeAvailable('s-x', { name: 'Gone' }, testDb)).toEqual({
+      ok: false,
+      reason: 'not_found',
+    });
   });
 });
 

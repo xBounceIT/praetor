@@ -192,6 +192,19 @@ new index remains. Reverting the schema requires dropping
 the collision-renaming backfill is intentionally not reversed because doing so could recreate
 ambiguous category names and product mappings.
 
+## Supplier code uniqueness rollout (migration 0125)
+
+Deploy migration `0125_enforce_supplier_code_uniqueness.sql` with the application image. The
+migration locks `suppliers`, renames legacy case-insensitive duplicate codes with deterministic
+`(duplicate N)` suffixes (preserving ids referenced by documents), then creates a partial unique
+index on `LOWER(supplier_code)` for non-empty codes. Multiple null/empty codes remain allowed.
+The new application serializes create and update code changes with the same advisory lock and
+returns HTTP 409 when a code is already taken. Run `db:migrate`, `db:ready`, and `db:check`; CI
+can replay migration 0125 against a legacy duplicate fixture when
+`RUN_SUPPLIER_CODE_UNIQUENESS_MIGRATION_TEST=1`. Prefer roll-forward. Schema rollback requires a
+pre-migration backup or deliberately dropping `idx_suppliers_supplier_code_unique` after
+reconciling renamed codes.
+
 ## Conventions for schema authors
 
 - **One file per table cluster.** `quotes.ts` defines both `quotes` and `quoteItems`; `tasks.ts` defines `tasks` and `userTasks`. Re-export everything from `schema/index.ts`.
