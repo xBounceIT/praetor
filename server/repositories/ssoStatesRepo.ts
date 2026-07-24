@@ -95,6 +95,7 @@ export const removeForProvider = async (
         eq(ssoStates.state, state),
         eq(ssoStates.providerId, providerId),
         eq(ssoStates.protocol, protocol),
+        gt(ssoStates.expiresAt, new Date()),
       ),
     )
     .returning({ relayState: ssoStates.relayState });
