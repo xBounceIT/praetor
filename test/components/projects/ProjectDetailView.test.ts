@@ -238,6 +238,38 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toMatch(/<Avatar\s+role="img"\s+aria-label=\{u\.name\}/);
     expect(source).toMatch(/<TooltipContent>\{u\.name\}<\/TooltipContent>/);
   });
+
+  test('task-row manage-members action is gated on canManageAssignments and opens task UserAssignmentModal', async () => {
+    const source = await readSource();
+    const tableSource = await readProjectTasksTableSource();
+
+    expect(tableSource).toContain('canManageAssignments: boolean');
+    expect(tableSource).toContain('onManageMembers: (task: ProjectTask) => void');
+    expect(tableSource).toMatch(
+      /\{canManageAssignments && \(\s*<ProjectTaskActionButton[\s\S]*?onClick=\{\(\) => onManageMembers\(row\)\}/,
+    );
+    expect(tableSource).toContain("label={t('tasks.manageMembers')}");
+
+    expect(source).toContain('managingTaskId: string | null');
+    expect(source).toMatch(
+      /const openTaskAssignments = useCallback\(\s*\(taskId: string\) => \{\s*if \(!canManageAssignments\) return;[\s\S]*?setIsAssignmentsOpen\(false\);[\s\S]*?setManagingTaskId\(taskId\);/,
+    );
+    expect(source).toMatch(
+      /const openProjectAssignments = useCallback\(\(\) => \{\s*if \(!canManageAssignments\) return;[\s\S]*?setManagingTaskId\(null\);[\s\S]*?setIsAssignmentsOpen\(true\);/,
+    );
+    expect(source).toContain('onClick={openProjectAssignments}');
+    expect(source).toContain('canManageAssignments={canManageAssignments}');
+    expect(source).toContain('onManageMembers={(task) => openTaskAssignments(task.id)}');
+    expect(source).toMatch(/tasksApi\.getUsers\(managingTaskId as string,\s*signal\)/);
+    expect(source).toMatch(/tasksApi\.updateUsers\(managingTaskId as string,\s*ids\)/);
+    expect(source).toContain("entityLabel={t('common:labels.task')}");
+    expect(source).toContain("entityName={managingTask?.name || ''}");
+    expect(source).toContain('isOpen={!!managingTaskId}');
+    expect(source).toContain('onClose={closeTaskAssignments}');
+    expect(source).toMatch(
+      /if \(managingTaskId === taskToDelete\.id\) \{\s*setManagingTaskId\(null\);\s*\}/,
+    );
+  });
 });
 
 describe('ProjectDetailView chart scaling on wide displays', () => {
