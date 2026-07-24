@@ -30,7 +30,7 @@ const baseProps = {
   currency: '€',
   onAddCustomTask: async () =>
     ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
-  onAddBulkEntries: async () => {},
+  onAddBulkEntries: async () => ({ created: [], failed: [] }),
   onUpdateEntry: () => {},
   onDeleteEntry: () => {},
   viewingUserId: 'u-1',

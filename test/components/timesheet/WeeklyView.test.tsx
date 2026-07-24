@@ -83,7 +83,7 @@ const sharedProps = {
   currency: '€',
   onAddCustomTask: async () =>
     ({ id: 'task-new', name: 'new', projectId: 'project-new' }) as ProjectTask,
-  onAddBulkEntries: async () => {},
+  onAddBulkEntries: async () => ({ created: [], failed: [] }),
   onUpdateEntry: () => {},
   onDeleteEntry: () => {},
   viewingUserId: 'user-a',
@@ -413,6 +413,7 @@ describe('<WeeklyView /> submit mutations', () => {
         {...sharedProps}
         onAddBulkEntries={async (entries) => {
           addCalls.push(entries);
+          return { created: [], failed: [] };
         }}
         onUpdateEntry={(id, updates) => {
           updateCalls.push({ id, updates });
@@ -506,6 +507,7 @@ describe('<WeeklyView /> submit mutations', () => {
         {...sharedProps}
         onAddBulkEntries={async (entries) => {
           addCalls.push(entries as unknown as Record<string, unknown>[]);
+          return { created: [], failed: [] };
         }}
       />,
     );
