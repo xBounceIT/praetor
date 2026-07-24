@@ -1,10 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
+import rateLimit from 'fastify-rate-limit';
 import * as realAuth from '../../middleware/auth.ts';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realFirstLogin from '../../services/firstLogin.ts';
 import * as realSsoService from '../../services/sso.ts';
 import * as realAudit from '../../utils/audit.ts';
+import * as realRateLimit from '../../utils/rate-limit.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 
 // Mix of two concerns sharing the same route plugin:
@@ -17,6 +19,7 @@ const ssoServiceSnap = { ...realSsoService };
 const authSnap = { ...realAuth };
 const firstLoginSnap = { ...realFirstLogin };
 const auditSnap = { ...realAudit };
+const rateLimitSnap = { ...realRateLimit };
 
 const findBySlugMock = mock();
 const completeOidcLoginMock = mock();
@@ -66,6 +69,10 @@ beforeAll(async () => {
     ...auditSnap,
     logAudit: logAuditMock,
   }));
+  mock.module('../../utils/rate-limit.ts', () => ({
+    ...rateLimitSnap,
+    LOGIN_RATE_LIMIT: { max: 2, timeWindow: '1 minute' },
+  }));
 
   routePlugin = (await import('../../routes/sso-auth.ts')).default as FastifyPluginAsync;
 });
@@ -76,6 +83,7 @@ afterAll(() => {
   mock.module('../../middleware/auth.ts', () => authSnap);
   mock.module('../../services/firstLogin.ts', () => firstLoginSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
+  mock.module('../../utils/rate-limit.ts', () => rateLimitSnap);
 });
 
 const samlProvider: realSsoProvidersRepo.SsoProvider = {
@@ -244,6 +252,40 @@ describe('POST /api/auth/sso/consume', () => {
 
 const ssoErrorParam = (location: string): string =>
   new URL(location).searchParams.get('sso_error') ?? '';
+
+describe('POST /api/auth/sso/saml/:slug/callback rate limiting', () => {
+  test('applies LOGIN_RATE_LIMIT before SAML response processing', async () => {
+    completeSamlLoginMock.mockResolvedValue('https://app.example.com');
+    const app = Fastify({ logger: false });
+
+    await app.register(rateLimit, {
+      ...rateLimitSnap.GLOBAL_RATE_LIMIT,
+      global: true,
+      hook: 'onRequest',
+    });
+    await app.register(routePlugin, { prefix: '/api/auth/sso' });
+    await app.ready();
+
+    try {
+      const request = {
+        method: 'POST' as const,
+        url: '/api/auth/sso/saml/okta/callback',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: 'SAMLResponse=fake',
+      };
+      const first = await app.inject(request);
+      const second = await app.inject(request);
+      const third = await app.inject(request);
+
+      expect(first.statusCode).toBe(302);
+      expect(second.statusCode).toBe(302);
+      expect(third.statusCode).toBe(429);
+      expect(completeSamlLoginMock).toHaveBeenCalledTimes(2);
+    } finally {
+      await app.close();
+    }
+  });
+});
 
 describe('SSO callbacks — sso_error carries a stable code (issue #604)', () => {
   test('SAML callback redirects with the SsoLoginError.code, not err.message', async () => {
