@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { SupplierQuoteAttachment } from '../../types';
@@ -26,7 +26,6 @@ const listAttachmentsMock = mock<(id: string) => Promise<SupplierQuoteAttachment
 const uploadAttachmentMock = mock<(id: string, file: File) => Promise<SupplierQuoteAttachment>>();
 const downloadAttachmentMock = mock<(id: string, attachmentId: string) => Promise<Blob>>();
 const deleteAttachmentMock = mock<(id: string, attachmentId: string) => Promise<void>>();
-const downloadBlobMock = mock<(filename: string, blob: Blob) => void>();
 
 mock.module('../../services/api/supplierQuotes', () => ({
   supplierQuotesApi: {
@@ -35,10 +34,6 @@ mock.module('../../services/api/supplierQuotes', () => ({
     downloadAttachment: (id: string, aid: string) => downloadAttachmentMock(id, aid),
     deleteAttachment: (id: string, aid: string) => deleteAttachmentMock(id, aid),
   },
-}));
-
-mock.module('../../utils/download', () => ({
-  downloadBlob: (filename: string, blob: Blob) => downloadBlobMock(filename, blob),
 }));
 
 const realDate = await import('../../utils/date');
@@ -68,6 +63,11 @@ mock.module('../../components/shared/DeleteConfirmModal', () => ({
       </div>
     ) : null,
 }));
+
+// Prefer spyOn over mock.module for utils/download: mock.module leaks across files and
+// breaks suites that assert real createObjectURL / deferred revokeObjectURL behavior.
+const downloadModule = await import('../../utils/download');
+const downloadBlobSpy = spyOn(downloadModule, 'downloadBlob').mockImplementation(() => {});
 
 clearSpyStateAfterAll();
 
@@ -100,7 +100,8 @@ beforeEach(() => {
   uploadAttachmentMock.mockReset();
   downloadAttachmentMock.mockReset();
   deleteAttachmentMock.mockReset();
-  downloadBlobMock.mockReset();
+  downloadBlobSpy.mockReset();
+  downloadBlobSpy.mockImplementation(() => {});
   listAttachmentsMock.mockImplementation(() => Promise.resolve([]));
 });
 
@@ -176,7 +177,7 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
     await waitFor(() =>
       expect(downloadAttachmentMock).toHaveBeenCalledWith('sq-1', ATTACHMENT_A.id),
     );
-    expect(downloadBlobMock).toHaveBeenCalledWith(ATTACHMENT_A.fileName, blob);
+    expect(downloadBlobSpy).toHaveBeenCalledWith(ATTACHMENT_A.fileName, blob);
   });
 
   test('uploads a valid file and prepends it to the list', async () => {
