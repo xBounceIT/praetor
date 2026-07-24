@@ -398,6 +398,8 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     closeEmployeeModal,
     setManagingEmployee,
     confirmEmployeeDelete,
+    startEmployeeDelete,
+    failEmployeeDelete,
     completeEmployeeDelete,
     setEmployeeErrors,
     startEmployeeSubmit,
@@ -413,6 +415,8 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     managingEmployee,
     isDeleteConfirmOpen,
     employeeToDelete,
+    isDeleting,
+    deleteError,
     errors,
     isSubmitting,
     formData,
@@ -499,8 +503,12 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
         if (canEditCosts) {
           updates.hourlyCostPeriods = buildHourlyCostPeriodInputs(hourlyCostPeriods);
         }
-        await onUpdateEmployee(editingEmployee.id, updates);
-        completeEmployeeSubmit();
+        const result = await onUpdateEmployee(editingEmployee.id, updates);
+        if (result.success) {
+          completeEmployeeSubmit();
+        } else {
+          setEmployeeErrors({ submit: result.error || 'Failed to update employee' });
+        }
       } else {
         const payload = buildEmployeeCreatePayload(formData);
         if (canEditCosts) {
@@ -522,10 +530,18 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     confirmEmployeeDelete(employee);
   };
 
-  const handleDelete = () => {
-    if (employeeToDelete) {
-      onDeleteEmployee(employeeToDelete.id);
-      completeEmployeeDelete();
+  const handleDelete = async () => {
+    if (!employeeToDelete || isDeleting) return;
+    startEmployeeDelete();
+    try {
+      const result = await onDeleteEmployee(employeeToDelete.id);
+      if (result.success) {
+        completeEmployeeDelete();
+      } else {
+        failEmployeeDelete(result.error || 'Failed to delete employee');
+      }
+    } catch (err) {
+      failEmployeeDelete(err instanceof Error ? err.message : 'Failed to delete employee');
     }
   };
 
@@ -605,10 +621,25 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={completeEmployeeDelete}
-        onConfirm={handleDelete}
+        onClose={() => {
+          if (isDeleting) return;
+          completeEmployeeDelete();
+        }}
+        onConfirm={() => {
+          void handleDelete();
+        }}
+        isDeleting={isDeleting}
         title={t('externalEmployees.deleteEmployee')}
-        description={t('externalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
+        description={
+          <>
+            <span>
+              {t('externalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
+            </span>
+            {deleteError ? (
+              <span className="mt-3 block text-destructive">{deleteError}</span>
+            ) : null}
+          </>
+        }
       />
 
       {/* Header */}

@@ -274,4 +274,22 @@ describe('<ExternalEmployeesView /> row click', () => {
     expect(screen.getByLabelText('employeeProfile.email')).toBeDisabled();
     expect(screen.getByLabelText('employeeProfile.phone')).toBeEnabled();
   });
+
+  test('keeps the edit modal open and shows an error when update fails', async () => {
+    const onUpdateEmployee = mock(async () => ({
+      success: false as const,
+      error: 'Update rejected',
+    }));
+    renderView({ onUpdateEmployee });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+    fireEvent.click(row);
+
+    fireEvent.click(screen.getByText('externalEmployees.saveChanges'));
+
+    await waitFor(() => expect(onUpdateEmployee).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Update rejected')).toBeInTheDocument();
+    expect(screen.getByText('externalEmployees.editEmployee')).toBeInTheDocument();
+  });
 });
