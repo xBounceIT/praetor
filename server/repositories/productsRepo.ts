@@ -913,6 +913,11 @@ export const countProductsForSubcategory = async (
 // Cross-domain link checks
 // ===========================================================================
 
+// TOCTOU gate for category/subcategory rename and delete. Locks matching internal
+// catalog products (`SELECT ... FOR UPDATE`) so concurrent document-item inserts that
+// FK-reference those rows wait until this transaction commits or rolls back, then counts
+// links across quote/offer/order/invoice item tables. Must be called inside
+// `withDbTransaction` — the row locks are released on commit/rollback.
 export const checkProductsLinkedToTransactions = async (
   category: string,
   type: string,
@@ -929,12 +934,14 @@ export const checkProductsLinkedToTransactions = async (
     sql` UNION ALL `,
   );
 
+  // MATERIALIZED keeps the FOR UPDATE side effect (PG 12+ may otherwise inline the CTE).
   const rows = await executeRows<{ total: string | number | null }>(
     exec,
-    sql`WITH matched AS (
+    sql`WITH matched AS MATERIALIZED (
           SELECT id FROM products
           WHERE category = ${category} AND type = ${type} AND supplier_id IS NULL
                 ${subcategoryClause}
+          FOR UPDATE
         )
         SELECT COALESCE(SUM(c), 0)::bigint AS total FROM (${linkCountSubqueries}) sub`,
   );

@@ -929,7 +929,9 @@ describe('checkProductsLinkedToTransactions', () => {
     expect(linkSql).toContain('supplier_sale_items');
     expect(linkSql).toContain('supplier_invoice_items');
     // Product ids never leave Postgres - the matched-ids CTE feeds all 7 subqueries directly.
-    expect(linkSql).toMatch(/with\s+matched\s+as/i);
+    expect(linkSql).toMatch(/with\s+matched\s+as\s+materialized/i);
+    // FOR UPDATE serializes concurrent document-item inserts that FK-reference matched products.
+    expect(linkSql).toMatch(/for\s+update/i);
     expect(exec.calls[0].params).toEqual(['cat-a', 'good']);
   });
 });

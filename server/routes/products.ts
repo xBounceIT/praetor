@@ -696,47 +696,44 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const isRename = newName !== current.name;
-      const [expectedCostUnit, nameTaken, linkedCheck] = await Promise.all([
+      const [expectedCostUnit, nameTaken] = await Promise.all([
         productsRepo.getCostUnitForType(current.type),
         isRename
           ? productsRepo.existsInternalCategoryByNameType(newName, current.type, idResult.value)
           : Promise.resolve(false),
-        isRename
-          ? productsRepo.checkProductsLinkedToTransactions(current.name, current.type, undefined)
-          : Promise.resolve({ linked: false, count: 0 }),
       ]);
       if (nameTaken) {
         return badRequest(reply, INTERNAL_CATEGORY_NAME_CONFLICT_MESSAGE);
       }
-      if (linkedCheck.linked) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Cannot rename category',
-          action: 'product_category.update.conflict',
-          entityType: 'product_category',
-          entityId: idResult.value,
-          details: {
-            targetLabel: current.name,
-            secondaryLabel: 'linked_to_transactions',
-            counts: { products: linkedCheck.count },
-          },
-          extraBody: {
-            message: `Category "${current.name}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
-            linkedCount: linkedCheck.count,
-          },
-        });
-      }
 
-      let updated: productsRepo.InternalCategoryRow | null;
+      // Linked-transaction check + rename must share one transaction and lock matched
+      // product rows so a concurrent document line cannot attach between check and mutate.
+      type CategoryUpdateOutcome =
+        | { ok: true; row: productsRepo.InternalCategoryRow }
+        | { ok: false; reason: 'not_found' }
+        | { ok: false; reason: 'linked'; linkedCount: number };
+
+      let outcome: CategoryUpdateOutcome;
       try {
-        updated = await withDbTransaction(async (tx) => {
+        outcome = await withDbTransaction(async (tx): Promise<CategoryUpdateOutcome> => {
+          if (isRename) {
+            const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
+              current.name,
+              current.type,
+              undefined,
+              tx,
+            );
+            if (linkedCheck.linked) {
+              return { ok: false, reason: 'linked', linkedCount: linkedCheck.count };
+            }
+          }
           const row = await productsRepo.updateInternalCategoryFields(
             idResult.value,
             newName,
             expectedCostUnit,
             tx,
           );
-          if (!row) return null;
+          if (!row) return { ok: false, reason: 'not_found' };
           if (isRename) {
             await productsRepo.propagateCategoryNameToProducts(
               current.name,
@@ -746,7 +743,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               tx,
             );
           }
-          return row;
+          return { ok: true, row };
         });
       } catch (error) {
         if (isInternalCategoryNameConflict(error)) {
@@ -755,7 +752,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         throw error;
       }
 
-      if (!updated) {
+      if (!outcome.ok && outcome.reason === 'linked') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Cannot rename category',
+          action: 'product_category.update.conflict',
+          entityType: 'product_category',
+          entityId: idResult.value,
+          details: {
+            targetLabel: current.name,
+            secondaryLabel: 'linked_to_transactions',
+            counts: { products: outcome.linkedCount },
+          },
+          extraBody: {
+            message: `Category "${current.name}" has ${outcome.linkedCount} product(s) linked to transactions. Rename would affect historical records.`,
+            linkedCount: outcome.linkedCount,
+          },
+        });
+      }
+
+      if (!outcome.ok) {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Category not found',
@@ -764,6 +780,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
+
+      const updated = outcome.row;
 
       await logAudit({
         request,
@@ -822,27 +840,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const { name, type } = category;
 
-      const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
-        name,
-        type,
-        undefined,
-      );
-      if (linkedCheck.linked) {
+      type CategoryDeleteOutcome =
+        | { ok: true }
+        | { ok: false; reason: 'linked'; linkedCount: number };
+
+      const outcome = await withDbTransaction(async (tx): Promise<CategoryDeleteOutcome> => {
+        const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
+          name,
+          type,
+          undefined,
+          tx,
+        );
+        if (linkedCheck.linked) {
+          return { ok: false, reason: 'linked', linkedCount: linkedCheck.count };
+        }
+        await productsRepo.clearProductsCategoryAndDeleteInternalCategory(
+          name,
+          type,
+          idResult.value,
+          tx,
+        );
+        return { ok: true };
+      });
+
+      if (!outcome.ok) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: `Cannot delete category "${name}" because ${linkedCheck.count} product(s) are linked to offers, orders, or invoices`,
+          message: `Cannot delete category "${name}" because ${outcome.linkedCount} product(s) are linked to offers, orders, or invoices`,
           action: 'product_category.delete.conflict',
           entityType: 'product_category',
           entityId: idResult.value,
           details: {
             targetLabel: name,
             secondaryLabel: 'linked_to_transactions',
-            counts: { products: linkedCheck.count },
+            counts: { products: outcome.linkedCount },
           },
         });
       }
-
-      await productsRepo.clearProductsCategoryAndDeleteInternalCategory(name, type, idResult.value);
 
       await logAudit({
         request,
@@ -1065,12 +1099,41 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Block rename when products are already linked - preserves historical references.
-      const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
-        categoryResult.value,
-        typeResult.value,
-        oldNameResult.value,
-      );
-      if (linkedCheck.linked) {
+      // Check + rename share one transaction and lock matched product rows so a concurrent
+      // document line cannot attach between the gate and the mutation.
+      type SubcategoryRenameOutcome =
+        | { ok: true; subId: string }
+        | { ok: false; reason: 'not_found' }
+        | { ok: false; reason: 'linked'; linkedCount: number };
+
+      const outcome = await withDbTransaction(async (tx): Promise<SubcategoryRenameOutcome> => {
+        const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
+          categoryResult.value,
+          typeResult.value,
+          oldNameResult.value,
+          tx,
+        );
+        if (linkedCheck.linked) {
+          return { ok: false, reason: 'linked', linkedCount: linkedCheck.count };
+        }
+        const sub = await productsRepo.updateInternalSubcategoryName(
+          categoryId,
+          oldNameResult.value,
+          newNameResult.value,
+          tx,
+        );
+        if (!sub) return { ok: false, reason: 'not_found' };
+        await productsRepo.propagateSubcategoryNameToProducts(
+          oldNameResult.value,
+          newNameResult.value,
+          typeResult.value,
+          categoryResult.value,
+          tx,
+        );
+        return { ok: true, subId: sub.id };
+      });
+
+      if (!outcome.ok && outcome.reason === 'linked') {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Cannot rename subcategory',
@@ -1080,34 +1143,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: {
             targetLabel: oldNameResult.value,
             secondaryLabel: 'linked_to_transactions',
-            counts: { products: linkedCheck.count },
+            counts: { products: outcome.linkedCount },
           },
           extraBody: {
-            message: `Subcategory "${oldNameResult.value}" has ${linkedCheck.count} product(s) linked to transactions. Rename would affect historical records.`,
-            linkedCount: linkedCheck.count,
+            message: `Subcategory "${oldNameResult.value}" has ${outcome.linkedCount} product(s) linked to transactions. Rename would affect historical records.`,
+            linkedCount: outcome.linkedCount,
           },
         });
       }
 
-      const result = await withDbTransaction(async (tx) => {
-        const sub = await productsRepo.updateInternalSubcategoryName(
-          categoryId,
-          oldNameResult.value,
-          newNameResult.value,
-          tx,
-        );
-        if (!sub) return null;
-        await productsRepo.propagateSubcategoryNameToProducts(
-          oldNameResult.value,
-          newNameResult.value,
-          typeResult.value,
-          categoryResult.value,
-          tx,
-        );
-        return { subId: sub.id };
-      });
-
-      if (!result) {
+      if (!outcome.ok) {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Subcategory not found',
@@ -1121,7 +1166,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request,
         action: 'internal_subcategory.renamed',
         entityType: 'internal_product_subcategory',
-        entityId: result.subId,
+        entityId: outcome.subId,
         details: {
           targetLabel: newNameResult.value,
           secondaryLabel: `From: ${oldNameResult.value}`,
@@ -1201,33 +1246,48 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
-        categoryResult.value,
-        typeResult.value,
-        nameResult.value,
-      );
-      if (linkedCheck.linked) {
+      type SubcategoryDeleteOutcome =
+        | { ok: true; subId: string }
+        | { ok: false; reason: 'not_found' }
+        | { ok: false; reason: 'linked'; linkedCount: number };
+
+      const outcome = await withDbTransaction(async (tx): Promise<SubcategoryDeleteOutcome> => {
+        const linkedCheck = await productsRepo.checkProductsLinkedToTransactions(
+          categoryResult.value,
+          typeResult.value,
+          nameResult.value,
+          tx,
+        );
+        if (linkedCheck.linked) {
+          return { ok: false, reason: 'linked', linkedCount: linkedCheck.count };
+        }
+        const subDeleted = await productsRepo.deleteInternalSubcategoryAndClearProducts(
+          categoryId,
+          nameResult.value,
+          typeResult.value,
+          categoryResult.value,
+          tx,
+        );
+        if (!subDeleted) return { ok: false, reason: 'not_found' };
+        return { ok: true, subId: subDeleted.id };
+      });
+
+      if (!outcome.ok && outcome.reason === 'linked') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: `Cannot delete subcategory "${nameResult.value}" because ${linkedCheck.count} product(s) are linked to offers, orders, or invoices`,
+          message: `Cannot delete subcategory "${nameResult.value}" because ${outcome.linkedCount} product(s) are linked to offers, orders, or invoices`,
           action: 'product_subcategory.delete.conflict',
           entityType: 'product_subcategory',
           entityId: nameResult.value,
           details: {
             targetLabel: nameResult.value,
             secondaryLabel: 'linked_to_transactions',
-            counts: { products: linkedCheck.count },
+            counts: { products: outcome.linkedCount },
           },
         });
       }
 
-      const subDeleted = await productsRepo.deleteInternalSubcategoryAndClearProducts(
-        categoryId,
-        nameResult.value,
-        typeResult.value,
-        categoryResult.value,
-      );
-      if (!subDeleted) {
+      if (!outcome.ok) {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Subcategory not found',
@@ -1241,7 +1301,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request,
         action: 'internal_subcategory.deleted',
         entityType: 'internal_product_subcategory',
-        entityId: subDeleted.id,
+        entityId: outcome.subId,
         details: {
           targetLabel: nameResult.value,
           secondaryLabel: categoryResult.value,
