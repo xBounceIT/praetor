@@ -488,20 +488,14 @@ const buildServer = () => {
 
       const canViewClientInvoices = hasPermission(user, 'accounting.clients_invoices.view');
       const canViewSupplierInvoices = hasPermission(user, 'accounting.supplier_invoices.view');
-      const [clientInvoices, supplierInvoices, supplierInvoiceItems] = await Promise.all([
+      const [clientInvoices, supplierInvoices] = await Promise.all([
         listIfAllowed(canViewClientInvoices, invoicesRepo.listAllWithItems),
-        listIfAllowed(canViewSupplierInvoices, supplierInvoicesRepo.listAll),
-        listIfAllowed(canViewSupplierInvoices, supplierInvoicesRepo.listAllItems),
+        listIfAllowed(canViewSupplierInvoices, supplierInvoicesRepo.listAllWithItems),
       ]);
-
-      const supplierItemsByInvoice = groupBy(supplierInvoiceItems, (item) => item.invoiceId);
 
       return jsonResult({
         clientInvoices,
-        supplierInvoices: supplierInvoices.map((invoice) => ({
-          ...invoice,
-          items: supplierItemsByInvoice.get(invoice.id) ?? [],
-        })),
+        supplierInvoices,
         scope: {
           includesClientInvoices: canViewClientInvoices,
           includesSupplierInvoices: canViewSupplierInvoices,

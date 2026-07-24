@@ -308,21 +308,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       },
     },
-    async () => {
-      const [invoices, items] = await Promise.all([
-        supplierInvoicesRepo.listAll(),
-        supplierInvoicesRepo.listAllItems(),
-      ]);
-      const itemsByInvoice: Record<string, supplierInvoicesRepo.SupplierInvoiceItem[]> = {};
-      for (const item of items) {
-        if (!itemsByInvoice[item.invoiceId]) itemsByInvoice[item.invoiceId] = [];
-        itemsByInvoice[item.invoiceId].push(item);
-      }
-      return invoices.map((invoice) => ({
-        ...invoice,
-        items: itemsByInvoice[invoice.id] || [],
-      }));
-    },
+    async () => supplierInvoicesRepo.listAllWithItems(),
   );
 
   fastify.post(

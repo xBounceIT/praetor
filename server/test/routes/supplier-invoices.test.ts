@@ -33,6 +33,7 @@ const getRolePermissionsMock = mock();
 
 const listAllMock = mock();
 const listAllItemsMock = mock();
+const listAllWithItemsMock = mock();
 const findInvoiceForLinkedSaleMock = mock();
 const maxSequenceForYearMock = mock();
 const createMock = mock();
@@ -76,6 +77,7 @@ beforeAll(async () => {
     ...supplierInvoicesRepoSnap,
     listAll: listAllMock,
     listAllItems: listAllItemsMock,
+    listAllWithItems: listAllWithItemsMock,
     findInvoiceForLinkedSale: findInvoiceForLinkedSaleMock,
     maxSequenceForYear: maxSequenceForYearMock,
     create: createMock,
@@ -192,6 +194,7 @@ const allMocks = [
   getRolePermissionsMock,
   listAllMock,
   listAllItemsMock,
+  listAllWithItemsMock,
   findInvoiceForLinkedSaleMock,
   maxSequenceForYearMock,
   createMock,
@@ -241,8 +244,7 @@ const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })
 
 describe('GET /api/supplier-invoices', () => {
   test('200 returns list with grouped items', async () => {
-    listAllMock.mockResolvedValue([SAMPLE_INVOICE]);
-    listAllItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+    listAllWithItemsMock.mockResolvedValue([{ ...SAMPLE_INVOICE, items: [SAMPLE_ITEM] }]);
 
     const res = await testApp.inject({
       method: 'GET',
@@ -255,11 +257,13 @@ describe('GET /api/supplier-invoices', () => {
     expect(body).toHaveLength(1);
     expect(body[0].id).toBe('SINV-2025-0001');
     expect(body[0].items).toHaveLength(1);
+    expect(listAllWithItemsMock).toHaveBeenCalledTimes(1);
+    expect(listAllMock).not.toHaveBeenCalled();
+    expect(listAllItemsMock).not.toHaveBeenCalled();
   });
 
   test('200 invoice without items has empty array', async () => {
-    listAllMock.mockResolvedValue([SAMPLE_INVOICE]);
-    listAllItemsMock.mockResolvedValue([]);
+    listAllWithItemsMock.mockResolvedValue([{ ...SAMPLE_INVOICE, items: [] }]);
 
     const res = await testApp.inject({
       method: 'GET',

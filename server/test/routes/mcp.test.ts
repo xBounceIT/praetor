@@ -49,8 +49,7 @@ const clientsOrdersListAllItemsMock = mock();
 const invoicesListAllWithItemsMock = mock();
 const suppliersListAllMock = mock();
 const suppliersListOptionsMock = mock();
-const supplierInvoicesListAllMock = mock();
-const supplierInvoicesListAllItemsMock = mock();
+const supplierInvoicesListAllWithItemsMock = mock();
 const supplierOrdersListAllMock = mock();
 const supplierOrdersListAllItemsMock = mock();
 const supplierQuotesListAllMock = mock();
@@ -138,8 +137,7 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/supplierInvoicesRepo.ts', () => ({
     ...supplierInvoicesRepoSnap,
-    listAll: supplierInvoicesListAllMock,
-    listAllItems: supplierInvoicesListAllItemsMock,
+    listAllWithItems: supplierInvoicesListAllWithItemsMock,
   }));
   mock.module('../../repositories/supplierOrdersRepo.ts', () => ({
     ...supplierOrdersRepoSnap,
@@ -230,8 +228,7 @@ beforeEach(async () => {
     invoicesListAllWithItemsMock,
     suppliersListAllMock,
     suppliersListOptionsMock,
-    supplierInvoicesListAllMock,
-    supplierInvoicesListAllItemsMock,
+    supplierInvoicesListAllWithItemsMock,
     supplierOrdersListAllMock,
     supplierOrdersListAllItemsMock,
     supplierQuotesListAllMock,
@@ -269,8 +266,7 @@ beforeEach(async () => {
   invoicesListAllWithItemsMock.mockResolvedValue([]);
   suppliersListAllMock.mockResolvedValue([]);
   suppliersListOptionsMock.mockResolvedValue([]);
-  supplierInvoicesListAllMock.mockResolvedValue([]);
-  supplierInvoicesListAllItemsMock.mockResolvedValue([]);
+  supplierInvoicesListAllWithItemsMock.mockResolvedValue([]);
   supplierOrdersListAllMock.mockResolvedValue([]);
   supplierOrdersListAllItemsMock.mockResolvedValue([]);
   supplierQuotesListAllMock.mockResolvedValue([]);
@@ -612,8 +608,9 @@ describe('/api/mcp', () => {
     supplierOrdersListAllMock.mockResolvedValue([{ id: 'sord-1', supplierId: 's1' }]);
     supplierOrdersListAllItemsMock.mockResolvedValue([{ id: 'sordi-1', orderId: 'sord-1' }]);
     invoicesListAllWithItemsMock.mockResolvedValue([{ id: 'inv-1', items: [{ id: 'invi-1' }] }]);
-    supplierInvoicesListAllMock.mockResolvedValue([{ id: 'sinv-1', supplierId: 's1' }]);
-    supplierInvoicesListAllItemsMock.mockResolvedValue([{ id: 'sinvi-1', invoiceId: 'sinv-1' }]);
+    supplierInvoicesListAllWithItemsMock.mockResolvedValue([
+      { id: 'sinv-1', supplierId: 's1', items: [{ id: 'sinvi-1', invoiceId: 'sinv-1' }] },
+    ]);
 
     const quotesRes = await rpc({
       jsonrpc: '2.0',
