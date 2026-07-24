@@ -70,7 +70,12 @@ official PG18 container layout. Do not point this compose file at an existing Po
 data volume.
 
 The compose setup defaults backend `TRUST_PROXY=1` for the bundled Caddy -> API hop.
-Set `DEMO_SEEDING=true` and a unique `DEMO_USER_PASSWORD` in `.env` when you want the stack to provision the canonical demo users and demo business data. The demo refresh fails before cleaning or reseeding demo data when the password is blank or matches the published legacy default, and it is refused outright when `NODE_ENV=production`.
+Set `DEMO_SEEDING=true`, a unique `DEMO_USER_PASSWORD`, and `NODE_ENV` to a non-production
+value (for example `development`) in `.env` when you want the stack to provision the
+canonical demo users and demo business data. The backend image defaults to
+`NODE_ENV=production`; demo seeding is refused in that mode. The demo refresh also fails
+before cleaning or reseeding demo data when the password is blank or matches the published
+legacy default.
 That refresh flow is intended for demo and test stacks, owns the canonical demo namespace,
 refreshes compatibility clients/projects/tasks, deletes financial documents and dependent
 resales backed by demo products, and resets the seeded demo users' assignments, notifications, and time entries so

@@ -42,6 +42,7 @@ services:
     environment:
       <<: *backend-db-env
       PORT: 3001
+      NODE_ENV: ${NODE_ENV:-production}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       ADMIN_DEFAULT_PASSWORD: '${ADMIN_DEFAULT_PASSWORD:-}'
@@ -49,6 +50,12 @@ services:
       DEMO_SEEDING: ${DEMO_SEEDING:-false}
       DEMO_USER_PASSWORD: '${DEMO_USER_PASSWORD:-}'
       FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_PRETTY: '${LOG_PRETTY:-}'
+      SSO_CALLBACK_BASE_URL: '${SSO_CALLBACK_BASE_URL:-}'
+      DB_SSL: '${DB_SSL:-}'
+      DB_SSL_CA: '${DB_SSL_CA:-}'
+      DB_SSL_CA_FILE: '${DB_SSL_CA_FILE:-}'
     volumes:
       - ssl_certs:/app/certs
       - uploads_data:/app/uploads
