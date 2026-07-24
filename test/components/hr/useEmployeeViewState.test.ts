@@ -116,4 +116,20 @@ describe('useEmployeeViewState employee delete', () => {
     expect(result.current.state.isDeleting).toBe(false);
     expect(result.current.state.deleteError).toBeNull();
   });
+
+  test('keeps confirmation open after a thrown-style delete failure message', () => {
+    const employee = buildEmployee('employee', 30);
+    const { result } = renderHook(() => useEmployeeViewState());
+
+    act(() => {
+      result.current.confirmEmployeeDelete(employee);
+      result.current.startEmployeeDelete();
+      result.current.failEmployeeDelete('Network down');
+    });
+
+    expect(result.current.state.isDeleteConfirmOpen).toBe(true);
+    expect(result.current.state.employeeToDelete?.id).toBe('employee');
+    expect(result.current.state.isDeleting).toBe(false);
+    expect(result.current.state.deleteError).toBe('Network down');
+  });
 });
