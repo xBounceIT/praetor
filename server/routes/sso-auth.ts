@@ -137,11 +137,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/saml/:slug/callback',
     {
+      onRequest: fastify.rateLimit(LOGIN_RATE_LIMIT),
       schema: {
         tags: ['sso'],
         summary: 'Complete SAML login',
         params: slugParamsSchema,
         security: [],
+        response: {
+          ...standardRateLimitedErrorResponses,
+        },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
