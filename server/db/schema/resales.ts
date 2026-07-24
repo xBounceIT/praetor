@@ -25,7 +25,7 @@ export const resaleCategories = pgTable(
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
   },
-  (table) => [uniqueIndex('idx_resale_categories_name_unique').on(table.name)],
+  (table) => [uniqueIndex('idx_resale_categories_name_unique').on(sql`lower(${table.name})`)],
 );
 
 export const resales = pgTable(
