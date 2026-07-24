@@ -6,6 +6,7 @@ import * as realQuoteCommunicationChannelsRepo from '../../repositories/quoteCom
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
+import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realDocumentCodes from '../../services/documentCodes.ts';
 import * as realAudit from '../../utils/audit.ts';
@@ -26,6 +27,7 @@ const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const clientsRepoSnap = { ...realClientsRepo };
+const suppliersRepoSnap = { ...realSuppliersRepo };
 const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
@@ -35,6 +37,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 const clientsFindNameMock = mock();
+const suppliersFindNameByIdMock = mock();
 
 const sqFindByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
@@ -108,6 +111,10 @@ beforeAll(async () => {
     ...clientsRepoSnap,
     findName: clientsFindNameMock,
   }));
+  mock.module('../../repositories/suppliersRepo.ts', () => ({
+    ...suppliersRepoSnap,
+    findNameById: suppliersFindNameByIdMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -140,6 +147,7 @@ afterAll(() => {
     () => quoteCommunicationChannelsRepoSnap,
   );
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/suppliersRepo.ts', () => suppliersRepoSnap);
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
@@ -205,6 +213,7 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   clientsFindNameMock,
+  suppliersFindNameByIdMock,
   sqFindByIdMock,
   sqFindLinkedOrderIdMock,
   sqLockEffectiveStatusByIdMock,
@@ -252,6 +261,10 @@ beforeEach(async () => {
   sqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   sqFindIdConflictMock.mockResolvedValue(false);
   qccFindByIdMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
+  // Default: create/update resolve supplierName from supplierId against this fixture supplier.
+  suppliersFindNameByIdMock.mockImplementation((id: string) =>
+    Promise.resolve(id === 's1' ? 'Acme' : id === 's-other' ? 'Other Co' : null),
+  );
   // Default: the quote is not sourced by any client line, so item edits on a draft are allowed.
   sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
   sqFindSourcedItemIdsMock.mockResolvedValue(new Set<string>());
@@ -424,6 +437,58 @@ describe('POST /api/sales/supplier-quotes', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({ error: 'Bad Request' });
+    expect(sqCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201 resolves supplierName from supplierId and ignores a forged body name', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: { ...CREATE_PAYLOAD, supplierName: 'FORGED SUPPLIER' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(suppliersFindNameByIdMock).toHaveBeenCalledWith('s1');
+    expect(sqCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supplierId: 's1',
+        supplierName: 'Acme',
+      }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).supplierName).toBe('Acme');
+  });
+
+  test('201 resolves supplierName when the body omits supplierName', async () => {
+    const { supplierName: _omitted, ...payload } = CREATE_PAYLOAD;
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(sqCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ supplierId: 's1', supplierName: 'Acme' }),
+      expect.anything(),
+    );
+  });
+
+  test('400 when supplierId does not reference an existing supplier on create', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: { ...CREATE_PAYLOAD, supplierId: 'ghost', supplierName: 'Ghost Co' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'supplierId does not reference an existing supplier',
+    });
     expect(sqCreateMock).not.toHaveBeenCalled();
   });
 });
@@ -1398,6 +1463,92 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({ clientId: 'cli-1', clientName: 'Globex Corp' }),
     );
+  });
+
+  test('200 reassigns supplier and resolves canonical supplierName from supplierId', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      supplierId: 's-other',
+      supplierName: 'Other Co',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { supplierId: 's-other', supplierName: 'FORGED OTHER' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(suppliersFindNameByIdMock).toHaveBeenCalledWith('s-other');
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ supplierId: 's-other', supplierName: 'Other Co' }),
+    );
+  });
+
+  test('200 preserves stored supplierName when an edit resubmits the unchanged supplierId', async () => {
+    sqFindByIdMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      supplierName: 'Name At Link Time',
+    });
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      supplierName: 'Name At Link Time',
+      notes: 'edited',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { supplierId: 's1', supplierName: 'Renamed Later', notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(suppliersFindNameByIdMock).not.toHaveBeenCalled();
+    const patch = sqUpdateMock.mock.calls[0]?.[1];
+    expect(patch).toEqual(expect.objectContaining({ notes: 'edited' }));
+    expect(patch).not.toHaveProperty('supplierId');
+    expect(patch).not.toHaveProperty('supplierName');
+  });
+
+  test('200 ignores a forged supplierName-only update', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { supplierName: 'FORGED SUPPLIER' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(suppliersFindNameByIdMock).not.toHaveBeenCalled();
+    expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual({});
+    expect(sqvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('400 when supplierId does not reference an existing supplier on update', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { supplierId: 'ghost' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'supplierId does not reference an existing supplier',
+    });
+    expect(sqUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 clears the customer link when clientId is empty', async () => {

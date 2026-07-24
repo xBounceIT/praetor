@@ -223,7 +223,11 @@ const supplierQuoteCreateBodySchema = {
     },
     description: { type: 'string' },
     supplierId: { type: 'string' },
-    supplierName: { type: 'string' },
+    // Accepted for backward compatibility; ignored. Canonical supplierName is resolved from supplierId.
+    supplierName: {
+      type: 'string',
+      description: 'Ignored. The canonical supplier name is resolved server-side from supplierId.',
+    },
     // clientName is resolved server-side from clientId; the body only carries the id.
     clientId: { type: ['string', 'null'] },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
@@ -233,7 +237,7 @@ const supplierQuoteCreateBodySchema = {
     communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
   },
-  required: ['supplierId', 'supplierName', 'items', 'expirationDate', 'communicationChannelId'],
+  required: ['supplierId', 'items', 'expirationDate', 'communicationChannelId'],
 } as const;
 
 const supplierQuoteUpdateBodySchema = {
@@ -247,7 +251,12 @@ const supplierQuoteUpdateBodySchema = {
     },
     description: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
-    supplierName: { type: 'string' },
+    // Accepted for backward compatibility; ignored. Canonical supplierName is resolved when supplierId changes.
+    supplierName: {
+      type: 'string',
+      description:
+        'Ignored. The canonical supplier name is resolved server-side when supplierId changes.',
+    },
     // clientName is resolved server-side from clientId; the body only carries the id.
     clientId: { type: ['string', 'null'] },
     items: { type: 'array', items: supplierQuoteItemBodySchema },
@@ -414,6 +423,26 @@ const resolveClientLink = async (
     return null;
   }
   return { clientId: clientIdResult.value, clientName };
+};
+
+// Resolves the required supplier association from `supplierId`. Caller-supplied `supplierName` is
+// never trusted: the canonical name is read from the suppliers table so quote labels, audit
+// secondary labels, and version snapshots stay tied to the referenced supplier row.
+const resolveSupplierLink = async (
+  rawSupplierId: unknown,
+  reply: FastifyReply,
+): Promise<{ supplierId: string; supplierName: string } | null> => {
+  const supplierIdResult = requireNonEmptyString(rawSupplierId, 'supplierId');
+  if (!supplierIdResult.ok) {
+    badRequest(reply, supplierIdResult.message);
+    return null;
+  }
+  const supplierName = await suppliersRepo.findNameById(supplierIdResult.value);
+  if (supplierName === null) {
+    badRequest(reply, 'supplierId does not reference an existing supplier');
+    return null;
+  }
+  return { supplierId: supplierIdResult.value, supplierName };
 };
 
 const resolveCommunicationChannel = async (
@@ -587,7 +616,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id: nextId,
         description,
         supplierId,
-        supplierName,
         clientId,
         items,
         paymentTerms,
@@ -598,7 +626,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id?: string;
         description?: string;
         supplierId?: string;
-        supplierName?: string;
         clientId?: string | null;
         items?: ItemBody[];
         paymentTerms?: string;
@@ -607,11 +634,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes?: string;
       };
 
-      const supplierIdResult = requireNonEmptyString(supplierId, 'supplierId');
-      if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
-
-      const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
-      if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
       const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
@@ -634,6 +656,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
+
+      // supplierName from the body is ignored; resolve the canonical label from supplierId.
+      const supplierLink = await resolveSupplierLink(supplierId, reply);
+      if (!supplierLink) return;
 
       const clientLink = await resolveClientLink(clientId, reply);
       if (!clientLink) return;
@@ -667,8 +693,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             {
               id: quoteId,
               description: description ?? null,
-              supplierId: supplierIdResult.value,
-              supplierName: supplierNameResult.value,
+              supplierId: supplierLink.supplierId,
+              supplierName: supplierLink.supplierName,
               clientId: clientLink.clientId,
               clientName: clientLink.clientName,
               paymentTerms: paymentTerms || 'immediate',
@@ -748,7 +774,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id: nextId,
         description,
         supplierId,
-        supplierName,
         clientId,
         items,
         paymentTerms,
@@ -759,7 +784,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id?: string;
         description?: string | null;
         supplierId?: string;
-        supplierName?: string;
         clientId?: string | null;
         items?: ItemBody[];
         paymentTerms?: string;
@@ -778,10 +802,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // field, expiration included) decides whether to take a version snapshot before writing;
       // id-only renames do not. Derived from one list so the field sets can't drift. A client-sent
       // `status` is IGNORED entirely: the status is fully derived from the linked client documents.
+      // `supplierName` is also ignored (resolved from supplierId when the id changes).
       const hasNonExpirationContentUpdate =
         description !== undefined ||
         supplierId !== undefined ||
-        supplierName !== undefined ||
         clientId !== undefined ||
         items !== undefined ||
         paymentTerms !== undefined ||
@@ -793,16 +817,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       if (description !== undefined) patch.description = description;
 
+      // Validate supplierId format here; resolve/write the canonical name later and only when the
+      // id actually changes (mirrors clientId/#759). Caller-supplied supplierName is never trusted.
+      let incomingSupplierId: string | null = null;
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
         if (!supplierIdResult.ok) return badRequest(reply, supplierIdResult.message);
-        if (supplierIdResult.value !== null) patch.supplierId = supplierIdResult.value;
-      }
-
-      if (supplierName !== undefined) {
-        const supplierNameResult = optionalNonEmptyString(supplierName, 'supplierName');
-        if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-        if (supplierNameResult.value !== null) patch.supplierName = supplierNameResult.value;
+        if (supplierIdResult.value !== null) incomingSupplierId = supplierIdResult.value;
       }
 
       // Validate the clientId format here, but resolve/write the link later and only when it
@@ -908,6 +929,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
           details: { secondaryLabel: 'duplicate_id' },
         });
+      }
+
+      // Touch the supplier link only when it actually changes. An unchanged supplierId (the edit
+      // form resubmits it on every save) leaves the stored supplierName intact so it survives later
+      // supplier renames; a changed id re-resolves the canonical name. Caller-supplied supplierName
+      // is never written.
+      if (incomingSupplierId !== null && incomingSupplierId !== current.supplierId) {
+        const supplierLink = await resolveSupplierLink(incomingSupplierId, reply);
+        if (!supplierLink) return;
+        patch.supplierId = supplierLink.supplierId;
+        patch.supplierName = supplierLink.supplierName;
       }
 
       // Touch the customer link only when it actually changes. An unchanged clientId (the edit
