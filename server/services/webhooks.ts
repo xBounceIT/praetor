@@ -1,12 +1,14 @@
-import type {
-  StoredWebhookHeader,
-  WebhookAuthType,
-  WebhookHttpMethod,
-} from '../db/schema/webhooks.ts';
+import type { WebhookAuthType, WebhookHttpMethod } from '../db/schema/webhooks.ts';
 import * as webhooksRepo from '../repositories/webhooksRepo.ts';
 import { decrypt, encrypt } from '../utils/crypto.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { fetchPinnedRemoteUrl, resolveSafeRemoteAddresses } from '../utils/safe-remote-fetch.ts';
+import {
+  decryptHeaderValue,
+  encryptNewHeaders,
+  mergeEncryptedHeaders,
+  type WebhookHeaderInput,
+} from './webhookHeaders.ts';
 
 // Plaintext input from the route. `authSecret` carries the raw credential the admin typed, or
 // `undefined` (the field omitted) to mean "keep the stored value". The UI signals "unchanged" by
@@ -22,7 +24,7 @@ export type WebhookInput = {
   authUsername?: string;
   authHeaderName?: string;
   authSecret?: string;
-  customHeaders?: StoredWebhookHeader[];
+  customHeaders?: WebhookHeaderInput[];
   enabled?: boolean;
 };
 
@@ -110,7 +112,7 @@ export const createWebhook = async (input: WebhookInput): Promise<webhooksRepo.W
     authUsername: auth.authUsername,
     authHeaderName: auth.authHeaderName,
     authSecret: auth.authSecret,
-    customHeaders: input.customHeaders ?? [],
+    customHeaders: encryptNewHeaders(input.customHeaders ?? []),
     enabled: input.enabled ?? true,
   });
 };
@@ -136,7 +138,9 @@ export const updateWebhook = async (
   if (input.description !== undefined) patch.description = input.description;
   if (input.url !== undefined) patch.url = input.url;
   if (input.httpMethod !== undefined) patch.httpMethod = input.httpMethod;
-  if (input.customHeaders !== undefined) patch.customHeaders = input.customHeaders;
+  if (input.customHeaders !== undefined) {
+    patch.customHeaders = mergeEncryptedHeaders(input.customHeaders, existing.customHeaders);
+  }
   if (input.enabled !== undefined) patch.enabled = input.enabled;
 
   return webhooksRepo.update(id, patch);
@@ -174,7 +178,7 @@ const buildDispatchHeaders = (
   if (hasJsonBody) headers['Content-Type'] = 'application/json';
 
   for (const header of webhook.customHeaders) {
-    setHeader(headers, header.key, header.value);
+    setHeader(headers, header.key, decryptHeaderValue(header));
   }
 
   switch (webhook.authType) {

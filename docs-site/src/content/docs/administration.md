@@ -154,7 +154,7 @@ Ogni destinazione definisce:
 - **URL** — l'endpoint HTTPS pubblico che Praetor chiama. Non sono accettati URL con credenziali incorporate né destinazioni loopback, private, link-local o riservate. Praetor risolve e vincola l'indirizzo prima della connessione e non segue i reindirizzamenti.
 - **Metodo HTTP** — `GET`, `POST` (predefinito), `PUT`, `PATCH` o `DELETE`.
 - **Autenticazione** — come Praetor si autentica verso la destinazione: **Nessuna**, **Bearer token**, **Basic** (nome utente e password) o **Chiave API** (un valore inviato in un header personalizzato che assegni). La credenziale segreta è cifrata a riposo e non viene mai restituita al browser; in modifica mostra un badge **Memorizzato — Sostituisci**, e lo stesso comportamento Mantieni / Sostituisci degli altri campi segreti la preserva finché non la sostituisci o la rimuovi esplicitamente.
-- **Header personalizzati** — coppie chiave/valore facoltative allegate a ogni richiesta, sovrapposte all'header di autenticazione. Usali per valori di instradamento non segreti come un id tenant.
+- **Header personalizzati** — coppie chiave/valore facoltative allegate a ogni richiesta, sovrapposte all'header di autenticazione. Ogni valore è cifrato a riposo e mascherato nell'API e nel browser. La modifica usa i controlli **Salvato — Sostituisci**: lascia invariato un valore salvato per conservarlo oppure scegli **Sostituisci** per impostarlo o cancellarlo.
 - **Abilitato** — un interruttore che marca la destinazione come attiva o inattiva.
 
 Le azioni di creazione, modifica ed eliminazione sono regolate rispettivamente dai permessi create, update e delete, e ogni modifica viene scritta nel log di audit.
@@ -162,3 +162,5 @@ Le azioni di creazione, modifica ed eliminazione sono regolate rispettivamente d
 Questa pagina configura solo le destinazioni; gli eventi che attivano ciascun webhook vengono collegati separatamente, ad esempio nelle azioni delle regole commessa.
 
 > Nota di aggiornamento: le destinazioni `http://` salvate da versioni precedenti non vengono più inviate. Modificale con un endpoint HTTPS pubblico prima di riabilitare le regole che le usano.
+>
+> Per aggiornare una versione che salvava in chiaro i valori degli header personalizzati, arresta tutte le istanze API precedenti ed esegui un backup del database prima di avviare la nuova versione. All'avvio i valori esistenti vengono cifrati sul posto; un'immagine precedente non può inviare questi header cifrati. Per eseguire il rollback, ripristina il backup precedente all'aggiornamento prima di riavviare l'immagine precedente.

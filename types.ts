@@ -1084,8 +1084,14 @@ export interface WebhookHeader {
   value: string;
 }
 
-// A configured webhook target. `authSecret` arrives masked from the server (the mask sentinel when
-// a secret is stored, '' otherwise) — never the real credential.
+export interface WebhookHeaderInput {
+  key: string;
+  // Omit a stored header's value on update to preserve it; provide a value for new/replaced headers.
+  value?: string;
+}
+
+// A configured webhook target. Secret values arrive masked from the server (the mask sentinel when
+// stored, '' otherwise) — never the real credentials.
 export interface Webhook {
   id: string;
   name: string;
@@ -1100,10 +1106,9 @@ export interface Webhook {
   enabled: boolean;
 }
 
-// Create/update body. Omit `authSecret` to keep the stored secret; send a new value to replace it,
-// or '' to clear it. There is no input mask sentinel: any string sent is stored as-is (a literal
-// '********' is saved verbatim), so callers must OMIT the field to preserve the credential — echoing
-// the masked value back from a fetched webhook would overwrite the stored secret with asterisks.
+// Create/update body. Omit `authSecret`, or a stored custom header's `value`, to preserve it. Send a
+// new value to replace it or '' to clear it. There is no input mask sentinel: any string sent is
+// stored as-is, so callers preserve a credential by omitting its field rather than echoing the mask.
 export interface WebhookPayload {
   name: string;
   description: string;
@@ -1113,7 +1118,7 @@ export interface WebhookPayload {
   authUsername: string;
   authHeaderName: string;
   authSecret?: string;
-  customHeaders: WebhookHeader[];
+  customHeaders: WebhookHeaderInput[];
   enabled: boolean;
 }
 

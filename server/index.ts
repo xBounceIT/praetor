@@ -13,6 +13,7 @@ import {
   startProjectRulesScheduler,
 } from './services/projectRulesScheduler.ts';
 import siemService from './services/siem.ts';
+import { migrateLegacyWebhookHeaders } from './services/webhookHeaders.ts';
 import { performShutdown } from './shutdown.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
@@ -93,6 +94,11 @@ try {
   const migratedLegacyAiApiKeys = await migrateLegacyAiApiKeys();
   if (migratedLegacyAiApiKeys) {
     logger.info('Legacy AI provider credentials encrypted');
+  }
+
+  const migratedWebhookHeaders = await migrateLegacyWebhookHeaders();
+  if (migratedWebhookHeaders > 0) {
+    logger.info({ webhookCount: migratedWebhookHeaders }, 'Legacy webhook header values encrypted');
   }
 
   // Ensure required bootstrap user data always exists.

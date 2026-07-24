@@ -14,10 +14,13 @@ const decryptMock = mock((ciphertext: string) => `dec(${ciphertext})`);
 const insertMock = mock();
 const updateMock = mock();
 const findByIdMock = mock();
+const listBatchAfterIdMock = mock();
+const replaceCustomHeadersIfUnchangedMock = mock();
 const resolveSafeRemoteAddressesMock = mock();
 const fetchPinnedRemoteUrlMock = mock();
 
 let webhooksService: typeof import('../../services/webhooks.ts');
+let webhookHeadersService: typeof import('../../services/webhookHeaders.ts');
 
 beforeAll(async () => {
   mock.module('../../utils/crypto.ts', () => ({
@@ -31,6 +34,8 @@ beforeAll(async () => {
     insert: insertMock,
     update: updateMock,
     findById: findByIdMock,
+    listBatchAfterId: listBatchAfterIdMock,
+    replaceCustomHeadersIfUnchanged: replaceCustomHeadersIfUnchangedMock,
   }));
   mock.module('../../utils/safe-remote-fetch.ts', () => ({
     ...safeRemoteFetchSnapshot,
@@ -38,6 +43,7 @@ beforeAll(async () => {
     fetchPinnedRemoteUrl: fetchPinnedRemoteUrlMock,
   }));
   webhooksService = await import('../../services/webhooks.ts');
+  webhookHeadersService = await import('../../services/webhookHeaders.ts');
 });
 
 afterAll(() => {
@@ -74,10 +80,14 @@ beforeEach(() => {
   insertMock.mockReset();
   updateMock.mockReset();
   findByIdMock.mockReset();
+  listBatchAfterIdMock.mockReset();
+  replaceCustomHeadersIfUnchangedMock.mockReset();
   resolveSafeRemoteAddressesMock.mockReset();
   fetchPinnedRemoteUrlMock.mockReset();
   insertMock.mockImplementation(async (webhook) => webhook);
   updateMock.mockImplementation(async (_id, patch) => ({ ...existingWebhook(), ...patch }));
+  listBatchAfterIdMock.mockResolvedValue([]);
+  replaceCustomHeadersIfUnchangedMock.mockResolvedValue(true);
   resolveSafeRemoteAddressesMock.mockResolvedValue(PUBLIC_ADDRESSES);
   fetchPinnedRemoteUrlMock.mockImplementation(async () => new Response(null, { status: 204 }));
 });
@@ -158,6 +168,23 @@ describe('createWebhook', () => {
     expect(insertedArg().enabled).toBe(true);
     expect(insertedArg().customHeaders).toEqual([]);
     expect(insertedArg().authType).toBe('none');
+  });
+
+  test('encrypts non-empty custom header values before storing them', async () => {
+    await webhooksService.createWebhook({
+      name: 'X',
+      url: 'https://x.com',
+      customHeaders: [
+        { key: 'X-API-Key', value: 'header-secret' },
+        { key: 'X-Empty', value: '' },
+      ],
+    });
+
+    expect(encryptMock).toHaveBeenCalledWith('header-secret');
+    expect(insertedArg().customHeaders).toEqual([
+      { key: 'X-API-Key', value: 'enc(header-secret)', encrypted: true },
+      { key: 'X-Empty', value: '', encrypted: true },
+    ]);
   });
 
   test('rejects api_key without a header name', async () => {
@@ -286,6 +313,100 @@ describe('updateWebhook', () => {
     ).rejects.toThrow('authHeaderName is required');
     expect(updateMock).not.toHaveBeenCalled();
   });
+
+  test('preserves an encrypted custom header when its value is omitted', async () => {
+    findByIdMock.mockResolvedValue(
+      existingWebhook({
+        customHeaders: [{ key: 'X-API-Key', value: 'enc(existing)', encrypted: true }],
+      }),
+    );
+
+    await webhooksService.updateWebhook('webhook-1', {
+      customHeaders: [{ key: 'x-api-key' }],
+    });
+
+    expect(updatedPatch().customHeaders).toEqual([
+      { key: 'x-api-key', value: 'enc(existing)', encrypted: true },
+    ]);
+    expect(encryptMock).not.toHaveBeenCalledWith('enc(existing)');
+  });
+
+  test('encrypts a replaced custom header value', async () => {
+    findByIdMock.mockResolvedValue(
+      existingWebhook({
+        customHeaders: [{ key: 'X-API-Key', value: 'enc(existing)', encrypted: true }],
+      }),
+    );
+
+    await webhooksService.updateWebhook('webhook-1', {
+      customHeaders: [{ key: 'X-API-Key', value: 'replacement' }],
+    });
+
+    expect(updatedPatch().customHeaders).toEqual([
+      { key: 'X-API-Key', value: 'enc(replacement)', encrypted: true },
+    ]);
+  });
+
+  test('rejects an omitted value for a new custom header', async () => {
+    findByIdMock.mockResolvedValue(existingWebhook({ customHeaders: [] }));
+
+    await expect(
+      webhooksService.updateWebhook('webhook-1', {
+        customHeaders: [{ key: 'X-New' }],
+      }),
+    ).rejects.toThrow('value is required for a new header');
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('migrateLegacyWebhookHeaders', () => {
+  test('encrypts legacy plaintext values with a compare-and-swap update', async () => {
+    const legacy = existingWebhook({
+      customHeaders: [
+        { key: 'X-Legacy', value: 'plaintext-secret' },
+        { key: 'X-Shaped', value: 'enc(shaped-plaintext)' },
+        { key: 'X-Current', value: 'enc(current)', encrypted: true },
+        { key: 'X-Empty', value: '' },
+      ],
+    });
+    listBatchAfterIdMock.mockResolvedValueOnce([legacy]);
+
+    await expect(webhookHeadersService.migrateLegacyWebhookHeaders()).resolves.toBe(1);
+
+    expect(replaceCustomHeadersIfUnchangedMock).toHaveBeenCalledWith(
+      legacy.id,
+      legacy.customHeaders,
+      [
+        { key: 'X-Legacy', value: 'enc(plaintext-secret)', encrypted: true },
+        { key: 'X-Shaped', value: 'enc(enc(shaped-plaintext))', encrypted: true },
+        { key: 'X-Current', value: 'enc(current)', encrypted: true },
+        { key: 'X-Empty', value: '', encrypted: true },
+      ],
+    );
+    expect(encryptMock).toHaveBeenCalledWith('plaintext-secret');
+    expect(encryptMock).toHaveBeenCalledWith('enc(shaped-plaintext)');
+    expect(encryptMock).not.toHaveBeenCalledWith('enc(current)');
+  });
+
+  test('keeps legacy plaintext dispatch-compatible until startup migration completes', () => {
+    expect(
+      webhookHeadersService.decryptHeaderValue({ key: 'X-Legacy', value: 'legacy-plaintext' }),
+    ).toBe('legacy-plaintext');
+    expect(decryptMock).not.toHaveBeenCalled();
+  });
+
+  test('fails closed when a concurrent write leaves a plaintext value behind', async () => {
+    const legacy = existingWebhook({
+      customHeaders: [{ key: 'X-Legacy', value: 'do-not-log-this' }],
+    });
+    listBatchAfterIdMock.mockResolvedValueOnce([legacy]);
+    replaceCustomHeadersIfUnchangedMock.mockResolvedValueOnce(false);
+    findByIdMock.mockResolvedValueOnce(legacy);
+
+    const migration = webhookHeadersService.migrateLegacyWebhookHeaders();
+    await expect(migration).rejects.toThrow('Failed to encrypt legacy webhook header values');
+    await expect(migration).rejects.not.toThrow('do-not-log-this');
+  });
 });
 
 describe('dispatchWebhook', () => {
@@ -304,11 +425,11 @@ describe('dispatchWebhook', () => {
     expect(decryptMock).not.toHaveBeenCalled();
   });
 
-  test('sends a JSON body with custom headers and bearer auth', async () => {
+  test('decrypts custom headers before sending a JSON body with bearer auth', async () => {
     const webhook = existingWebhook({
       authType: 'bearer',
       authSecret: 'enc(tok)',
-      customHeaders: [{ key: 'X-Custom', value: '1' }],
+      customHeaders: [{ key: 'X-Custom', value: 'enc(header-value)', encrypted: true }],
     });
 
     const result = await webhooksService.dispatchWebhook(webhook, {
@@ -317,6 +438,7 @@ describe('dispatchWebhook', () => {
 
     expect(result).toEqual({ delivered: true, skipped: false, status: 204 });
     expect(decryptMock).toHaveBeenCalledWith('enc(tok)');
+    expect(decryptMock).toHaveBeenCalledWith('enc(header-value)');
     expect(fetchPinnedRemoteUrlMock).toHaveBeenCalledWith(
       expect.objectContaining({ href: 'https://example.com/hook' }),
       PUBLIC_ADDRESSES,
@@ -326,7 +448,7 @@ describe('dispatchWebhook', () => {
         body: JSON.stringify({ eventType: 'project_rule_triggered' }),
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
-          'X-Custom': '1',
+          'X-Custom': 'dec(enc(header-value))',
           Authorization: 'Bearer dec(enc(tok))',
         }),
       }),

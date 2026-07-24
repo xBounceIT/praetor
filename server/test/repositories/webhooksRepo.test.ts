@@ -81,6 +81,21 @@ describe('list', () => {
   });
 });
 
+describe('listBatchAfterId', () => {
+  test('uses stable id ordering, cursor, and limit for bounded migrations', async () => {
+    exec.enqueue({ rows: [buildRow({ id: 'webhook-2' })] });
+
+    const result = await webhooksRepo.listBatchAfterId('webhook-1', 100, testDb);
+
+    expect(result[0]?.id).toBe('webhook-2');
+    expect(exec.calls[0].sql).toMatch(/"webhooks"\."id"\s*>\s*\$1/i);
+    expect(exec.calls[0].sql).toMatch(/order by\s+"webhooks"\."id"\s+asc/i);
+    expect(exec.calls[0].sql).toMatch(/limit/i);
+    expect(exec.calls[0].params).toContain('webhook-1');
+    expect(exec.calls[0].params).toContain(100);
+  });
+});
+
 describe('findById', () => {
   test('returns null when no row matches', async () => {
     exec.enqueue({ rows: [] });
@@ -145,6 +160,40 @@ describe('update', () => {
     const result = await webhooksRepo.update('webhook-1', {}, testDb);
     expect(result?.id).toBe('webhook-1');
     expect(exec.calls[0].sql).toMatch(/select/i);
+  });
+});
+
+describe('replaceCustomHeadersIfUnchanged', () => {
+  test('compares the old JSON value before replacing it', async () => {
+    exec.enqueue({ rows: [['webhook-1']] });
+    const expected = [{ key: 'X-API-Key', value: 'plaintext' }];
+    const replacement = [{ key: 'X-API-Key', value: 'encrypted' }];
+
+    expect(
+      await webhooksRepo.replaceCustomHeadersIfUnchanged(
+        'webhook-1',
+        expected,
+        replacement,
+        testDb,
+      ),
+    ).toBe(true);
+
+    expect(exec.calls[0].sql).toMatch(/update "webhooks" set/i);
+    expect(exec.calls[0].sql).toMatch(/"custom_headers"\s*=\s*/i);
+    expect(exec.calls[0].sql).toMatch(/where.*"webhooks"\."id".*"custom_headers"/i);
+    expect(exec.calls[0].params).toContain('webhook-1');
+  });
+
+  test('returns false after a concurrent change', async () => {
+    exec.enqueue({ rows: [] });
+    expect(
+      await webhooksRepo.replaceCustomHeadersIfUnchanged(
+        'webhook-1',
+        [{ key: 'X', value: 'old' }],
+        [{ key: 'X', value: 'new' }],
+        testDb,
+      ),
+    ).toBe(false);
   });
 });
 
