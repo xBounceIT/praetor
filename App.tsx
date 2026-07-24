@@ -62,6 +62,7 @@ import SelectControl from './components/shared/SelectControl';
 import StandardTable, { type Column } from './components/shared/StandardTable';
 import StatusBadge from './components/shared/StatusBadge';
 import DailyView from './components/timesheet/DailyView';
+import EntryDuplicateDialog from './components/timesheet/EntryDuplicateDialog';
 import EntryEditDialog from './components/timesheet/EntryEditDialog';
 import RecurringManager from './components/timesheet/RecurringManager';
 import RilView from './components/timesheet/RilView';
@@ -71,7 +72,7 @@ import { Toaster } from './components/ui/sonner';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
-import { makeEntryHandlers } from './hooks/handlers/entryHandlers';
+import { type AddBulkResult, makeEntryHandlers } from './hooks/handlers/entryHandlers';
 import { makeInvoiceHandlers } from './hooks/handlers/invoiceHandlers';
 import { makeLdapHandlers } from './hooks/handlers/ldapHandlers';
 import { makeProductHandlers } from './hooks/handlers/productHandlers';
@@ -170,8 +171,12 @@ import {
 } from './utils/ril';
 import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
+import {
+  buildDuplicateTimeEntryDrafts,
+  collectDuplicateConflictDates,
+} from './utils/timeEntryDuplicate';
 import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
-import { toastError } from './utils/toast';
+import { toastError, toastSuccess } from './utils/toast';
 import { filterTrackerCatalogs, type TrackerCatalogState } from './utils/trackerCatalogs';
 
 type AppModuleState = {
@@ -675,8 +680,17 @@ const TrackerActivityTable: React.FC<{
   dailyTotal: number;
   dailyGoal: number;
   onEditEntry: (entry: TimeEntry) => void;
+  onDuplicateEntry: (entry: TimeEntry) => void;
   onDeleteEntryClick: (entry: TimeEntry) => void;
-}> = ({ selectedDate, entries, dailyTotal, dailyGoal, onEditEntry, onDeleteEntryClick }) => {
+}> = ({
+  selectedDate,
+  entries,
+  dailyTotal,
+  dailyGoal,
+  onEditEntry,
+  onDuplicateEntry,
+  onDeleteEntryClick,
+}) => {
   const { t } = useTranslation('timesheets');
   const activityHeaderExtras = useMemo(
     () =>
@@ -803,6 +817,25 @@ const TrackerActivityTable: React.FC<{
                     size="icon-xs"
                     onClick={(e) => {
                       e.stopPropagation();
+                      onDuplicateEntry(row);
+                    }}
+                    className="text-muted-foreground hover:text-praetor"
+                  >
+                    <i className="fa-solid fa-copy text-xs"></i>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t('entry.duplicate')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
                       onDeleteEntryClick(row);
                     }}
                     className="text-muted-foreground hover:text-destructive"
@@ -817,7 +850,7 @@ const TrackerActivityTable: React.FC<{
         ),
       },
     ],
-    [selectedDate, t, onEditEntry, onDeleteEntryClick],
+    [selectedDate, t, onEditEntry, onDuplicateEntry, onDeleteEntryClick],
   );
 
   return (
@@ -954,7 +987,10 @@ const TrackerView: React.FC<{
   availableUsers: User[];
   currentUser: User;
   dailyGoal: number;
-  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
+  onAddBulkEntries: (
+    entries: TimeEntryDraft[],
+    options?: { silent?: boolean },
+  ) => Promise<AddBulkResult>;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
   onAddCustomTask: (
@@ -1012,6 +1048,43 @@ const TrackerView: React.FC<{
   }, [filteredEntries]);
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [duplicatingEntry, setDuplicatingEntry] = useState<TimeEntry | null>(null);
+  const { t } = useTranslation('timesheets');
+
+  const duplicateConflictDates = useMemo(() => {
+    if (!duplicatingEntry) return [];
+    return collectDuplicateConflictDates(entries, duplicatingEntry);
+  }, [duplicatingEntry, entries]);
+
+  const handleDuplicateEntry = useCallback(
+    async (dates: string[]) => {
+      if (!duplicatingEntry) {
+        throw new Error('duplicate-entry-missing');
+      }
+      const drafts = buildDuplicateTimeEntryDrafts(duplicatingEntry, dates);
+      const result = await onAddBulkEntries(drafts, { silent: true });
+      const createdCount = result.created.length;
+      const failedCount = result.failed.length;
+      const total = dates.length;
+
+      if (createdCount === 0) {
+        toastError(t('entry.duplicateFailed'));
+        throw new Error('duplicate-failed');
+      }
+      if (failedCount > 0) {
+        toastSuccess(
+          t('entry.duplicatePartial', {
+            created: createdCount,
+            total,
+            failed: failedCount,
+          }),
+        );
+        return;
+      }
+      toastSuccess(t('entry.duplicated', { count: createdCount }));
+    },
+    [duplicatingEntry, onAddBulkEntries, t],
+  );
 
   const handleDeleteClick = useCallback(
     (entry: TimeEntry) => {
@@ -1111,6 +1184,7 @@ const TrackerView: React.FC<{
               dailyTotal={dailyTotal}
               dailyGoal={dailyGoal}
               onEditEntry={setEditingEntry}
+              onDuplicateEntry={setDuplicatingEntry}
               onDeleteEntryClick={handleDeleteClick}
             />
           </div>
@@ -1127,6 +1201,15 @@ const TrackerView: React.FC<{
         permissions={permissions}
         currency={currency}
         onAddCustomTask={onAddCustomTask}
+      />
+
+      <EntryDuplicateDialog
+        entry={duplicatingEntry}
+        onClose={() => setDuplicatingEntry(null)}
+        onDuplicate={handleDuplicateEntry}
+        existingConflictDates={duplicateConflictDates}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
 
       {pendingDeleteEntry && (
