@@ -55,8 +55,11 @@ export interface InternalEmployeesViewProps {
   workUnits: WorkUnit[];
   responsibleUserOptions: ResponsibleUserOption[];
   onAddEmployee: (employee: EmployeeCreatePayload) => Promise<{ success: boolean; error?: string }>;
-  onUpdateEmployee: (id: string, updates: Partial<User>) => void | Promise<void>;
-  onDeleteEmployee: (id: string) => void;
+  onUpdateEmployee: (
+    id: string,
+    updates: Partial<User>,
+  ) => Promise<{ success: boolean; error?: string }>;
+  onDeleteEmployee: (id: string) => Promise<{ success: boolean; error?: string }>;
   currency: string;
   permissions: string[];
 }
@@ -419,6 +422,8 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     closeEmployeeModal,
     setManagingEmployee,
     confirmEmployeeDelete,
+    startEmployeeDelete,
+    failEmployeeDelete,
     completeEmployeeDelete,
     setEmployeeErrors,
     startEmployeeSubmit,
@@ -434,6 +439,8 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     managingEmployee,
     isDeleteConfirmOpen,
     employeeToDelete,
+    isDeleting,
+    deleteError,
     errors,
     isSubmitting,
     formData,
@@ -525,8 +532,12 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
         if (canEditCosts) {
           updates.hourlyCostPeriods = buildHourlyCostPeriodInputs(hourlyCostPeriods);
         }
-        await onUpdateEmployee(editingEmployee.id, updates);
-        completeEmployeeSubmit();
+        const result = await onUpdateEmployee(editingEmployee.id, updates);
+        if (result.success) {
+          completeEmployeeSubmit();
+        } else {
+          setEmployeeErrors({ submit: result.error || 'Failed to update employee' });
+        }
       } else {
         const payload = buildEmployeeCreatePayload(formData, {
           includeHrDetails: canUpdateEmployees,
@@ -550,10 +561,18 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     confirmEmployeeDelete(employee);
   };
 
-  const handleDelete = () => {
-    if (employeeToDelete) {
-      onDeleteEmployee(employeeToDelete.id);
-      completeEmployeeDelete();
+  const handleDelete = async () => {
+    if (!employeeToDelete || isDeleting) return;
+    startEmployeeDelete();
+    try {
+      const result = await onDeleteEmployee(employeeToDelete.id);
+      if (result.success) {
+        completeEmployeeDelete();
+      } else {
+        failEmployeeDelete(result.error || 'Failed to delete employee');
+      }
+    } catch (err) {
+      failEmployeeDelete(err instanceof Error ? err.message : 'Failed to delete employee');
     }
   };
 
@@ -634,10 +653,25 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        onClose={completeEmployeeDelete}
-        onConfirm={handleDelete}
+        onClose={() => {
+          if (isDeleting) return;
+          completeEmployeeDelete();
+        }}
+        onConfirm={() => {
+          void handleDelete();
+        }}
+        isDeleting={isDeleting}
         title={t('internalEmployees.deleteEmployee')}
-        description={t('internalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
+        description={
+          <>
+            <span>
+              {t('internalEmployees.deleteConfirmMessage', { name: employeeToDelete?.name })}
+            </span>
+            {deleteError ? (
+              <span className="mt-3 block text-destructive">{deleteError}</span>
+            ) : null}
+          </>
+        }
       />
 
       {/* Header */}

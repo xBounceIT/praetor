@@ -141,23 +141,36 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
 
   const addExternalEmployee = (data: EmployeeCreatePayload) => addEmployee(data, 'external');
 
-  const updateEmployee = async (id: string, updates: Partial<User>) => {
+  const updateEmployee = async (
+    id: string,
+    updates: Partial<User>,
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
       const updated = await api.employees.update(id, updates);
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
       await refreshMfaExemptionUsers();
+      return { success: true };
     } catch (err) {
       console.error('Failed to update employee:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to update employee',
+      };
     }
   };
 
-  const deleteEmployee = async (id: string) => {
+  const deleteEmployee = async (id: string): Promise<{ success: boolean; error?: string }> => {
     try {
       await api.employees.delete(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
       await refreshMfaExemptionUsers();
+      return { success: true };
     } catch (err) {
       console.error('Failed to delete employee:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to delete employee',
+      };
     }
   };
 

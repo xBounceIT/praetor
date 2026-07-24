@@ -78,3 +78,42 @@ describe('useEmployeeViewState hourly cost loading', () => {
     expect(result.current.state.hourlyCostPeriodsLoadError).toBeNull();
   });
 });
+
+describe('useEmployeeViewState employee delete', () => {
+  test('keeps confirmation open and records an error when delete fails', () => {
+    const employee = buildEmployee('employee', 30);
+    const { result } = renderHook(() => useEmployeeViewState());
+
+    act(() => {
+      result.current.confirmEmployeeDelete(employee);
+      result.current.startEmployeeDelete();
+    });
+    expect(result.current.state.isDeleting).toBe(true);
+    expect(result.current.state.deleteError).toBeNull();
+
+    act(() => {
+      result.current.failEmployeeDelete('Delete rejected');
+    });
+
+    expect(result.current.state.isDeleteConfirmOpen).toBe(true);
+    expect(result.current.state.employeeToDelete?.id).toBe('employee');
+    expect(result.current.state.isDeleting).toBe(false);
+    expect(result.current.state.deleteError).toBe('Delete rejected');
+  });
+
+  test('clears delete state after a successful delete', () => {
+    const employee = buildEmployee('employee', 30);
+    const { result } = renderHook(() => useEmployeeViewState());
+
+    act(() => {
+      result.current.confirmEmployeeDelete(employee);
+      result.current.startEmployeeDelete();
+      result.current.completeEmployeeDelete();
+    });
+
+    expect(result.current.state.isDeleteConfirmOpen).toBe(false);
+    expect(result.current.state.employeeToDelete).toBeNull();
+    expect(result.current.state.isDeleting).toBe(false);
+    expect(result.current.state.deleteError).toBeNull();
+  });
+});

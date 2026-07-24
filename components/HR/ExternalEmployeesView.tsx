@@ -55,8 +55,11 @@ export interface ExternalEmployeesViewProps {
   workUnits: WorkUnit[];
   responsibleUserOptions: ResponsibleUserOption[];
   onAddEmployee: (employee: EmployeeCreatePayload) => Promise<{ success: boolean; error?: string }>;
-  onUpdateEmployee: (id: string, updates: Partial<User>) => void | Promise<void>;
-  onDeleteEmployee: (id: string) => void;
+  onUpdateEmployee: (
+    id: string,
+    updates: Partial<User>,
+  ) => Promise<{ success: boolean; error?: string }>;
+  onDeleteEmployee: (id: string) => Promise<{ success: boolean; error?: string }>;
   currency: string;
   permissions: string[];
 }

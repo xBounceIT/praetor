@@ -383,16 +383,19 @@ describe('makeUserHandlers - employees', () => {
       Promise.resolve({ id, ...(updates as object) }),
     );
     const ctx = buildHandlers({ users: [{ id: 'u1', name: 'Old' }] });
-    await ctx.handlers.updateEmployee('u1', { name: 'New' });
+    const result = await ctx.handlers.updateEmployee('u1', { name: 'New' });
+    expect(result).toEqual({ success: true });
     expect(ctx.users.get()[0]).toEqual({ id: 'u1', name: 'New' });
   });
 
-  test('updateEmployee swallows errors', async () => {
+  test('updateEmployee returns failure without mutating users', async () => {
     apiMocks.employeesUpdate.mockImplementation(() => Promise.reject(new Error('boom')));
-    const ctx = buildHandlers({ users: [{ id: 'u1' }] });
+    const ctx = buildHandlers({ users: [{ id: 'u1', name: 'Old' }] });
     const restore = silenceConsole();
     try {
-      await ctx.handlers.updateEmployee('u1', { name: 'X' });
+      const result = await ctx.handlers.updateEmployee('u1', { name: 'X' });
+      expect(result).toEqual({ success: false, error: 'boom' });
+      expect(ctx.users.get()).toEqual([{ id: 'u1', name: 'Old' }]);
     } finally {
       restore();
     }
@@ -401,16 +404,19 @@ describe('makeUserHandlers - employees', () => {
   test('deleteEmployee removes user', async () => {
     apiMocks.employeesDelete.mockImplementation(() => Promise.resolve());
     const ctx = buildHandlers({ users: [{ id: 'u1' }, { id: 'u2' }] });
-    await ctx.handlers.deleteEmployee('u1');
+    const result = await ctx.handlers.deleteEmployee('u1');
+    expect(result).toEqual({ success: true });
     expect(ctx.users.get()).toEqual([{ id: 'u2' }]);
   });
 
-  test('deleteEmployee swallows errors', async () => {
+  test('deleteEmployee returns failure without mutating users', async () => {
     apiMocks.employeesDelete.mockImplementation(() => Promise.reject(new Error('boom')));
     const ctx = buildHandlers({ users: [{ id: 'u1' }] });
     const restore = silenceConsole();
     try {
-      await ctx.handlers.deleteEmployee('u1');
+      const result = await ctx.handlers.deleteEmployee('u1');
+      expect(result).toEqual({ success: false, error: 'boom' });
+      expect(ctx.users.get()).toEqual([{ id: 'u1' }]);
     } finally {
       restore();
     }
