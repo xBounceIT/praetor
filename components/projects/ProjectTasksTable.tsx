@@ -21,9 +21,11 @@ export interface ProjectTasksTableProps {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
+  canManageAssignments: boolean;
   onAddTask: () => void | Promise<void>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onRequestDeleteTask: (task: ProjectTask) => void;
+  onManageMembers: (task: ProjectTask) => void;
 }
 
 type ProjectTaskHoursState = {
@@ -40,6 +42,34 @@ const INITIAL_TASK_HOURS_STATE: ProjectTaskHoursState = {
 
 const ProjectTaskEmptyState: React.FC<{ label: string }> = ({ label }) => (
   <span className="text-xs italic text-muted-foreground">{label}</span>
+);
+
+const ProjectTaskActionButton: React.FC<{
+  label: string;
+  iconClassName: string;
+  onClick: () => void;
+  className?: string;
+}> = ({ label, iconClassName, onClick, className }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span className="inline-flex">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          aria-label={label}
+          className={className}
+        >
+          <i className={`fa-solid ${iconClassName} text-xs`}></i>
+        </Button>
+      </span>
+    </TooltipTrigger>
+    <TooltipContent>{label}</TooltipContent>
+  </Tooltip>
 );
 
 const ProjectTaskAddButton: React.FC<{
@@ -67,6 +97,7 @@ interface ProjectTaskColumnsParams {
   currency: string;
   canUpdate: boolean;
   canDelete: boolean;
+  canManageAssignments: boolean;
   hoursState: ProjectTaskHoursState;
   getTaskFieldValue: (taskId: string, field: string, fallback: string) => string;
   setTaskFieldValue: (taskId: string, field: string, value: string) => void;
@@ -78,12 +109,14 @@ interface ProjectTaskColumnsParams {
   parseTaskNumber: (row: ProjectTask, field: keyof ProjectTask, fallback: number) => number;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onRequestDeleteTask: (task: ProjectTask) => void;
+  onManageMembers: (task: ProjectTask) => void;
 }
 
 const useProjectTaskColumns = ({
   currency,
   canUpdate,
   canDelete,
+  canManageAssignments,
   hoursState,
   getTaskFieldValue,
   setTaskFieldValue,
@@ -91,6 +124,7 @@ const useProjectTaskColumns = ({
   parseTaskNumber,
   onUpdateTask,
   onRequestDeleteTask,
+  onManageMembers,
 }: ProjectTaskColumnsParams): Column<ProjectTask>[] => {
   const { t } = useTranslation(['projects', 'common']);
   const translatedBillingTypeOptions = useBillingTypeOptions();
@@ -278,41 +312,41 @@ const useProjectTaskColumns = ({
         id: 'actions',
         disableFiltering: true,
         align: 'right',
-        cell: ({ row }) => (
-          <div className="flex justify-end">
-            {canDelete && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRequestDeleteTask(row);
-                      }}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <i className="fa-solid fa-trash-can text-xs"></i>
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        ),
+        cell: ({ row }) => {
+          if (!canManageAssignments && !canDelete) return null;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              {canManageAssignments && (
+                <ProjectTaskActionButton
+                  label={t('tasks.manageMembers')}
+                  iconClassName="fa-users"
+                  onClick={() => onManageMembers(row)}
+                  className="text-muted-foreground hover:text-foreground"
+                />
+              )}
+              {canDelete && (
+                <ProjectTaskActionButton
+                  label={t('common:buttons.delete')}
+                  iconClassName="fa-trash-can"
+                  onClick={() => onRequestDeleteTask(row)}
+                  className="text-muted-foreground hover:text-destructive"
+                />
+              )}
+            </div>
+          );
+        },
       },
     ],
     [
       canDelete,
+      canManageAssignments,
       canUpdate,
       commitTaskField,
       currency,
       getTaskFieldValue,
       hoursState.hours,
       hoursState.loadState,
+      onManageMembers,
       onRequestDeleteTask,
       onUpdateTask,
       parseTaskNumber,
@@ -331,9 +365,11 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
   canCreate,
   canUpdate,
   canDelete,
+  canManageAssignments,
   onAddTask,
   onUpdateTask,
   onRequestDeleteTask,
+  onManageMembers,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
 
@@ -406,6 +442,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     currency,
     canUpdate,
     canDelete,
+    canManageAssignments,
     hoursState,
     getTaskFieldValue,
     setTaskFieldValue,
@@ -413,6 +450,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     parseTaskNumber,
     onUpdateTask,
     onRequestDeleteTask,
+    onManageMembers,
   });
 
   return (
