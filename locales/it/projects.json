@@ -47,13 +47,15 @@
       "da_fare": "Da fare",
       "in_corso": "In corso",
       "in_pausa": "In pausa",
-      "terminato": "Terminato"
+      "terminato": "Terminato",
+      "perpetuo": "Perpetuo"
     },
     "statusHelp": {
       "da_fare": "Commessa pianificata, ore inseribili.",
       "in_corso": "Commessa attiva, ore inseribili.",
       "in_pausa": "Commessa sospesa, ore non inseribili.",
-      "terminato": "Commessa conclusa, ore non inseribili."
+      "terminato": "Commessa conclusa, ore non inseribili.",
+      "perpetuo": "Commessa permanente, ore inseribili."
     },
     "inheritedFromDisabledClient": "Ereditato da Cliente disabilitato: {{clientName}}",
     "allClients": "Tutti i Clienti",
@@ -334,7 +336,8 @@
           "da_fare": "Da fare",
           "in_corso": "In corso",
           "in_pausa": "In pausa",
-          "terminato": "Terminato"
+          "terminato": "Terminato",
+          "perpetuo": "Perpetuo"
         }
       },
       "errors": {

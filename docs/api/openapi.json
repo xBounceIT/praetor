@@ -11562,7 +11562,8 @@
                           "da_fare",
                           "in_corso",
                           "in_pausa",
-                          "terminato"
+                          "terminato",
+                          "perpetuo"
                         ]
                       },
                       "tipo": {
@@ -11824,7 +11825,8 @@
                       "da_fare",
                       "in_corso",
                       "in_pausa",
-                      "terminato"
+                      "terminato",
+                      "perpetuo"
                     ]
                   },
                   "tipo": {
@@ -11930,7 +11932,8 @@
                         "da_fare",
                         "in_corso",
                         "in_pausa",
-                        "terminato"
+                        "terminato",
+                        "perpetuo"
                       ]
                     },
                     "tipo": {
@@ -12591,7 +12594,8 @@
                         "da_fare",
                         "in_corso",
                         "in_pausa",
-                        "terminato"
+                        "terminato",
+                        "perpetuo"
                       ]
                     },
                     "tipo": {
@@ -12997,7 +13001,8 @@
                       "da_fare",
                       "in_corso",
                       "in_pausa",
-                      "terminato"
+                      "terminato",
+                      "perpetuo"
                     ]
                   },
                   "tipo": {
@@ -13109,7 +13114,8 @@
                         "da_fare",
                         "in_corso",
                         "in_pausa",
-                        "terminato"
+                        "terminato",
+                        "perpetuo"
                       ]
                     },
                     "tipo": {

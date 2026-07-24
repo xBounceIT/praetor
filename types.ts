@@ -83,7 +83,13 @@ export type BillingFrequency = 'monthly' | 'one_time';
 export const PROJECT_TIPOS = ['attivo', 'passivo', 'interno'] as const;
 export type ProjectTipo = (typeof PROJECT_TIPOS)[number];
 
-export const PROJECT_STATUSES = ['da_fare', 'in_corso', 'in_pausa', 'terminato'] as const;
+export const PROJECT_STATUSES = [
+  'da_fare',
+  'in_corso',
+  'in_pausa',
+  'terminato',
+  'perpetuo',
+] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const DEFAULT_PROJECT_STATUS: ProjectStatus = 'da_fare';
 export const LEGACY_PROJECT_STATUS: ProjectStatus = 'in_corso';

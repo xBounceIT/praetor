@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  getProjectStatusBadgeType,
   getProjectStatusIcon,
   translateProjectStatusOptions,
 } from '../../../components/projects/projectStatusUi';
@@ -12,6 +13,7 @@ const STATUS_ICON_CASES = [
   ['in_corso', 'lucide-play'],
   ['in_pausa', 'lucide-pause'],
   ['terminato', 'lucide-check'],
+  ['perpetuo', 'lucide-infinity'],
 ] as const satisfies ReadonlyArray<readonly [ProjectStatus, string]>;
 
 describe('project status media icons', () => {
@@ -30,5 +32,9 @@ describe('project status media icons', () => {
     const { container } = render(getProjectStatusIcon(undefined));
 
     expect(container.querySelector('svg')).toHaveClass('lucide-play');
+  });
+
+  test('perpetuo uses the active badge type', () => {
+    expect(getProjectStatusBadgeType('perpetuo')).toBe('active');
   });
 });

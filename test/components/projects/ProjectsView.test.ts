@@ -255,6 +255,7 @@ describe('ProjectsView create-form validation', () => {
       in_corso: 'In corso',
       in_pausa: 'In pausa',
       terminato: 'Terminato',
+      perpetuo: 'Perpetuo',
     };
 
     for (const loc of [en, it]) {
