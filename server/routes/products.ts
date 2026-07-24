@@ -1350,49 +1350,53 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const current = await productsRepo.findProductTypeById(idResult.value);
-      if (!current) {
-        return replyError(request, reply, {
-          statusCode: 404,
-          message: 'Product type not found',
-          action: 'product_type.update.not_found',
-          entityType: 'product_type',
-          entityId: idResult.value,
-        });
-      }
-
-      let newName = current.name;
-      let newCostUnit = current.costUnit;
-
+      let requestedName: string | undefined;
       if (body.name !== undefined) {
         const nameResult = requireNonEmptyString(body.name, 'name');
         if (!nameResult.ok) return badRequest(reply, nameResult.message);
-        newName = nameResult.value;
+        requestedName = nameResult.value;
       }
 
+      let requestedCostUnit: CostUnit | undefined;
       if (body.costUnit !== undefined) {
         const costUnitResult = validateEnum(body.costUnit, ['unit', 'hours'] as const, 'costUnit');
         if (!costUnitResult.ok) return badRequest(reply, costUnitResult.message);
-        newCostUnit = costUnitResult.value;
+        requestedCostUnit = costUnitResult.value;
       }
 
-      if (newName !== current.name) {
-        if (await productsRepo.existsProductTypeByName(newName, idResult.value)) {
-          return badRequest(reply, 'Product type with this name already exists');
+      const updateResult = await withDbTransaction(async (tx) => {
+        const current = await productsRepo.lockProductTypeById(idResult.value, tx);
+        if (!current) return { status: 'not_found' } as const;
+
+        const newName = requestedName ?? current.name;
+        const newCostUnit = requestedCostUnit ?? current.costUnit;
+        if (
+          newName !== current.name &&
+          (await productsRepo.existsProductTypeByName(newName, idResult.value, tx))
+        ) {
+          return { status: 'duplicate' } as const;
         }
-      }
-
-      const updated = await withDbTransaction(async (tx) => {
         if (newName !== current.name) {
           await productsRepo.propagateProductTypeName(current.name, newName, tx);
         }
         if (newCostUnit !== current.costUnit) {
           await productsRepo.propagateProductTypeCostUnit(newName, newCostUnit, tx);
         }
-        return await productsRepo.updateProductTypeFields(idResult.value, newName, newCostUnit, tx);
+        const updated = await productsRepo.updateProductTypeFields(
+          idResult.value,
+          newName,
+          newCostUnit,
+          tx,
+        );
+        return updated
+          ? ({ status: 'updated', updated, newName, newCostUnit } as const)
+          : ({ status: 'not_found' } as const);
       });
 
-      if (!updated) {
+      if (updateResult.status === 'duplicate') {
+        return badRequest(reply, 'Product type with this name already exists');
+      }
+      if (updateResult.status === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Product type not found',
@@ -1401,6 +1405,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
+      const { updated, newName, newCostUnit } = updateResult;
 
       await logAudit({
         request,
@@ -1447,8 +1452,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const type = await productsRepo.findProductTypeById(idResult.value);
-      if (!type) {
+      const result = await productsRepo.deleteProductTypeIfUnused(idResult.value);
+      if (result.status === 'not_found') {
         return replyError(request, reply, {
           statusCode: 404,
           message: 'Product type not found',
@@ -1457,43 +1462,36 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      const { name } = type;
+      const { name } = result.type;
 
-      const [productCount, categoryCount] = await Promise.all([
-        productsRepo.countProductsForType(name),
-        productsRepo.countCategoriesForType(name),
-      ]);
-
-      if (productCount > 0) {
+      if (result.status === 'in_use' && result.productCount > 0) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: `Cannot delete type "${name}" because ${productCount} product(s) are using it`,
+          message: `Cannot delete type "${name}" because ${result.productCount} product(s) are using it`,
           action: 'product_type.delete.conflict',
           entityType: 'product_type',
           entityId: idResult.value,
           details: {
             targetLabel: name,
             secondaryLabel: 'in_use_by_products',
-            counts: { products: productCount },
+            counts: { products: result.productCount },
           },
         });
       }
-      if (categoryCount > 0) {
+      if (result.status === 'in_use' && result.categoryCount > 0) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: `Cannot delete type "${name}" because ${categoryCount} category(s) are using it`,
+          message: `Cannot delete type "${name}" because ${result.categoryCount} category(s) are using it`,
           action: 'product_type.delete.conflict',
           entityType: 'product_type',
           entityId: idResult.value,
           details: {
             targetLabel: name,
             secondaryLabel: 'in_use_by_categories',
-            counts: { categories: categoryCount },
+            counts: { categories: result.categoryCount },
           },
         });
       }
-
-      await productsRepo.deleteProductTypeById(idResult.value);
 
       await logAudit({
         request,

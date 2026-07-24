@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { DbExecutor } from '../../db/drizzle.ts';
 import * as productsRepo from '../../repositories/productsRepo.ts';
+import { ForeignKeyError } from '../../utils/http-errors.ts';
 import { type FakeExecutor, makeRow, setupTestDb } from '../helpers/fakeExecutor.ts';
 
 let exec: FakeExecutor;
@@ -186,6 +187,7 @@ describe('existsProductByName / existsProductByCode', () => {
 
 describe('insertProduct', () => {
   test('passes all 11 input columns through and maps the returned row', async () => {
+    exec.enqueue({ rows: [['pt-1']] });
     // INSERT ... RETURNING with no explicit cols returns all 13 products columns.
     exec.enqueue({ rows: [productRow()], rowCount: 1 });
     const result = await productsRepo.insertProduct(
@@ -206,7 +208,8 @@ describe('insertProduct', () => {
     );
     // The 11 user-provided values appear among the bound params; Drizzle's order matches
     // the insert object's key order.
-    const params = exec.calls[0].params;
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for share');
+    const params = exec.calls[1].params;
     expect(params).toContain('p-1');
     expect(params).toContain('Widget');
     expect(params).toContain('WGT-001');
@@ -215,6 +218,30 @@ describe('insertProduct', () => {
     expect(params).toContain('unit');
     expect(params).toContain('good');
     expect(result.id).toBe('p-1');
+  });
+
+  test('rejects a product whose type disappeared before the write', async () => {
+    exec.enqueue({ rows: [] });
+    await expect(
+      productsRepo.insertProduct(
+        {
+          id: 'p-1',
+          name: 'Widget',
+          productCode: 'WGT-001',
+          description: null,
+          costo: 12.5,
+          molPercentage: 30,
+          costUnit: 'unit',
+          category: null,
+          subcategory: null,
+          type: 'deleted',
+          supplierId: null,
+        },
+        testDb,
+      ),
+    ).rejects.toBeInstanceOf(ForeignKeyError);
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for share');
   });
 });
 
@@ -261,6 +288,14 @@ describe('updateProductDynamic', () => {
     exec.enqueue({ rows: [], rowCount: 0 });
     const result = await productsRepo.updateProductDynamic('p-1', { name: 'X' }, testDb);
     expect(result).toBeNull();
+  });
+
+  test('locks a new type reference through the product update', async () => {
+    exec.enqueue({ rows: [['pt-1']] });
+    exec.enqueue({ rows: [productRow({ 7: 'service' })], rowCount: 1 });
+    await productsRepo.updateProductDynamic('p-1', { type: 'service' }, testDb);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for share');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('update "products"');
   });
 });
 
@@ -339,6 +374,13 @@ describe('findProductTypeById / insertProductType / updateProductTypeFields', ()
 
     exec.enqueue({ rows: [] });
     expect(await productsRepo.findProductTypeById('pt-99', testDb)).toBeNull();
+  });
+
+  test('lockProductTypeById holds an update lock for mutation checks', async () => {
+    exec.enqueue({ rows: [['pt-1', 'good', 'unit']] });
+    const result = await productsRepo.lockProductTypeById('pt-1', testDb);
+    expect(result).toEqual({ id: 'pt-1', name: 'good', costUnit: 'unit' });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
   });
 
   test('insertProductType passes id/name/costUnit and returns row with zero counts', async () => {
@@ -459,13 +501,39 @@ describe('countProductsForType / countCategoriesForType', () => {
   });
 });
 
-describe('deleteProductTypeById', () => {
-  test.each([
-    [1, true],
-    [0, false],
-  ] as const)('returns %s when rowCount is %s', async (rowCount, expected) => {
-    exec.enqueue({ rows: [], rowCount });
-    expect(await productsRepo.deleteProductTypeById('pt-1', testDb)).toBe(expected);
+describe('deleteProductTypeIfUnused', () => {
+  test('locks the type before checking references and deleting it', async () => {
+    exec.enqueue({ rows: [['pt-1', 'good', 'unit']] });
+    exec.enqueue({ rows: [['0']] });
+    exec.enqueue({ rows: [['0']] });
+    exec.enqueue({ rows: [], rowCount: 1 });
+
+    const result = await productsRepo.deleteProductTypeIfUnused('pt-1', testDb);
+
+    expect(result).toEqual({
+      status: 'deleted',
+      type: { id: 'pt-1', name: 'good', costUnit: 'unit' },
+    });
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('from "products"');
+    expect(exec.calls[2].sql.toLowerCase()).toContain('from "internal_product_categories"');
+    expect(exec.calls[3].sql.toLowerCase()).toContain('delete from "product_types"');
+  });
+
+  test('does not delete a type that gained a reference before the lock', async () => {
+    exec.enqueue({ rows: [['pt-1', 'good', 'unit']] });
+    exec.enqueue({ rows: [['1']] });
+    exec.enqueue({ rows: [['0']] });
+
+    const result = await productsRepo.deleteProductTypeIfUnused('pt-1', testDb);
+
+    expect(result).toEqual({
+      status: 'in_use',
+      type: { id: 'pt-1', name: 'good', costUnit: 'unit' },
+      productCount: 1,
+      categoryCount: 0,
+    });
+    expect(exec.calls).toHaveLength(3);
   });
 });
 
@@ -542,6 +610,7 @@ describe('existsInternalCategoryByNameType', () => {
 
 describe('insertInternalCategory / updateInternalCategoryFields', () => {
   test('insertInternalCategory binds [id, name, type, costUnit] and starts with zero counts', async () => {
+    exec.enqueue({ rows: [['pt-1']] });
     exec.enqueue({ rows: [categoryRow()], rowCount: 1 });
     const result = await productsRepo.insertInternalCategory(
       'ipc-1',
@@ -550,7 +619,8 @@ describe('insertInternalCategory / updateInternalCategoryFields', () => {
       'unit',
       testDb,
     );
-    const params = exec.calls[0].params;
+    expect(exec.calls[0].sql.toLowerCase()).toContain('for share');
+    const params = exec.calls[1].params;
     expect(params).toContain('ipc-1');
     expect(params).toContain('Mechanical');
     expect(params).toContain('good');

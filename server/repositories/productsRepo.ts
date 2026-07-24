@@ -6,6 +6,7 @@ import { products } from '../db/schema/products.ts';
 import { productTypes } from '../db/schema/productTypes.ts';
 import { suppliers } from '../db/schema/suppliers.ts';
 import type { CostUnit } from '../utils/cost-unit.ts';
+import { ForeignKeyError } from '../utils/http-errors.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
 
 // Accepts whatever pg returns for a timestamp column. Drizzle's typed `.select()` paths
@@ -17,6 +18,15 @@ const epochMs = (v: unknown): number | null => {
 };
 
 const LEGACY_HOURS_TYPES = new Set(['service', 'consulting']);
+
+const lockProductTypeReference = async (typeName: string, exec: DbExecutor): Promise<void> => {
+  const rows = await exec
+    .select({ id: productTypes.id })
+    .from(productTypes)
+    .where(eq(productTypes.name, typeName))
+    .for('share');
+  if (!rows[0]) throw new ForeignKeyError(`Product type "${typeName}"`);
+};
 
 // Transaction-item tables holding a `product_id` foreign key.
 const TRANSACTION_ITEM_TABLES = [
@@ -226,25 +236,27 @@ export const existsProductByCode = async (
 export const insertProduct = async (
   product: NewProduct,
   exec: DbExecutor = db,
-): Promise<ProductRow> => {
-  const rows = await exec
-    .insert(products)
-    .values({
-      id: product.id,
-      name: product.name,
-      productCode: product.productCode,
-      description: product.description,
-      costo: numericForDb(product.costo),
-      molPercentage: numericForDb(product.molPercentage),
-      costUnit: product.costUnit,
-      category: product.category,
-      subcategory: product.subcategory,
-      type: product.type,
-      supplierId: product.supplierId,
-    })
-    .returning();
-  return mapProductRow(rows[0]);
-};
+): Promise<ProductRow> =>
+  runAtomically(exec, async (tx) => {
+    await lockProductTypeReference(product.type, tx);
+    const rows = await tx
+      .insert(products)
+      .values({
+        id: product.id,
+        name: product.name,
+        productCode: product.productCode,
+        description: product.description,
+        costo: numericForDb(product.costo),
+        molPercentage: numericForDb(product.molPercentage),
+        costUnit: product.costUnit,
+        category: product.category,
+        subcategory: product.subcategory,
+        type: product.type,
+        supplierId: product.supplierId,
+      })
+      .returning();
+    return mapProductRow(rows[0]);
+  });
 
 export const updateProductDynamic = async (
   id: string,
@@ -267,8 +279,12 @@ export const updateProductDynamic = async (
 
   if (Object.keys(setClause).length === 0) return null;
 
-  const rows = await exec.update(products).set(setClause).where(eq(products.id, id)).returning();
-  return rows[0] ? mapProductRow(rows[0]) : null;
+  const update = async (tx: DbExecutor): Promise<ProductRow | null> => {
+    if (fields.type !== undefined) await lockProductTypeReference(fields.type, tx);
+    const rows = await tx.update(products).set(setClause).where(eq(products.id, id)).returning();
+    return rows[0] ? mapProductRow(rows[0]) : null;
+  };
+  return fields.type === undefined ? update(exec) : runAtomically(exec, update);
 };
 
 export const deleteProductById = async (
@@ -389,6 +405,18 @@ export const findProductTypeById = async (
   return rows[0] ?? null;
 };
 
+export const lockProductTypeById = async (
+  id: string,
+  exec: DbExecutor,
+): Promise<ProductTypeCore | null> => {
+  const rows = await exec
+    .select({ id: productTypes.id, name: productTypes.name, costUnit: productTypes.costUnit })
+    .from(productTypes)
+    .where(eq(productTypes.id, id))
+    .for('update');
+  return rows[0] ?? null;
+};
+
 export const insertProductType = async (
   id: string,
   name: string,
@@ -469,13 +497,33 @@ export const countCategoriesForType = async (
   return row?.value ?? 0;
 };
 
-export const deleteProductTypeById = async (
+export type DeleteProductTypeResult =
+  | { status: 'deleted'; type: ProductTypeCore }
+  | { status: 'not_found' }
+  | {
+      status: 'in_use';
+      type: ProductTypeCore;
+      productCount: number;
+      categoryCount: number;
+    };
+
+export const deleteProductTypeIfUnused = (
   id: string,
   exec: DbExecutor = db,
-): Promise<boolean> => {
-  const result = await exec.delete(productTypes).where(eq(productTypes.id, id));
-  return (result.rowCount ?? 0) > 0;
-};
+): Promise<DeleteProductTypeResult> =>
+  runAtomically(exec, async (tx) => {
+    const type = await lockProductTypeById(id, tx);
+    if (!type) return { status: 'not_found' };
+
+    const productCount = await countProductsForType(type.name, tx);
+    const categoryCount = await countCategoriesForType(type.name, tx);
+    if (productCount > 0 || categoryCount > 0) {
+      return { status: 'in_use', type, productCount, categoryCount };
+    }
+
+    const deleted = await tx.delete(productTypes).where(eq(productTypes.id, id));
+    return (deleted.rowCount ?? 0) > 0 ? { status: 'deleted', type } : { status: 'not_found' };
+  });
 
 // ===========================================================================
 // Internal product categories
@@ -592,13 +640,15 @@ export const insertInternalCategory = async (
   type: string,
   costUnit: CostUnit,
   exec: DbExecutor = db,
-): Promise<InternalCategoryRow> => {
-  const rows = await exec
-    .insert(productCategories)
-    .values({ id, name, type, costUnit })
-    .returning();
-  return mapInternalCategoryRow(rows[0]);
-};
+): Promise<InternalCategoryRow> =>
+  runAtomically(exec, async (tx) => {
+    await lockProductTypeReference(type, tx);
+    const rows = await tx
+      .insert(productCategories)
+      .values({ id, name, type, costUnit })
+      .returning();
+    return mapInternalCategoryRow(rows[0]);
+  });
 
 export const updateInternalCategoryFields = async (
   id: string,
