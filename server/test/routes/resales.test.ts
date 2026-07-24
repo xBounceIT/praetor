@@ -28,6 +28,9 @@ const existsByOrderPairMock = mock();
 const createMock = mock();
 const createActivityMock = mock();
 const findByIdMock = mock();
+const existsCategoryByNameMock = mock();
+const createCategoryMock = mock();
+const updateCategoryMock = mock();
 const txExecutor = {};
 const withDbTransactionMock = mock(async (callback: (tx: unknown) => Promise<unknown>) =>
   callback(txExecutor),
@@ -89,6 +92,15 @@ const SAMPLE_RESALE = {
   activities: [SAMPLE_ACTIVITY],
 };
 
+const SAMPLE_CATEGORY = {
+  id: 'rvc-1',
+  name: 'Hardware',
+  createdAt: 1700000000000,
+  updatedAt: 1700000000000,
+  activityCount: 0,
+  hasLinkedActivities: false,
+};
+
 beforeAll(async () => {
   installAuthMiddlewareMock();
 
@@ -115,6 +127,9 @@ beforeAll(async () => {
     create: createMock,
     createActivity: createActivityMock,
     findById: findByIdMock,
+    existsCategoryByName: existsCategoryByNameMock,
+    createCategory: createCategoryMock,
+    updateCategory: updateCategoryMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -144,6 +159,9 @@ beforeEach(async () => {
     createMock,
     createActivityMock,
     findByIdMock,
+    existsCategoryByNameMock,
+    createCategoryMock,
+    updateCategoryMock,
     withDbTransactionMock,
     logAuditMock,
   ]) {
@@ -158,6 +176,9 @@ beforeEach(async () => {
   createMock.mockResolvedValue(SAMPLE_RESALE);
   createActivityMock.mockResolvedValue(SAMPLE_ACTIVITY);
   findByIdMock.mockResolvedValue(SAMPLE_RESALE);
+  existsCategoryByNameMock.mockResolvedValue(false);
+  createCategoryMock.mockResolvedValue(SAMPLE_CATEGORY);
+  updateCategoryMock.mockResolvedValue({ ...SAMPLE_CATEGORY, name: 'Licenza' });
   withDbTransactionMock.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
     callback(txExecutor),
   );
@@ -300,5 +321,86 @@ describe('resale routes', () => {
       dueDate: '2026-06-30',
       activities: [expect.objectContaining({ name: 'Setup rivendita' })],
     });
+  });
+});
+
+describe('resale category routes', () => {
+  test('POST creates a category', async () => {
+    currentPermissions = ['projects.resales.create'];
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/resales/categories',
+      headers: authHeaders(),
+      payload: { name: 'Hardware' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(existsCategoryByNameMock).toHaveBeenCalledWith('Hardware');
+    expect(createCategoryMock).toHaveBeenCalledWith(expect.stringMatching(/^rvc-/), 'Hardware');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'resale_category.created' }),
+    );
+  });
+
+  test('POST rejects duplicate names before insert', async () => {
+    currentPermissions = ['projects.resales.create'];
+    existsCategoryByNameMock.mockResolvedValue(true);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/resales/categories',
+      headers: authHeaders(),
+      payload: { name: 'Hardware' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Category name must be unique' });
+    expect(createCategoryMock).not.toHaveBeenCalled();
+  });
+
+  test('POST returns 400 when a concurrent case-insensitive duplicate wins the insert race', async () => {
+    currentPermissions = ['projects.resales.create'];
+    existsCategoryByNameMock.mockResolvedValue(false);
+    createCategoryMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'idx_resale_categories_name_unique',
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/resales/categories',
+      headers: authHeaders(),
+      payload: { name: 'hardware' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Category name must be unique' });
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT returns 400 when a concurrent case-insensitive rename wins the update race', async () => {
+    currentPermissions = ['projects.resales.update'];
+    existsCategoryByNameMock.mockResolvedValue(false);
+    updateCategoryMock.mockRejectedValue(
+      Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'idx_resale_categories_name_unique',
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/resales/categories/rvc-1',
+      headers: authHeaders(),
+      payload: { name: 'LICENZA' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Category name must be unique' });
+    expect(existsCategoryByNameMock).toHaveBeenCalledWith('LICENZA', 'rvc-1');
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { authenticateToken, requireAnyPermission, requirePermission } from '../m
 import * as resalesRepo from '../repositories/resalesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { getAuditChangedFields, logAudit } from '../utils/audit.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -18,6 +19,12 @@ import {
   parseLocalizedNonNegativeNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+
+const RESALE_CATEGORY_NAME_UNIQUE_INDEX = 'idx_resale_categories_name_unique';
+const RESALE_CATEGORY_NAME_CONFLICT_MESSAGE = 'Category name must be unique';
+
+const isResaleCategoryNameConflict = (error: unknown): boolean =>
+  getUniqueViolation(error)?.constraint === RESALE_CATEGORY_NAME_UNIQUE_INDEX;
 
 const idParamSchema = {
   type: 'object',
@@ -315,11 +322,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
       if (await resalesRepo.existsCategoryByName(nameResult.value)) {
-        return badRequest(reply, 'Category name must be unique');
+        return badRequest(reply, RESALE_CATEGORY_NAME_CONFLICT_MESSAGE);
       }
 
       const id = generatePrefixedId('rvc');
-      const created = await resalesRepo.createCategory(id, nameResult.value);
+      let created: resalesRepo.ResaleCategory;
+      try {
+        created = await resalesRepo.createCategory(id, nameResult.value);
+      } catch (error) {
+        if (isResaleCategoryNameConflict(error)) {
+          return badRequest(reply, RESALE_CATEGORY_NAME_CONFLICT_MESSAGE);
+        }
+        throw error;
+      }
       await logAudit({
         request,
         action: 'resale_category.created',
@@ -354,10 +369,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
       if (await resalesRepo.existsCategoryByName(nameResult.value, idResult.value)) {
-        return badRequest(reply, 'Category name must be unique');
+        return badRequest(reply, RESALE_CATEGORY_NAME_CONFLICT_MESSAGE);
       }
 
-      const updated = await resalesRepo.updateCategory(idResult.value, nameResult.value);
+      let updated: resalesRepo.ResaleCategory | null;
+      try {
+        updated = await resalesRepo.updateCategory(idResult.value, nameResult.value);
+      } catch (error) {
+        if (isResaleCategoryNameConflict(error)) {
+          return badRequest(reply, RESALE_CATEGORY_NAME_CONFLICT_MESSAGE);
+        }
+        throw error;
+      }
       if (!updated) {
         return replyError(request, reply, {
           statusCode: 404,
