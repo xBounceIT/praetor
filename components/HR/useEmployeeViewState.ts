@@ -16,6 +16,8 @@ type EmployeeViewState = {
   managingEmployee: User | null;
   isDeleteConfirmOpen: boolean;
   employeeToDelete: User | null;
+  isDeleting: boolean;
+  deleteError: string | null;
   errors: Record<string, string>;
   isSubmitting: boolean;
   formData: EmployeeHrFormData;
@@ -31,6 +33,8 @@ type EmployeeViewAction =
   | { type: 'closeModal' }
   | { type: 'setManagingEmployee'; employee: User | null }
   | { type: 'confirmDelete'; employee: User }
+  | { type: 'deleteStart' }
+  | { type: 'deleteFail'; error: string }
   | { type: 'deleteSuccess' }
   | { type: 'setErrors'; errors: Record<string, string> }
   | { type: 'submitStart' }
@@ -51,6 +55,8 @@ const createEmployeeViewState = (): EmployeeViewState => ({
   managingEmployee: null,
   isDeleteConfirmOpen: false,
   employeeToDelete: null,
+  isDeleting: false,
+  deleteError: null,
   errors: {},
   isSubmitting: false,
   formData: createEmptyEmployeeHrForm(),
@@ -109,9 +115,25 @@ const employeeViewReducer = (
     case 'setManagingEmployee':
       return { ...state, managingEmployee: action.employee };
     case 'confirmDelete':
-      return { ...state, employeeToDelete: action.employee, isDeleteConfirmOpen: true };
+      return {
+        ...state,
+        employeeToDelete: action.employee,
+        isDeleteConfirmOpen: true,
+        isDeleting: false,
+        deleteError: null,
+      };
+    case 'deleteStart':
+      return { ...state, isDeleting: true, deleteError: null };
+    case 'deleteFail':
+      return { ...state, isDeleting: false, deleteError: action.error };
     case 'deleteSuccess':
-      return { ...state, employeeToDelete: null, isDeleteConfirmOpen: false };
+      return {
+        ...state,
+        employeeToDelete: null,
+        isDeleteConfirmOpen: false,
+        isDeleting: false,
+        deleteError: null,
+      };
     case 'setErrors':
       return { ...state, errors: action.errors };
     case 'submitStart':
@@ -191,6 +213,8 @@ export const useEmployeeViewState = () => {
       (employee: User) => dispatch({ type: 'confirmDelete', employee }),
       [],
     ),
+    startEmployeeDelete: useCallback(() => dispatch({ type: 'deleteStart' }), []),
+    failEmployeeDelete: useCallback((error: string) => dispatch({ type: 'deleteFail', error }), []),
     completeEmployeeDelete: useCallback(() => dispatch({ type: 'deleteSuccess' }), []),
     setEmployeeErrors: useCallback(
       (errors: Record<string, string>) => dispatch({ type: 'setErrors', errors }),

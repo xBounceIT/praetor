@@ -72,8 +72,8 @@ const renderView = (overrides: Partial<ComponentProps<typeof InternalEmployeesVi
     workUnits: [],
     responsibleUserOptions,
     onAddEmployee: mock(async () => ({ success: true })),
-    onUpdateEmployee: mock<(id: string, updates: Partial<User>) => void>(() => {}),
-    onDeleteEmployee: mock(() => {}),
+    onUpdateEmployee: mock(async () => ({ success: true })),
+    onDeleteEmployee: mock(async () => ({ success: true })),
     currency: '€',
     permissions: ['hr.internal.view', 'hr.internal.update'],
     ...overrides,
@@ -164,7 +164,9 @@ describe('<InternalEmployeesView /> row click', () => {
   });
 
   test('cost-only editor opens the calendar and submits only hourly cost periods', async () => {
-    const onUpdateEmployee = mock<(id: string, updates: Partial<User>) => void>(() => {});
+    const onUpdateEmployee = mock<
+      (id: string, updates: Partial<User>) => Promise<{ success: boolean; error?: string }>
+    >(async () => ({ success: true }));
     renderView({
       onUpdateEmployee,
       permissions: ['hr.internal.view', 'hr.costs_all.view', 'hr.costs_all.update'],
@@ -359,7 +361,9 @@ describe('<InternalEmployeesView /> row click', () => {
     'oidc',
     'saml',
   ] as const)('keeps %s-managed identity disabled while allowing phone edits', async (authMethod) => {
-    const onUpdateEmployee = mock<(id: string, updates: Partial<User>) => void>(() => {});
+    const onUpdateEmployee = mock<
+      (id: string, updates: Partial<User>) => Promise<{ success: boolean; error?: string }>
+    >(async () => ({ success: true }));
     renderView({
       users: [{ ...employee, employeeType: 'app_user', authMethod }],
       onUpdateEmployee,
@@ -407,5 +411,23 @@ describe('<InternalEmployeesView /> row click', () => {
 
     const bodyText = document.body.textContent ?? '';
     expect(bodyText.indexOf('Anna Verdi')).toBeLessThan(bodyText.indexOf('Mario Rossi'));
+  });
+
+  test('keeps the edit modal open and shows an error when update fails', async () => {
+    const onUpdateEmployee = mock(async () => ({
+      success: false as const,
+      error: 'Update rejected',
+    }));
+    renderView({ onUpdateEmployee });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+    fireEvent.click(row);
+
+    fireEvent.click(screen.getByText('internalEmployees.saveChanges'));
+
+    await waitFor(() => expect(onUpdateEmployee).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Update rejected')).toBeInTheDocument();
+    expect(screen.getByText('internalEmployees.editEmployee')).toBeInTheDocument();
   });
 });

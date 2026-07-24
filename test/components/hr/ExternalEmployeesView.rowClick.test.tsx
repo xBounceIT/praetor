@@ -68,8 +68,8 @@ const renderView = (overrides: Partial<ComponentProps<typeof ExternalEmployeesVi
     workUnits: [],
     responsibleUserOptions,
     onAddEmployee: mock(async () => ({ success: true })),
-    onUpdateEmployee: mock(() => {}),
-    onDeleteEmployee: mock(() => {}),
+    onUpdateEmployee: mock(async () => ({ success: true })),
+    onDeleteEmployee: mock(async () => ({ success: true })),
     currency: '€',
     permissions: ['hr.external.view', 'hr.external.update'],
     ...overrides,
@@ -152,7 +152,9 @@ describe('<ExternalEmployeesView /> row click', () => {
   });
 
   test('cost-only editor opens the calendar and submits only hourly cost periods', async () => {
-    const onUpdateEmployee = mock<(id: string, updates: Partial<User>) => void>(() => {});
+    const onUpdateEmployee = mock<
+      (id: string, updates: Partial<User>) => Promise<{ success: boolean; error?: string }>
+    >(async () => ({ success: true }));
     renderView({
       onUpdateEmployee,
       permissions: ['hr.external.view', 'hr.costs_all.view', 'hr.costs_all.update'],
