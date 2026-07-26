@@ -35,7 +35,12 @@ import {
   requestHasPermission as hasPermission,
   makeAccessChecker,
 } from '../utils/permissions.ts';
-import { PROJECT_STATUSES } from '../utils/projectStatus.ts';
+import {
+  DEFAULT_PROJECT_STATUS,
+  isProjectEndDateRequired,
+  isProjectStartDateRequired,
+  PROJECT_STATUSES,
+} from '../utils/projectStatus.ts';
 import { DEFAULT_PROJECT_TIPO, PROJECT_TIPOS } from '../utils/projectTipo.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -169,7 +174,8 @@ const projectCreateBodySchema = {
     },
     endDate: {
       type: ['string', 'null'],
-      description: 'Required for Active/Passive projects; optional for Internal projects.',
+      description:
+        'Required for Active/Passive projects unless status is perpetuo; optional for Internal and perpetuo projects.',
     },
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
@@ -500,13 +506,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'internal projects cannot link an order or offer');
       }
 
-      const startDateResult = isInternalProject
-        ? optionalDateString(body.startDate, 'startDate')
-        : parseDateString(body.startDate, 'startDate');
+      const statusResult = optionalEnum(body.status, PROJECT_STATUSES, 'status');
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
+      const projectStatus = statusResult.value ?? DEFAULT_PROJECT_STATUS;
+
+      const startDateResult = isProjectStartDateRequired({ tipo: tipoResult.value })
+        ? parseDateString(body.startDate, 'startDate')
+        : optionalDateString(body.startDate, 'startDate');
       if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
-      const endDateResult = isInternalProject
-        ? optionalDateString(body.endDate, 'endDate')
-        : parseDateString(body.endDate, 'endDate');
+      const endDateResult = isProjectEndDateRequired({
+        tipo: tipoResult.value,
+        status: projectStatus,
+      })
+        ? parseDateString(body.endDate, 'endDate')
+        : optionalDateString(body.endDate, 'endDate');
       if (!endDateResult.ok) return badRequest(reply, endDateResult.message);
       if (
         startDateResult.value &&
@@ -529,9 +542,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
       const billingFrequency = normalizeBillingFrequency(billingFrequencyResult.value);
-
-      const statusResult = optionalEnum(body.status, PROJECT_STATUSES, 'status');
-      if (!statusResult.ok) return badRequest(reply, statusResult.message);
 
       const id = generatePrefixedId('p');
 
@@ -835,14 +845,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             previousTipo === 'interno' && finalTipo !== 'interno';
 
           // Validate the final date range against the locked row so a concurrent writer can't
-          // sneak past us. Converting an open-ended Internal project back to a commercial type
-          // requires both planning dates in the same save.
-          if (
+          // sneak past us. Converting an open-ended Internal project back to a commercial type,
+          // or leaving perpetuo without an end date, requires the commercial planning window.
+          const needsDateResolution =
             startDatePatch.provided ||
             endDatePatch.provided ||
-            isConvertingInternalToCommercial
-          ) {
+            isConvertingInternalToCommercial ||
+            (statusResult.value !== null && statusResult.value !== 'perpetuo');
+          if (needsDateResolution) {
             const existing = await projectsRepo.findDateRangeById(idResult.value, tx);
+            const previousStatus = existing?.status ?? DEFAULT_PROJECT_STATUS;
+            const finalStatus = statusResult.value ?? previousStatus;
+            const isLeavingPerpetuo = previousStatus === 'perpetuo' && finalStatus !== 'perpetuo';
             const nextStart = startDatePatch.provided
               ? startDatePatch.value
               : (existing?.startDate ?? null);
@@ -852,6 +866,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             if (isConvertingInternalToCommercial && (!nextStart || !nextEnd)) {
               throw new DateRangeError(
                 'startDate and endDate are required when converting an internal project to a commercial type',
+              );
+            }
+            if (
+              isLeavingPerpetuo &&
+              isProjectEndDateRequired({ tipo: finalTipo, status: finalStatus }) &&
+              (!nextStart || !nextEnd)
+            ) {
+              throw new DateRangeError(
+                'startDate and endDate are required when leaving perpetuo status on a commercial project',
               );
             }
             if (nextStart && nextEnd && nextStart > nextEnd) {

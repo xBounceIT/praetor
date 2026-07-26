@@ -13,7 +13,11 @@ import { formatLocalDateOnly, parseLocalDateOnly, todayLocalDateOnly } from '../
 import { isItalianHoliday } from '../utils/holidays.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { hasScopedActionPermission } from '../utils/permissions.ts';
-import { isProjectStatusBlockingTimeEntries, type ProjectStatus } from '../utils/projectStatus.ts';
+import {
+  isProjectExpiredForTimeEntries,
+  isProjectStatusBlockingTimeEntries,
+  type ProjectStatus,
+} from '../utils/projectStatus.ts';
 import {
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
@@ -84,9 +88,6 @@ const hasTrackerPermission = (
 const canWriteExpiredProjectEntries = (actor: AuthenticatedActor) =>
   hasPermission(actor, 'timesheets.expired_projects.create');
 
-const isProjectExpired = (endDate: string | null | undefined): boolean =>
-  !!endDate && endDate < todayLocalDateOnly();
-
 type ProjectEntryAvailability = {
   endDate: string | null | undefined;
   status: ProjectStatus | null | undefined;
@@ -103,7 +104,7 @@ const enforceProjectCanAcceptTimeEntries = (
   project: ProjectEntryAvailability,
 ) => {
   enforceProjectStatusAllowsTimeEntryChanges(project);
-  if (!canWriteExpiredProjectEntries(actor) && isProjectExpired(project.endDate)) {
+  if (!canWriteExpiredProjectEntries(actor) && isProjectExpiredForTimeEntries(project)) {
     fail(403, 'Project is expired');
   }
 };
@@ -493,7 +494,7 @@ export const updateTimeEntry = async (
     if (
       availability &&
       !isProjectStatusBlockingTimeEntries(availability.status) &&
-      (canWriteExpiredProjectEntries(actor) || !isProjectExpired(availability.endDate))
+      (canWriteExpiredProjectEntries(actor) || !isProjectExpiredForTimeEntries(availability))
     ) {
       const backfill = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
       if (backfill) resolvedTaskId = backfill;
@@ -702,7 +703,7 @@ export const generateRecurringEntries = async (
   if (!canWriteExpiredProjectEntries(actor)) {
     allowedTasks = allowedTasks.filter((task) => {
       const project = projectsByProjectId.get(task.projectId);
-      return project !== undefined && !isProjectExpired(project.endDate);
+      return project !== undefined && !isProjectExpiredForTimeEntries(project);
     });
   }
   if (!hasPermission(actor, 'timesheets.tracker_all.create')) {

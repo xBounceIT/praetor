@@ -11797,7 +11797,7 @@
                       "string",
                       "null"
                     ],
-                    "description": "Required for Active/Passive projects; optional for Internal projects."
+                    "description": "Required for Active/Passive projects unless status is perpetuo; optional for Internal and perpetuo projects."
                   },
                   "revenue": {
                     "type": [

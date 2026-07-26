@@ -1013,6 +1013,31 @@ describe('POST /api/entries', () => {
     expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
+  test('201 creates on an expired perpetuo project without the override permission', async () => {
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({
+      clientId: 'c1',
+      endDate: '2000-01-01',
+      status: 'perpetuo',
+    });
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledTimes(1);
+  });
+
   test('403 when project status blocks entries even with the expired override permission', async () => {
     getRolePermissionsMock.mockResolvedValue([
       ...TRACKER_PERMS,

@@ -55,7 +55,7 @@
       "in_corso": "Active job, time entries allowed.",
       "in_pausa": "Suspended job, time entries blocked.",
       "terminato": "Closed job, time entries blocked.",
-      "perpetuo": "Permanent job, time entries allowed."
+      "perpetuo": "Permanent job, time entries allowed; end date optional and never expired."
     },
     "inheritedFromDisabledClient": "Inherited from disabled Client: {{clientName}}",
     "allClients": "All Clients",

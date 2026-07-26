@@ -55,7 +55,7 @@
       "in_corso": "Commessa attiva, ore inseribili.",
       "in_pausa": "Commessa sospesa, ore non inseribili.",
       "terminato": "Commessa conclusa, ore non inseribili.",
-      "perpetuo": "Commessa permanente, ore inseribili."
+      "perpetuo": "Commessa permanente, ore inseribili; data fine opzionale e non scaduta."
     },
     "inheritedFromDisabledClient": "Ereditato da Cliente disabilitato: {{clientName}}",
     "allClients": "Tutti i Clienti",

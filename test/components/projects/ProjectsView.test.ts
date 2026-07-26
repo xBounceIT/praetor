@@ -100,10 +100,12 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain(
       "if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired')",
     );
-    expect(source).toContain('if (!isInternalProject && !startDate) {');
-    expect(source).toContain('if (!isInternalProject && !endDate) {');
-    expect(source).toContain('required={!controller.isInternalProject}');
-    expect(source).toContain('{!controller.isInternalProject && <RequiredMark />}');
+    expect(source).toContain('if (isProjectStartDateRequired({ tipo }) && !startDate) {');
+    expect(source).toContain('isProjectEndDateRequired({ tipo, status })');
+    expect(source).toContain(
+      'isProjectEndDateRequired({ tipo: controller.tipo, status: controller.status })',
+    );
+    expect(source).toContain('{isRequired && <RequiredMark />}');
     expect(source).toContain("newErrors.dateRange = t('projects:projects.dateRangeInvalid')");
   });
 
