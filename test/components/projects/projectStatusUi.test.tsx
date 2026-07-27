@@ -31,11 +31,7 @@ describe('project status media icons', () => {
     expect(option?.name).toBe(`label:${status}`);
     expect(svg).toHaveClass(iconClass);
     expect(svg).toHaveClass(...PROJECT_STATUS_ICON_CLASS_NAME.split(' '));
-    if (filled) {
-      expect(svg?.getAttribute('fill')).toBe('currentColor');
-    } else {
-      expect(svg?.getAttribute('fill') === 'none' || svg?.getAttribute('fill') == null).toBe(true);
-    }
+    expect(svg?.getAttribute('fill')).toBe(filled ? 'currentColor' : 'none');
   });
 
   test('tooltip icons use the same glyph, size, and fill as select options', () => {

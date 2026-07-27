@@ -34,7 +34,9 @@ export const getProjectStatusIcon = (status: ProjectStatus | undefined, classNam
   return createElement(Icon, {
     'aria-hidden': true,
     className,
-    fill: FILLED_PROJECT_STATUS_ICONS.has(resolvedStatus) ? 'currentColor' : undefined,
+    // Always set fill explicitly: `undefined` overrides Lucide's default `fill="none"`
+    // and lets tooltip/parent CSS paint stroke icons (check, infinity) as solid blobs.
+    fill: FILLED_PROJECT_STATUS_ICONS.has(resolvedStatus) ? 'currentColor' : 'none',
   });
 };
 
