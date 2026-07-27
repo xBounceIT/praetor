@@ -180,8 +180,9 @@ and does not block tracker writes for the full index build. Multiple rows with t
 allowed; `POST /api/entries` always inserts, and tracker duplicate always appends. Recurring
 generation still skips existing `(date, project, task)` tuples for idempotency.
 `PUT /api/entries/:id` returns `409` only for stale optimistic-lock versions. Run `db:migrate`,
-`db:ready`, and `db:check` after deploy. Older images that still expect uniqueness must not run
-against a database that has already applied 0130.
+`db:ready`, and `db:check` after deploy. CI also replays migration 0130 against a legacy unique
+index fixture when `RUN_TIME_ENTRY_DUPLICATE_KEY_MIGRATION_TEST=1`. Older images that still expect
+uniqueness must not run against a database that has already applied 0130.
 
 ## Internal category name uniqueness rollout (migration 0123)
 

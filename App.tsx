@@ -154,6 +154,7 @@ import {
   getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
+  hasScopedActionPermission,
   hasViewAccess,
   TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
@@ -680,6 +681,7 @@ const TrackerActivityTable: React.FC<{
   entries: TimeEntry[];
   dailyTotal: number;
   dailyGoal: number;
+  canDuplicateEntries: boolean;
   onEditEntry: (entry: TimeEntry) => void;
   onDuplicateEntry: (entry: TimeEntry) => void;
   onDeleteEntryClick: (entry: TimeEntry) => void;
@@ -688,6 +690,7 @@ const TrackerActivityTable: React.FC<{
   entries,
   dailyTotal,
   dailyGoal,
+  canDuplicateEntries,
   onEditEntry,
   onDuplicateEntry,
   onDeleteEntryClick,
@@ -809,25 +812,27 @@ const TrackerActivityTable: React.FC<{
               </TooltipTrigger>
               <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDuplicateEntry(row);
-                    }}
-                    className="text-muted-foreground hover:text-praetor"
-                  >
-                    <i className="fa-solid fa-copy text-xs"></i>
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{t('entry.duplicate')}</TooltipContent>
-            </Tooltip>
+            {canDuplicateEntries ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDuplicateEntry(row);
+                      }}
+                      className="text-muted-foreground hover:text-praetor"
+                    >
+                      <i className="fa-solid fa-copy text-xs"></i>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('entry.duplicate')}</TooltipContent>
+              </Tooltip>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex">
@@ -851,7 +856,7 @@ const TrackerActivityTable: React.FC<{
         ),
       },
     ],
-    [selectedDate, t, onEditEntry, onDuplicateEntry, onDeleteEntryClick],
+    [selectedDate, t, canDuplicateEntries, onEditEntry, onDuplicateEntry, onDeleteEntryClick],
   );
 
   return (
@@ -1057,6 +1062,12 @@ const TrackerView: React.FC<{
     return collectDuplicateConflictDates(entries, duplicatingEntry);
   }, [duplicatingEntry, entries]);
 
+  const canDuplicateEntries = hasScopedActionPermission(
+    permissions,
+    'timesheets.tracker',
+    'create',
+  );
+
   const handleDuplicateEntry = useCallback(
     async (dates: string[]) => {
       if (!duplicatingEntry) {
@@ -1193,6 +1204,7 @@ const TrackerView: React.FC<{
               entries={filteredEntries}
               dailyTotal={dailyTotal}
               dailyGoal={dailyGoal}
+              canDuplicateEntries={canDuplicateEntries}
               onEditEntry={setEditingEntry}
               onDuplicateEntry={setDuplicatingEntry}
               onDeleteEntryClick={handleDeleteClick}
