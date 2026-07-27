@@ -172,8 +172,9 @@ restoring any archived rows whose key no longer conflicts.
 ## Allow duplicate time-entry keys (migration 0130)
 
 Deploy migration `0130_allow_duplicate_time_entry_keys.sql` with the application image that
-always appends on create/duplicate. It drops `idx_time_entries_entry_key_unique` and replaces
-it with a non-unique `(user_id, date, project_id, task)` lookup index using
+always appends on create/duplicate. It drops `idx_time_entries_entry_key_unique`, drops any
+existing `idx_time_entries_user_date_project_task` (including an invalid index left by an
+interrupted concurrent build), then recreates the non-unique lookup index with
 `DROP/CREATE INDEX CONCURRENTLY` so `migrationsRunner.ts` runs those statements in autocommit
 and does not block tracker writes for the full index build. Multiple rows with the same key are
 allowed; `POST /api/entries` always inserts, and tracker duplicate always appends. Recurring
