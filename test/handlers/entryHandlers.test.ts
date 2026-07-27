@@ -160,6 +160,32 @@ describe('makeEntryHandlers', () => {
     expect(apiMocks.entriesCreate).not.toHaveBeenCalled();
   });
 
+  test('addBulk creates entries sequentially to avoid server serialization conflicts', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    apiMocks.entriesCreate.mockImplementation(async (data: unknown) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return { id: `e-new-${maxInFlight}`, createdAt: 1, ...(data as object) };
+    });
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1', costPerHour: 25 } as never,
+      viewingUserId: 'u2',
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    await handlers.addBulk([
+      { task: 'a' } as never,
+      { task: 'b' } as never,
+      { task: 'c' } as never,
+    ]);
+
+    expect(maxInFlight).toBe(1);
+    expect(apiMocks.entriesCreate).toHaveBeenCalledTimes(3);
+  });
+
   test('addBulk creates and prepends sorted by createdAt desc', async () => {
     let counter = 0;
     apiMocks.entriesCreate.mockImplementation((data: unknown) => {

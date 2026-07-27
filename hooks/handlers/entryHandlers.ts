@@ -51,31 +51,30 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   ): Promise<AddBulkResult> => {
     if (!currentUser) return { created: [], failed: [] };
     const targetUserId = viewingUserId || currentUser.id;
-    const results = await Promise.allSettled(
-      newEntries.map((entry) =>
-        api.entries.create({
-          ...entry,
-          userId: targetUserId,
-        }),
-      ),
-    );
-
     const created: TimeEntry[] = [];
     const failures: unknown[] = [];
-    for (const r of results) {
-      if (r.status === 'fulfilled') created.push(r.value);
-      else failures.push(r.reason);
+
+    // Each POST locks the user row inside a SERIALIZABLE transaction; parallel
+    // creates for the same user trigger Postgres 40001 serialization failures.
+    for (const entry of newEntries) {
+      try {
+        const createdEntry = await api.entries.create({
+          ...entry,
+          userId: targetUserId,
+        });
+        created.push(createdEntry);
+      } catch (err) {
+        failures.push(err);
+        console.error('Failed to add bulk entry:', err);
+      }
     }
 
     if (created.length > 0) {
       setEntries((prev) => [...created, ...prev].sort((a, b) => b.createdAt - a.createdAt));
     }
 
-    if (failures.length > 0) {
-      for (const err of failures) console.error('Failed to add bulk entry:', err);
-      if (!options?.silent) {
-        toastError('Failed to add some time entries');
-      }
+    if (failures.length > 0 && !options?.silent) {
+      toastError('Failed to add some time entries');
     }
 
     return { created, failed: failures };
