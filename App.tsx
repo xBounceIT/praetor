@@ -171,10 +171,7 @@ import {
 } from './utils/ril';
 import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
-import {
-  buildDuplicateTimeEntryDrafts,
-  collectDuplicateConflictDates,
-} from './utils/timeEntryDuplicate';
+import { buildDuplicateTimeEntryDrafts } from './utils/timeEntryDuplicate';
 import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
 import { toastError, toastSuccess } from './utils/toast';
 import { filterTrackerCatalogs, type TrackerCatalogState } from './utils/trackerCatalogs';
@@ -1051,11 +1048,6 @@ const TrackerView: React.FC<{
   const [duplicatingEntry, setDuplicatingEntry] = useState<TimeEntry | null>(null);
   const { t } = useTranslation('timesheets');
 
-  const duplicateConflictDates = useMemo(() => {
-    if (!duplicatingEntry) return [];
-    return collectDuplicateConflictDates(entries, duplicatingEntry);
-  }, [duplicatingEntry, entries]);
-
   const handleDuplicateEntry = useCallback(
     async (dates: string[]) => {
       if (!duplicatingEntry) {
@@ -1207,7 +1199,6 @@ const TrackerView: React.FC<{
         entry={duplicatingEntry}
         onClose={() => setDuplicatingEntry(null)}
         onDuplicate={handleDuplicateEntry}
-        existingConflictDates={duplicateConflictDates}
         startOfWeek={startOfWeek}
         treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />

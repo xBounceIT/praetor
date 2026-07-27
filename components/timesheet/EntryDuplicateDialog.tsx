@@ -16,15 +16,12 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import type { TimeEntry } from '../../types';
 import { formatDateOnlyForLocale } from '../../utils/date';
 import { formatDecimal } from '../../utils/numbers';
-import { filterDuplicateTargetDates } from '../../utils/timeEntryDuplicate';
 import Calendar from '../shared/Calendar';
 
 export interface EntryDuplicateDialogProps {
   entry: TimeEntry | null;
   onClose: () => void;
   onDuplicate: (dates: string[]) => Promise<void>;
-  /** Dates that already have the same project+task (plus source day). */
-  existingConflictDates?: string[];
   startOfWeek?: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday?: boolean;
 }
@@ -33,7 +30,6 @@ const EntryDuplicateDialog: React.FC<EntryDuplicateDialogProps> = ({
   entry,
   onClose,
   onDuplicate,
-  existingConflictDates = [],
   startOfWeek = 'Monday',
   treatSaturdayAsHoliday = false,
 }) => (
@@ -49,7 +45,6 @@ const EntryDuplicateDialog: React.FC<EntryDuplicateDialogProps> = ({
         entry={entry}
         onClose={onClose}
         onDuplicate={onDuplicate}
-        existingConflictDates={existingConflictDates}
         startOfWeek={startOfWeek}
         treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
@@ -61,7 +56,6 @@ type ContentProps = {
   entry: TimeEntry;
   onClose: () => void;
   onDuplicate: (dates: string[]) => Promise<void>;
-  existingConflictDates: string[];
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
 };
@@ -70,7 +64,6 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
   entry,
   onClose,
   onDuplicate,
-  existingConflictDates,
   startOfWeek,
   treatSaturdayAsHoliday,
 }) => {
@@ -78,22 +71,21 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const targetDates = useMemo(
-    () => filterDuplicateTargetDates(selectedDates, existingConflictDates),
-    [selectedDates, existingConflictDates],
+  const summary = useMemo(
+    () =>
+      `${entry.clientName} · ${entry.projectName} · ${entry.task} · ${formatDecimal(entry.duration)} h`,
+    [entry.clientName, entry.projectName, entry.task, entry.duration],
   );
-
-  const summary = `${entry.clientName} · ${entry.projectName} · ${entry.task} · ${formatDecimal(entry.duration)} h`;
 
   const handleRemoveDate = (date: string) => {
     setSelectedDates((prev) => prev.filter((d) => d !== date));
   };
 
   const handleSubmit = async () => {
-    if (targetDates.length === 0 || isSubmitting) return;
+    if (selectedDates.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await onDuplicate(targetDates);
+      await onDuplicate(selectedDates);
       onClose();
     } catch {
       // Caller handles toasts; keep dialog open for retry.
@@ -103,8 +95,8 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
   };
 
   const ctaLabel =
-    targetDates.length > 0
-      ? t('entry.duplicateToDays', { count: targetDates.length })
+    selectedDates.length > 0
+      ? t('entry.duplicateToDays', { count: selectedDates.length })
       : t('entry.duplicate');
 
   return (
@@ -126,24 +118,20 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
           <div className="min-w-0 space-y-1">
             <DialogTitle>{t('entry.duplicateEntry')}</DialogTitle>
             <DialogDescription>{t('entry.selectTargetDates')}</DialogDescription>
+            <p className="text-sm text-muted-foreground truncate" title={summary}>
+              {summary}
+            </p>
           </div>
         </div>
       </DialogHeader>
 
       <div className="space-y-4">
-        <div
-          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground truncate"
-          title={summary}
-        >
-          {summary}
-        </div>
-
         <div className="rounded-md border border-border p-2">
           <Calendar
             selectionMode="multiple"
             selectedDates={selectedDates}
             onDatesChange={setSelectedDates}
-            disabledDates={existingConflictDates}
+            disabledDates={[entry.date]}
             selectedDate={entry.date}
             startOfWeek={startOfWeek}
             treatSaturdayAsHoliday={treatSaturdayAsHoliday}
@@ -155,11 +143,11 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
 
         <Field>
           <FieldLabel>{t('entry.selectedDays')}</FieldLabel>
-          {targetDates.length === 0 ? (
+          {selectedDates.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('entry.selectTargetDates')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {targetDates.map((date) => (
+              {selectedDates.map((date) => (
                 <Badge key={date} variant="secondary" className="gap-1 pr-1">
                   <span>
                     {formatDateOnlyForLocale(date, i18n.language, {
@@ -192,7 +180,7 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
           onClick={() => {
             void handleSubmit();
           }}
-          disabled={targetDates.length === 0 || isSubmitting}
+          disabled={selectedDates.length === 0 || isSubmitting}
         >
           {ctaLabel}
         </Button>

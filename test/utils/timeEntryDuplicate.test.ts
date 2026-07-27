@@ -1,14 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  buildDuplicateTimeEntryDrafts,
-  collectDuplicateConflictDates,
-  filterDuplicateTargetDates,
-} from '../../utils/timeEntryDuplicate';
+import { buildDuplicateTimeEntryDrafts } from '../../utils/timeEntryDuplicate';
 
 describe('timeEntryDuplicate helpers', () => {
   const source = {
-    id: 'te-1',
-    date: '2024-03-11',
     clientId: 'c1',
     clientName: 'Client',
     projectId: 'p1',
@@ -50,27 +44,5 @@ describe('timeEntryDuplicate helpers', () => {
         isPlaceholder: false,
       },
     ]);
-  });
-
-  test('collectDuplicateConflictDates includes source day and matching project+task days', () => {
-    const dates = collectDuplicateConflictDates(
-      [
-        source,
-        { id: 'te-2', date: '2024-03-12', projectId: 'p1', task: 'Task' },
-        { id: 'te-3', date: '2024-03-13', projectId: 'p1', task: 'Other' },
-        { id: 'te-4', date: '2024-03-14', projectId: 'p2', task: 'Task' },
-      ],
-      source,
-    );
-    expect(dates).toEqual(['2024-03-11', '2024-03-12']);
-  });
-
-  test('filterDuplicateTargetDates drops blocked dates', () => {
-    expect(
-      filterDuplicateTargetDates(
-        ['2024-03-12', '2024-03-13', '2024-03-11'],
-        ['2024-03-11', '2024-03-13'],
-      ),
-    ).toEqual(['2024-03-12']);
   });
 });

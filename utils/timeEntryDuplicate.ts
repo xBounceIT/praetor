@@ -34,27 +34,3 @@ export const buildDuplicateTimeEntryDrafts = (
     location: entry.location,
     isPlaceholder: false,
   }));
-
-/** Dates that already have the same project+task key as the source entry. */
-export const collectDuplicateConflictDates = (
-  entries: Array<Pick<TimeEntry, 'id' | 'date' | 'projectId' | 'task'>>,
-  source: Pick<TimeEntry, 'id' | 'date' | 'projectId' | 'task'>,
-): string[] => {
-  const dates = new Set<string>([source.date]);
-  for (const entry of entries) {
-    if (entry.id === source.id) continue;
-    if (entry.projectId === source.projectId && entry.task === source.task) {
-      dates.add(entry.date);
-    }
-  }
-  return [...dates].sort();
-};
-
-/** Drop target dates that are blocked (source day / known conflicts). */
-export const filterDuplicateTargetDates = (
-  selectedDates: string[],
-  disabledDates: Iterable<string>,
-): string[] => {
-  const blocked = new Set(disabledDates);
-  return selectedDates.filter((date) => !blocked.has(date));
-};

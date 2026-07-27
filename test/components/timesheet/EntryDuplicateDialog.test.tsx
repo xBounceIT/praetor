@@ -47,12 +47,7 @@ describe('<EntryDuplicateDialog />', () => {
     const onClose = mock(() => {});
 
     render(
-      <EntryDuplicateDialog
-        entry={sampleEntry}
-        onClose={onClose}
-        onDuplicate={onDuplicate}
-        existingConflictDates={['2024-03-11', '2024-03-12']}
-      />,
+      <EntryDuplicateDialog entry={sampleEntry} onClose={onClose} onDuplicate={onDuplicate} />,
     );
 
     expect(screen.getByText('entry.duplicateEntry')).toBeInTheDocument();
@@ -61,17 +56,17 @@ describe('<EntryDuplicateDialog />', () => {
     const submit = screen.getByRole('button', { name: 'entry.duplicate' });
     expect(submit).toBeDisabled();
 
-    // Source day and conflict day are disabled
+    // Source day is disabled; other days remain selectable even when already logged.
     expect(screen.getByText('11').closest('button')).toBeDisabled();
-    expect(screen.getByText('12').closest('button')).toBeDisabled();
 
+    fireEvent.click(screen.getByText('12'));
     fireEvent.click(screen.getByText('15'));
     expect(screen.getByRole('button', { name: /entry\.duplicateToDays/ })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: /entry\.duplicateToDays/ }));
 
     await waitFor(() => {
-      expect(onDuplicate).toHaveBeenCalledWith(['2024-03-15']);
+      expect(onDuplicate).toHaveBeenCalledWith(['2024-03-12', '2024-03-15']);
     });
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
