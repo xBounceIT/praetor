@@ -255,16 +255,25 @@ const PlainSelectControl = ({
         }}
       >
         <SelectTrigger id={id} className={cn(baseTriggerClassName, buttonClassName)}>
-          <SelectValue placeholder={placeholder || t('select.placeholder')}>
-            {hasSelection ? (
-              <TriggerLabel
-                icon={renderOptionIcon(selectedOption?.icon)}
-                isPlaceholder={false}
-                label={labelText}
-                valueClassName={valueClassName}
-              />
-            ) : null}
-          </SelectValue>
+          {displayValue ? (
+            <TriggerLabel
+              icon={renderOptionIcon(selectedOption?.icon)}
+              isPlaceholder={!hasSelection}
+              label={labelText}
+              valueClassName={valueClassName}
+            />
+          ) : (
+            <SelectValue placeholder={placeholder || t('select.placeholder')}>
+              {selectedOption ? (
+                <TriggerLabel
+                  icon={renderOptionIcon(selectedOption.icon)}
+                  isPlaceholder={false}
+                  label={labelText}
+                  valueClassName={valueClassName}
+                />
+              ) : null}
+            </SelectValue>
+          )}
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
