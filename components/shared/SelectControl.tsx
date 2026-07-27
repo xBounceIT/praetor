@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface Option {
@@ -166,23 +166,25 @@ const TriggerLabel = ({
   const tooltipLabel = label.trim() === '' ? null : label;
 
   return (
-    <Tooltip disabled={!tooltipLabel}>
-      <TooltipTrigger asChild>
-        <span className="inline-flex min-w-0 flex-1 items-center gap-2">
-          {icon}
-          <span
-            className={cn(
-              'w-full truncate',
-              isPlaceholder ? 'text-muted-foreground' : 'font-semibold text-foreground',
-              valueClassName,
-            )}
-          >
-            {label}
+    <TooltipProvider>
+      <Tooltip disabled={!tooltipLabel}>
+        <TooltipTrigger asChild>
+          <span className="inline-flex min-w-0 flex-1 items-center gap-2">
+            {icon}
+            <span
+              className={cn(
+                'w-full truncate',
+                isPlaceholder ? 'text-muted-foreground' : 'font-semibold text-foreground',
+                valueClassName,
+              )}
+            >
+              {label}
+            </span>
           </span>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{tooltipLabel}</TooltipContent>
-    </Tooltip>
+        </TooltipTrigger>
+        <TooltipContent>{tooltipLabel}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 
