@@ -817,6 +817,52 @@ describe('POST /api/entries', () => {
     expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-02', 'u1');
   });
 
+  test('201: overwrites a matching non-placeholder entry when overwriteExisting is true', async () => {
+    entriesFindForEntryKeyMock.mockResolvedValue({
+      ...SAMPLE_ENTRY,
+      id: 'te-existing',
+      duration: 1,
+      notes: 'old',
+      isPlaceholder: false,
+      version: 2,
+    });
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesUpdateMock.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({
+      ...SAMPLE_ENTRY,
+      id,
+      ...patch,
+      version: 3,
+      createdAt: 1_700_000_000_000,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        duration: 5,
+        notes: 'hello',
+        isPlaceholder: false,
+        overwriteExisting: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-existing',
+      expect.objectContaining({
+        version: 2,
+        duration: 5,
+        notes: 'hello',
+        isPlaceholder: false,
+      }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400 invalid isPlaceholder value does not create entry', async () => {
     const res = await testApp.inject({
       method: 'POST',

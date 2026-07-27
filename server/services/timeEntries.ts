@@ -286,6 +286,7 @@ export const createTimeEntry = async (
     isPlaceholder?: unknown;
     userId?: unknown;
     location?: unknown;
+    overwriteExisting?: unknown;
   },
 ): Promise<TimeEntry> => {
   if (!hasTrackerPermission(actor, 'create')) fail(403, 'Insufficient permissions');
@@ -335,6 +336,7 @@ export const createTimeEntry = async (
 
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
+  const overwriteExisting = requireValid(parseBooleanField(input, 'overwriteExisting')) === true;
 
   const created = await withSerializableWriteTransaction(async (tx) => {
     await usersRepo.lockById(targetUserId, tx);
@@ -344,12 +346,12 @@ export const createTimeEntry = async (
       tx,
     );
     if (existing) {
-      // Recurring stubs reserve the uniqueness key; promote them into a real entry
-      // instead of forcing the client to delete the placeholder first.
-      if (!existing.isPlaceholder) {
+      // Placeholders always promote; callers may also opt in to overwrite a real entry
+      // (duplicate flow) because the uniqueness key cannot hold two rows.
+      if (!existing.isPlaceholder && !overwriteExisting) {
         fail(409, 'A time entry already exists for this date, project, and task');
       }
-      const promoted = await entriesRepo.update(
+      const replaced = await entriesRepo.update(
         existing.id,
         {
           version: existing.version,
@@ -367,10 +369,10 @@ export const createTimeEntry = async (
         },
         tx,
       );
-      if (promoted === null) {
+      if (replaced === null) {
         fail(409, 'Entry has changed since it was loaded; reload and retry');
       }
-      return promoted;
+      return replaced;
     }
 
     return entriesRepo.create(

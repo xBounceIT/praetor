@@ -85,6 +85,7 @@ const entryCreateBodySchema = {
     isPlaceholder: { type: 'boolean' },
     userId: { type: 'string' },
     location: { type: 'string' },
+    overwriteExisting: { type: 'boolean' },
   },
   required: ['date', 'clientId', 'clientName', 'projectId', 'projectName', 'task'],
 } as const;
@@ -302,9 +303,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description:
           'Creates one time entry. If a matching placeholder already exists for the same ' +
           'user, date, project, and task, promotes that stub instead of inserting a new row. ' +
-          'Returns 409 when a non-placeholder entry already exists for that key. Returns 403 ' +
-          'when the selected project is in a status that blocks time entries, or when it is ' +
-          'expired and the role lacks timesheets.expired_projects.create.',
+          'When `overwriteExisting` is true, a matching non-placeholder entry is updated ' +
+          'instead of rejected. Returns 409 when a non-placeholder entry already exists and ' +
+          '`overwriteExisting` is not set. Returns 403 when the selected project is in a ' +
+          'status that blocks time entries, or when it is expired and the role lacks ' +
+          'timesheets.expired_projects.create.',
         body: entryCreateBodySchema,
         response: {
           201: entrySchema,

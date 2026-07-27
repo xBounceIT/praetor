@@ -1,7 +1,8 @@
-import { Copy, X } from 'lucide-react';
+import { AlertTriangle, Copy, X } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +23,8 @@ export interface EntryDuplicateDialogProps {
   entry: TimeEntry | null;
   onClose: () => void;
   onDuplicate: (dates: string[]) => Promise<void>;
+  /** Dates that already have the same project+task (warning only; still selectable). */
+  existingConflictDates?: string[];
   startOfWeek?: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday?: boolean;
 }
@@ -30,6 +33,7 @@ const EntryDuplicateDialog: React.FC<EntryDuplicateDialogProps> = ({
   entry,
   onClose,
   onDuplicate,
+  existingConflictDates = [],
   startOfWeek = 'Monday',
   treatSaturdayAsHoliday = false,
 }) => (
@@ -45,6 +49,7 @@ const EntryDuplicateDialog: React.FC<EntryDuplicateDialogProps> = ({
         entry={entry}
         onClose={onClose}
         onDuplicate={onDuplicate}
+        existingConflictDates={existingConflictDates}
         startOfWeek={startOfWeek}
         treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
@@ -56,6 +61,7 @@ type ContentProps = {
   entry: TimeEntry;
   onClose: () => void;
   onDuplicate: (dates: string[]) => Promise<void>;
+  existingConflictDates: string[];
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
 };
@@ -64,6 +70,7 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
   entry,
   onClose,
   onDuplicate,
+  existingConflictDates,
   startOfWeek,
   treatSaturdayAsHoliday,
 }) => {
@@ -75,6 +82,13 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
     () =>
       `${entry.clientName} · ${entry.projectName} · ${entry.task} · ${formatDecimal(entry.duration)} h`,
     [entry.clientName, entry.projectName, entry.task, entry.duration],
+  );
+
+  const conflictDateSet = useMemo(() => new Set(existingConflictDates), [existingConflictDates]);
+
+  const overwriteCount = useMemo(
+    () => selectedDates.filter((date) => conflictDateSet.has(date)).length,
+    [selectedDates, conflictDateSet],
   );
 
   const handleRemoveDate = (date: string) => {
@@ -140,6 +154,15 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
             bare
           />
         </div>
+
+        {overwriteCount > 0 ? (
+          <Alert>
+            <AlertTriangle aria-hidden="true" />
+            <AlertDescription>
+              {t('entry.duplicateOverwriteWarning', { count: overwriteCount })}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <Field>
           <FieldLabel>{t('entry.selectedDays')}</FieldLabel>

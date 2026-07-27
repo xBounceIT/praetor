@@ -6,7 +6,9 @@ import { toastError } from '../../utils/toast';
 type TimeEntryDraft = Omit<
   TimeEntry,
   'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
->;
+> & {
+  overwriteExisting?: boolean;
+};
 type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
 
 export type AddBulkResult = {

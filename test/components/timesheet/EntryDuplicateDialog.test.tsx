@@ -73,6 +73,21 @@ describe('<EntryDuplicateDialog />', () => {
     });
   });
 
+  test('shows an overwrite warning when a selected day already has the same project/task', () => {
+    render(
+      <EntryDuplicateDialog
+        entry={sampleEntry}
+        onClose={mock(() => {})}
+        onDuplicate={mock(async () => {})}
+        existingConflictDates={['2024-03-12']}
+      />,
+    );
+
+    expect(screen.queryByText(/entry\.duplicateOverwriteWarning/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('12'));
+    expect(screen.getByText(/entry\.duplicateOverwriteWarning/)).toBeInTheDocument();
+  });
+
   test('keeps the dialog open when onDuplicate rejects', async () => {
     const onDuplicate = mock(async () => {
       throw new Error('failed');

@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildDuplicateTimeEntryDrafts } from '../../utils/timeEntryDuplicate';
+import {
+  buildDuplicateTimeEntryDrafts,
+  collectDuplicateConflictDates,
+} from '../../utils/timeEntryDuplicate';
 
 describe('timeEntryDuplicate helpers', () => {
   const source = {
@@ -29,6 +32,7 @@ describe('timeEntryDuplicate helpers', () => {
         duration: 2,
         location: 'remote',
         isPlaceholder: false,
+        overwriteExisting: true,
       },
       {
         date: '2024-03-13',
@@ -42,7 +46,21 @@ describe('timeEntryDuplicate helpers', () => {
         duration: 2,
         location: 'remote',
         isPlaceholder: false,
+        overwriteExisting: true,
       },
     ]);
+  });
+
+  test('collectDuplicateConflictDates lists other days with the same project+task', () => {
+    expect(
+      collectDuplicateConflictDates(
+        [
+          { id: 'te-1', date: '2024-03-11', projectId: 'p1', task: 'Task' },
+          { id: 'te-2', date: '2024-03-12', projectId: 'p1', task: 'Task' },
+          { id: 'te-3', date: '2024-03-13', projectId: 'p1', task: 'Other' },
+        ],
+        { id: 'te-1', date: '2024-03-11', projectId: 'p1', task: 'Task' },
+      ),
+    ).toEqual(['2024-03-12']);
   });
 });
