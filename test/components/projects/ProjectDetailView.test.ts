@@ -122,9 +122,12 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain("project.tipo === 'interno' && !isInternalProject");
     expect(source).toContain('isLeavingPerpetuo');
     expect(source).toContain('isProjectEndDateRequired({ tipo, status })');
+    expect(source).toContain('endDateRequiredForSave');
+    expect(source).toContain('isConvertingInternalToCommercial ||');
     expect(source).toMatch(
       /if \(\s*!isInternalProject &&\s*\(project\.startDate \|\| isConvertingInternalToCommercial \|\| isLeavingPerpetuo\) &&\s*!startDate\s*\)/,
     );
+    expect(source).toContain('if (endDateRequiredForSave && !endDate)');
     expect(source).toContain('{isRequired && <RequiredMark />}');
     expect(source).toContain('required={isRequired}');
     expect(source).toContain('<FieldLabel htmlFor="detail-name" required>');

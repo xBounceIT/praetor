@@ -1057,11 +1057,12 @@ const useProjectDetailController = ({
     ) {
       newErrors.startDate = t('projects:projects.startDateRequired');
     }
-    if (
-      isProjectEndDateRequired({ tipo, status }) &&
-      (project.endDate || isConvertingInternalToCommercial || isLeavingPerpetuo) &&
-      !endDate
-    ) {
+    // Conversion always needs an end date (server enforces it), even when status is perpetuo.
+    const endDateRequiredForSave =
+      isConvertingInternalToCommercial ||
+      (isProjectEndDateRequired({ tipo, status }) &&
+        (Boolean(project.endDate) || isLeavingPerpetuo));
+    if (endDateRequiredForSave && !endDate) {
       newErrors.endDate = t('projects:projects.endDateRequired');
     }
     if (startDate && endDate && startDate > endDate) {
@@ -1708,9 +1709,12 @@ const ProjectDetailEndDateField: React.FC<{ controller: ProjectDetailController 
     controller;
   const isLeavingPerpetuo =
     (project.status ?? LEGACY_PROJECT_STATUS) === 'perpetuo' && status !== 'perpetuo';
+  const isConvertingInternalToCommercial =
+    project.tipo === 'interno' && Boolean(tipo) && tipo !== 'interno';
   const isRequired =
-    isProjectEndDateRequired({ tipo, status }) &&
-    (Boolean(project.endDate) || project.tipo === 'interno' || isLeavingPerpetuo);
+    isConvertingInternalToCommercial ||
+    (isProjectEndDateRequired({ tipo, status }) &&
+      (Boolean(project.endDate) || project.tipo === 'interno' || isLeavingPerpetuo));
 
   return (
     <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
