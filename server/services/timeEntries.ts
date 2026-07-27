@@ -337,6 +337,8 @@ export const createTimeEntry = async (
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
   const overwriteExisting = requireValid(parseBooleanField(input, 'overwriteExisting')) === true;
+  const notes = parseOptionalNotes(input.notes);
+  const resolvedDuration = duration ?? 0;
 
   const created = await withSerializableWriteTransaction(async (tx) => {
     await usersRepo.lockById(targetUserId, tx);
@@ -346,10 +348,19 @@ export const createTimeEntry = async (
       tx,
     );
     if (existing) {
-      // Placeholders always promote; callers may also opt in to overwrite a real entry
-      // (duplicate flow) because the uniqueness key cannot hold two rows.
-      if (!existing.isPlaceholder && !overwriteExisting) {
-        fail(409, 'A time entry already exists for this date, project, and task');
+      // Placeholders always promote under create permission. Overwriting a real entry
+      // is an update of an existing row, so require update permission as well.
+      if (!existing.isPlaceholder) {
+        if (!overwriteExisting) {
+          fail(409, 'A time entry already exists for this date, project, and task');
+        }
+        if (!hasTrackerPermission(actor, 'update')) {
+          fail(403, 'Insufficient permissions');
+        }
+        if (targetUserId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.update')) {
+          const allowed = await workUnitsRepo.isUserManagedBy(actor.id, targetUserId);
+          if (!allowed) fail(403, 'Not authorized to update this entry');
+        }
       }
       const replaced = await entriesRepo.update(
         existing.id,
@@ -361,8 +372,8 @@ export const createTimeEntry = async (
           projectName,
           task,
           taskId: resolvedTaskId,
-          notes: parseOptionalNotes(input.notes),
-          duration: duration ?? 0,
+          notes,
+          duration: resolvedDuration,
           hourlyCost,
           isPlaceholder: parsedIsPlaceholder ?? false,
           location,
@@ -370,7 +381,7 @@ export const createTimeEntry = async (
         tx,
       );
       if (replaced === null) {
-        fail(409, 'Entry has changed since it was loaded; reload and retry');
+        return fail(409, 'Entry has changed since it was loaded; reload and retry');
       }
       return replaced;
     }
@@ -386,8 +397,8 @@ export const createTimeEntry = async (
         projectName,
         task,
         taskId: resolvedTaskId,
-        notes: parseOptionalNotes(input.notes),
-        duration: duration ?? 0,
+        notes,
+        duration: resolvedDuration,
         hourlyCost,
         isPlaceholder: parsedIsPlaceholder ?? false,
         location,

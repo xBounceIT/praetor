@@ -148,6 +148,33 @@ describe('makeEntryHandlers', () => {
     }
   });
 
+  test('add replaces an existing entry id when create promotes a placeholder', async () => {
+    apiMocks.entriesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({
+        id: 'e-ph',
+        createdAt: 200,
+        isPlaceholder: false,
+        ...(data as object),
+      }),
+    );
+    const entries = makeStubSetter<EntryLike>([
+      { id: 'e-ph', createdAt: 50, task: 'stub' },
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1' } as never,
+      viewingUserId: 'u1',
+      setEntries: entries.setter,
+    });
+
+    await handlers.add({ task: 'promoted' } as never);
+
+    expect(entries.get()).toEqual([
+      expect.objectContaining({ id: 'e-ph', task: 'promoted', createdAt: 200 }),
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+  });
+
   test('addBulk returns early when no current user', async () => {
     const entries = makeStubSetter<EntryLike>([]);
     const handlers = makeEntryHandlers({

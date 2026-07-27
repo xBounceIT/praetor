@@ -378,7 +378,22 @@ export const findForEntryKey = async (
 export const existsForEntryKey = async (
   key: EntryKeyLookup,
   exec: DbExecutor = db,
-): Promise<boolean> => (await findForEntryKey(key, exec)) !== null;
+): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.userId, key.userId),
+        eq(timeEntries.date, key.date),
+        eq(timeEntries.projectId, key.projectId),
+        eq(timeEntries.task, key.task),
+        key.excludeId ? ne(timeEntries.id, key.excludeId) : undefined,
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+};
 
 export const sumDurationForUserDate = async (
   userId: string,

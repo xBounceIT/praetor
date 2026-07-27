@@ -590,7 +590,7 @@ describe('findForEntryKey / existsForEntryKey', () => {
   });
 
   test('existsForEntryKey returns true when found', async () => {
-    exec.enqueue({ rows: [entryRow()] });
+    exec.enqueue({ rows: [['e-1']] });
 
     const result = await entriesRepo.existsForEntryKey(
       { userId: 'u-1', date: '2026-04-30', projectId: 'p-1', task: 'Dev' },
@@ -598,6 +598,7 @@ describe('findForEntryKey / existsForEntryKey', () => {
     );
 
     expect(result).toBe(true);
+    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', 'p-1', 'Dev', 1]);
   });
 
   test('existsForEntryKey returns false when no matching tuple exists', async () => {

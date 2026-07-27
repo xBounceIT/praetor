@@ -863,6 +863,37 @@ describe('POST /api/entries', () => {
     );
   });
 
+  test('403: overwriteExisting on a real entry requires update permission', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'timesheets.tracker.view',
+      'timesheets.tracker.create',
+    ]);
+    entriesFindForEntryKeyMock.mockResolvedValue({
+      ...SAMPLE_ENTRY,
+      id: 'te-existing',
+      isPlaceholder: false,
+      version: 2,
+    });
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        duration: 5,
+        overwriteExisting: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
   test('400 invalid isPlaceholder value does not create entry', async () => {
     const res = await testApp.inject({
       method: 'POST',

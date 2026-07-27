@@ -1,14 +1,9 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { TimeEntry, User } from '../../types';
+import type { TimeEntryDuplicateDraft } from '../../utils/timeEntryDuplicate';
 import { toastError } from '../../utils/toast';
 
-type TimeEntryDraft = Omit<
-  TimeEntry,
-  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
-> & {
-  overwriteExisting?: boolean;
-};
 type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
 
 export type AddBulkResult = {
@@ -21,6 +16,14 @@ const isConflictStatus = (err: unknown): boolean =>
   err !== null &&
   'status' in err &&
   (err as { status: unknown }).status === 409;
+
+const upsertEntriesById = (prev: TimeEntry[], next: TimeEntry[]): TimeEntry[] => {
+  const byId = new Map(prev.map((entry) => [entry.id, entry]));
+  for (const entry of next) {
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+};
 
 export type EntryHandlersDeps = {
   currentUser: User | null;
@@ -38,7 +41,7 @@ export type EntryHandlersDeps = {
 export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   const { currentUser, viewingUserId, setEntries } = deps;
 
-  const add = async (newEntry: TimeEntryDraft) => {
+  const add = async (newEntry: TimeEntryDuplicateDraft) => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
@@ -46,7 +49,8 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
         ...newEntry,
         userId: targetUserId,
       });
-      setEntries((prev) => [entry, ...prev]);
+      // Create may promote a placeholder in place; replace by id instead of always prepending.
+      setEntries((prev) => upsertEntriesById(prev, [entry]));
     } catch (err) {
       console.error('Failed to add entry:', err);
       toastError('Failed to add time entry');
@@ -54,7 +58,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   };
 
   const addBulk = async (
-    newEntries: TimeEntryDraft[],
+    newEntries: TimeEntryDuplicateDraft[],
     options?: { silent?: boolean },
   ): Promise<AddBulkResult> => {
     if (!currentUser) return { created: [], failed: [] };
@@ -81,15 +85,9 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     }
 
     if (created.length > 0) {
-      // Create may promote an existing placeholder in place; merge by id so the
-      // local list does not keep a stale stub alongside the promoted row.
-      setEntries((prev) => {
-        const byId = new Map(prev.map((entry) => [entry.id, entry]));
-        for (const entry of created) {
-          byId.set(entry.id, entry);
-        }
-        return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
-      });
+      // Create may promote/overwrite an existing row in place; merge by id so the
+      // local list does not keep a stale stub alongside the returned row.
+      setEntries((prev) => upsertEntriesById(prev, created));
     }
 
     if (failures.length > 0 && !options?.silent) {

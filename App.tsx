@@ -1061,7 +1061,7 @@ const TrackerView: React.FC<{
       if (!duplicatingEntry) {
         throw new Error('duplicate-entry-missing');
       }
-      const conflictSet = new Set(collectDuplicateConflictDates(entries, duplicatingEntry));
+      const conflictSet = new Set(duplicateConflictDates);
       const overwriteCount = dates.filter((date) => conflictSet.has(date)).length;
       const drafts = buildDuplicateTimeEntryDrafts(duplicatingEntry, dates);
       const result = await onAddBulkEntries(drafts, { silent: true });
@@ -1094,7 +1094,7 @@ const TrackerView: React.FC<{
       }
       toastSuccess(t('entry.duplicated', { count: createdCount }));
     },
-    [duplicatingEntry, entries, onAddBulkEntries, t],
+    [duplicatingEntry, duplicateConflictDates, onAddBulkEntries, t],
   );
 
   const handleDeleteClick = useCallback(
