@@ -51,11 +51,11 @@ export const collectDuplicateConflictDates = (
   return [...dates].sort();
 };
 
-/** Keep only dates that do not already hold the same project+task key. */
-export const filterDuplicateTargetDates = (
+/** How many selected dates already hold the same project+task (warning/toast only). */
+export const countSelectedConflictDates = (
   selectedDates: string[],
   conflictDates: Iterable<string>,
-): string[] => {
-  const blocked = new Set(conflictDates);
-  return selectedDates.filter((date) => !blocked.has(date));
+): number => {
+  const conflicts = new Set(conflictDates);
+  return selectedDates.filter((date) => conflicts.has(date)).length;
 };

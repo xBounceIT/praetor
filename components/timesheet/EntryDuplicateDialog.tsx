@@ -17,14 +17,14 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import type { TimeEntry } from '../../types';
 import { formatDateOnlyForLocale } from '../../utils/date';
 import { formatDecimal } from '../../utils/numbers';
-import { filterDuplicateTargetDates } from '../../utils/timeEntryDuplicate';
+import { countSelectedConflictDates } from '../../utils/timeEntryDuplicate';
 import Calendar from '../shared/Calendar';
 
 export interface EntryDuplicateDialogProps {
   entry: TimeEntry | null;
   onClose: () => void;
   onDuplicate: (dates: string[]) => Promise<void>;
-  /** Dates that already have the same project+task (skipped on confirm; still selectable). */
+  /** Dates that already have the same project+task (informational warning only). */
   existingConflictDates?: string[];
   startOfWeek?: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday?: boolean;
@@ -85,19 +85,17 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
     [entry.clientName, entry.projectName, entry.task, entry.duration],
   );
 
-  const creatableDates = useMemo(
-    () => filterDuplicateTargetDates(selectedDates, existingConflictDates),
+  const sameTaskDayCount = useMemo(
+    () => countSelectedConflictDates(selectedDates, existingConflictDates),
     [selectedDates, existingConflictDates],
   );
-  const creatableCount = creatableDates.length;
-  const skipCount = selectedDates.length - creatableCount;
 
   const handleRemoveDate = (date: string) => {
     setSelectedDates((prev) => prev.filter((d) => d !== date));
   };
 
   const handleSubmit = async () => {
-    if (creatableCount === 0 || isSubmitting) return;
+    if (selectedDates.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
       await onDuplicate(selectedDates);
@@ -110,8 +108,8 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
   };
 
   const ctaLabel =
-    creatableCount > 0
-      ? t('entry.duplicateToDays', { count: creatableCount })
+    selectedDates.length > 0
+      ? t('entry.duplicateToDays', { count: selectedDates.length })
       : t('entry.duplicate');
 
   return (
@@ -156,11 +154,11 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
           />
         </div>
 
-        {skipCount > 0 ? (
+        {sameTaskDayCount > 0 ? (
           <Alert>
             <AlertTriangle aria-hidden="true" />
             <AlertDescription>
-              {t('entry.duplicateSkipWarning', { count: skipCount })}
+              {t('entry.duplicateSameTaskWarning', { count: sameTaskDayCount })}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -204,7 +202,7 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
           onClick={() => {
             void handleSubmit();
           }}
-          disabled={creatableCount === 0 || isSubmitting}
+          disabled={selectedDates.length === 0 || isSubmitting}
         >
           {ctaLabel}
         </Button>

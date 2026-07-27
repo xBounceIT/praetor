@@ -1,6 +1,6 @@
 {
-  "id": "49918990-063b-4c79-91ef-19dac218b973",
-  "prevId": "ea47347a-7d08-4975-afea-774281ab39a7",
+  "id": "a48f12b8-6089-480c-8366-6b675a2d862b",
+  "prevId": "49918990-063b-4c79-91ef-19dac218b973",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -9642,8 +9642,8 @@
           "method": "btree",
           "with": {}
         },
-        "idx_time_entries_entry_key_unique": {
-          "name": "idx_time_entries_entry_key_unique",
+        "idx_time_entries_user_date_project_task": {
+          "name": "idx_time_entries_user_date_project_task",
           "columns": [
             {
               "expression": "user_id",
@@ -9670,7 +9670,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

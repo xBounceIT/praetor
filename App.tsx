@@ -174,7 +174,7 @@ import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import {
   buildDuplicateTimeEntryDrafts,
   collectDuplicateConflictDates,
-  filterDuplicateTargetDates,
+  countSelectedConflictDates,
 } from './utils/timeEntryDuplicate';
 import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
 import { toastError, toastSuccess, toastWarning } from './utils/toast';
@@ -1062,17 +1062,11 @@ const TrackerView: React.FC<{
       if (!duplicatingEntry) {
         throw new Error('duplicate-entry-missing');
       }
-      const targetDates = filterDuplicateTargetDates(dates, duplicateConflictDates);
-      const skippedCount = dates.length - targetDates.length;
-      if (targetDates.length === 0) {
-        toastError(t('entry.duplicateFailed'));
-        throw new Error('duplicate-failed');
-      }
-      const drafts = buildDuplicateTimeEntryDrafts(duplicatingEntry, targetDates);
+      const sameTaskDayCount = countSelectedConflictDates(dates, duplicateConflictDates);
+      const drafts = buildDuplicateTimeEntryDrafts(duplicatingEntry, dates);
       const result = await onAddBulkEntries(drafts, { silent: true });
       const createdCount = result.created.length;
       const failedCount = result.failed.length;
-      const total = dates.length;
 
       if (createdCount === 0) {
         toastError(t('entry.duplicateFailed'));
@@ -1082,17 +1076,17 @@ const TrackerView: React.FC<{
         toastSuccess(
           t('entry.duplicatePartial', {
             created: createdCount,
-            total,
-            failed: failedCount + skippedCount,
+            total: dates.length,
+            failed: failedCount,
           }),
         );
         return;
       }
-      if (skippedCount > 0) {
+      if (sameTaskDayCount > 0) {
         toastWarning(
-          t('entry.duplicatedWithSkip', {
+          t('entry.duplicatedWithSameTaskNotice', {
             count: createdCount,
-            skipped: skippedCount,
+            sameTaskDays: sameTaskDayCount,
           }),
         );
         return;

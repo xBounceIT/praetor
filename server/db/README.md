@@ -162,13 +162,23 @@ window, PostgreSQL fails the unique build with `23505` and may leave an invalid 
 migration ledger remains pending. Retrying 0121 consolidates the racing row into the same prior
 survivor, drops the valid or invalid index concurrently, and completes a fresh concurrent build.
 
-The new application serializes date/project/task moves with the same per-user lock already
-used by creation and recurring generation and returns HTTP 409 for a conflicting key. The
-database index then protects direct or future writers. Run `db:migrate`, `db:ready`, and
-`db:check`; CI also replays migration 0121 against a legacy duplicate fixture. Roll forward if
-the application needs correction. A schema rollback requires restoring a pre-migration backup
-or first dropping `idx_time_entries_entry_key_unique` and deliberately restoring any archived
-rows whose key no longer conflicts; the previous image does not enforce update-time uniqueness.
+The 0121 application used a per-user lock around date/project/task moves and returned HTTP 409
+for a conflicting key, with the unique index as the database backstop. Run `db:migrate`,
+`db:ready`, and `db:check`; CI also replays migration 0121 against a legacy duplicate fixture.
+Roll forward if the application needs correction. A schema rollback of 0121 requires restoring
+a pre-migration backup or first dropping `idx_time_entries_entry_key_unique` and deliberately
+restoring any archived rows whose key no longer conflicts.
+
+## Allow duplicate time-entry keys (migration 0130)
+
+Deploy migration `0130_allow_duplicate_time_entry_keys.sql` with the application image that
+always appends on create/duplicate. It drops `idx_time_entries_entry_key_unique` and replaces
+it with a non-unique `(user_id, date, project_id, task)` lookup index. Multiple rows with the
+same key are allowed; `POST /api/entries` always inserts, and tracker duplicate always appends.
+Recurring generation still skips existing `(date, project, task)` tuples for idempotency.
+`PUT /api/entries/:id` returns `409` only for stale optimistic-lock versions. Run `db:migrate`,
+`db:ready`, and `db:check` after deploy. Older images that still expect uniqueness must not run
+against a database that has already applied 0130.
 
 ## Internal category name uniqueness rollout (migration 0123)
 

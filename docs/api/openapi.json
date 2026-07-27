@@ -20454,7 +20454,7 @@
         "tags": [
           "entries"
         ],
-        "description": "Creates one time entry. Returns 409 when the target user already has an entry for the same date, project, and task. Returns 403 when the selected project is in a status that blocks time entries, or when it is expired and the role lacks timesheets.expired_projects.create.",
+        "description": "Creates one time entry. Multiple entries for the same user, date, project, and task are allowed. Returns 403 when the selected project is in a status that blocks time entries, or when it is expired and the role lacks timesheets.expired_projects.create.",
         "requestBody": {
           "required": true,
           "content": {
@@ -20947,7 +20947,7 @@
         "tags": [
           "entries"
         ],
-        "description": "Updates one time entry. Returns 409 when a date, project, or task change would give the owner another entry with the same date, project, and task, or when the optimistic-lock version is stale.",
+        "description": "Updates one time entry. Returns 409 when the optimistic-lock version is stale.",
         "requestBody": {
           "required": true,
           "content": {

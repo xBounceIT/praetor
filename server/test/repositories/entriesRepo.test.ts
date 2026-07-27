@@ -576,62 +576,6 @@ describe('findExistingRecurringKeys', () => {
   });
 });
 
-describe('findForEntryKey / existsForEntryKey', () => {
-  test('findForEntryKey returns the matching row', async () => {
-    exec.enqueue({ rows: [entryRow()] });
-
-    const result = await entriesRepo.findForEntryKey(
-      { userId: 'u-1', date: '2026-04-30', projectId: 'p-1', task: 'Dev' },
-      testDb,
-    );
-
-    expect(result?.id).toBe('e-1');
-    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', 'p-1', 'Dev', 1]);
-  });
-
-  test('existsForEntryKey returns true when found', async () => {
-    exec.enqueue({ rows: [['e-1']] });
-
-    const result = await entriesRepo.existsForEntryKey(
-      { userId: 'u-1', date: '2026-04-30', projectId: 'p-1', task: 'Dev' },
-      testDb,
-    );
-
-    expect(result).toBe(true);
-    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', 'p-1', 'Dev', 1]);
-  });
-
-  test('existsForEntryKey returns false when no matching tuple exists', async () => {
-    exec.enqueue({ rows: [] });
-
-    const result = await entriesRepo.existsForEntryKey(
-      { userId: 'u-1', date: '2026-04-30', projectId: 'p-1', task: 'Dev' },
-      testDb,
-    );
-
-    expect(result).toBe(false);
-  });
-
-  test('can exclude the entry being updated from the key lookup', async () => {
-    exec.enqueue({ rows: [] });
-
-    const result = await entriesRepo.existsForEntryKey(
-      {
-        userId: 'u-1',
-        date: '2026-04-30',
-        projectId: 'p-1',
-        task: 'Dev',
-        excludeId: 'e-1',
-      },
-      testDb,
-    );
-
-    expect(result).toBe(false);
-    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', 'p-1', 'Dev', 'e-1', 1]);
-    expect(exec.calls[0].sql).toContain('"time_entries"."id" <> $5');
-  });
-});
-
 const newEntry = {
   id: 'e-1',
   userId: 'u-1',

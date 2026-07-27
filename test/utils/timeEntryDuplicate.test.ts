@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildDuplicateTimeEntryDrafts,
   collectDuplicateConflictDates,
-  filterDuplicateTargetDates,
+  countSelectedConflictDates,
 } from '../../utils/timeEntryDuplicate';
 
 describe('timeEntryDuplicate helpers', () => {
@@ -63,12 +63,8 @@ describe('timeEntryDuplicate helpers', () => {
     ).toEqual(['2024-03-12']);
   });
 
-  test('filterDuplicateTargetDates drops days that already have the same key', () => {
-    expect(
-      filterDuplicateTargetDates(
-        ['2024-03-12', '2024-03-13', '2024-03-14'],
-        ['2024-03-12', '2024-03-14'],
-      ),
-    ).toEqual(['2024-03-13']);
+  test('countSelectedConflictDates counts intersection only', () => {
+    expect(countSelectedConflictDates(['2024-03-12', '2024-03-14'], ['2024-03-12'])).toBe(1);
+    expect(countSelectedConflictDates(['2024-03-14'], ['2024-03-12'])).toBe(0);
   });
 });

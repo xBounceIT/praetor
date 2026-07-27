@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS "idx_time_entries_entry_key_unique";--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_time_entries_user_date_project_task" ON "time_entries" USING btree ("user_id","date","project_id","task");

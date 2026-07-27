@@ -148,7 +148,7 @@ describe('makeEntryHandlers', () => {
     }
   });
 
-  test('add replaces an existing entry id when create promotes a placeholder', async () => {
+  test('add replaces an existing local entry when create returns the same id', async () => {
     apiMocks.entriesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({
         id: 'e-ph',
@@ -167,10 +167,10 @@ describe('makeEntryHandlers', () => {
       setEntries: entries.setter,
     });
 
-    await handlers.add({ task: 'promoted' } as never);
+    await handlers.add({ task: 'updated' } as never);
 
     expect(entries.get()).toEqual([
-      expect.objectContaining({ id: 'e-ph', task: 'promoted', createdAt: 200 }),
+      expect.objectContaining({ id: 'e-ph', task: 'updated', createdAt: 200 }),
       { id: 'e-other', createdAt: 40, task: 'other' },
     ]);
   });
@@ -290,7 +290,7 @@ describe('makeEntryHandlers', () => {
     }
   });
 
-  test('addBulk replaces an existing entry id when create promotes a placeholder', async () => {
+  test('addBulk replaces an existing local entry when create returns the same id', async () => {
     apiMocks.entriesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({
         id: 'e-ph',
@@ -309,17 +309,17 @@ describe('makeEntryHandlers', () => {
       setEntries: entries.setter,
     });
 
-    await handlers.addBulk([{ task: 'promoted' } as never]);
+    await handlers.addBulk([{ task: 'updated' } as never]);
 
     expect(entries.get()).toEqual([
-      expect.objectContaining({ id: 'e-ph', task: 'promoted', createdAt: 200 }),
+      expect.objectContaining({ id: 'e-ph', task: 'updated', createdAt: 200 }),
       { id: 'e-other', createdAt: 40, task: 'other' },
     ]);
   });
 
-  test('addBulk does not console.error expected 409 conflicts', async () => {
+  test('addBulk console.errors create failures even when silent', async () => {
     apiMocks.entriesCreate.mockImplementation(() =>
-      Promise.reject(new ApiErrorStub('A time entry already exists', 409)),
+      Promise.reject(new ApiErrorStub('create failed', 500)),
     );
     const handlers = makeEntryHandlers({
       currentUser: { id: 'u' } as never,
@@ -333,7 +333,7 @@ describe('makeEntryHandlers', () => {
     try {
       const result = await handlers.addBulk([{ task: 'a' } as never], { silent: true });
       expect(result.failed).toHaveLength(1);
-      expect(errorSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalled();
     } finally {
       console.error = originalError;
     }

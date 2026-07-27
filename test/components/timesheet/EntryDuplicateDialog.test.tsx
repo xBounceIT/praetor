@@ -56,7 +56,6 @@ describe('<EntryDuplicateDialog />', () => {
     const submit = screen.getByRole('button', { name: 'entry.duplicate' });
     expect(submit).toBeDisabled();
 
-    // Source day is disabled; other days remain selectable even when already logged.
     expect(screen.getByText('11').closest('button')).toBeDisabled();
 
     fireEvent.click(screen.getByText('12'));
@@ -73,23 +72,7 @@ describe('<EntryDuplicateDialog />', () => {
     });
   });
 
-  test('shows a skip warning when a selected day already has the same project/task', () => {
-    render(
-      <EntryDuplicateDialog
-        entry={sampleEntry}
-        onClose={mock(() => {})}
-        onDuplicate={mock(async () => {})}
-        existingConflictDates={['2024-03-12']}
-      />,
-    );
-
-    expect(screen.queryByText(/entry\.duplicateSkipWarning/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('12'));
-    expect(screen.getByText(/entry\.duplicateSkipWarning/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'entry.duplicate' })).toBeDisabled();
-  });
-
-  test('keeps submit enabled for mixed selection and still submits all selected dates', async () => {
+  test('warns about same-task days but still allows duplicate', async () => {
     const onDuplicate = mock(async (_dates: string[]) => {});
 
     render(
@@ -101,15 +84,15 @@ describe('<EntryDuplicateDialog />', () => {
       />,
     );
 
+    expect(screen.queryByText(/entry\.duplicateSameTaskWarning/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('12'));
-    fireEvent.click(screen.getByText('15'));
-    expect(screen.getByText(/entry\.duplicateSkipWarning/)).toBeInTheDocument();
+    expect(screen.getByText(/entry\.duplicateSameTaskWarning/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /entry\.duplicateToDays/ })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: /entry\.duplicateToDays/ }));
 
     await waitFor(() => {
-      expect(onDuplicate).toHaveBeenCalledWith(['2024-03-12', '2024-03-15']);
+      expect(onDuplicate).toHaveBeenCalledWith(['2024-03-12']);
     });
   });
 

@@ -341,40 +341,6 @@ export const createTimeEntry = async (
   const created = await withSerializableWriteTransaction(async (tx) => {
     await usersRepo.lockById(targetUserId, tx);
     const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(targetUserId, date, tx);
-    const existing = await entriesRepo.findForEntryKey(
-      { userId: targetUserId, date, projectId, task },
-      tx,
-    );
-    if (existing) {
-      // Recurring stubs reserve the uniqueness key; promote them into a real entry
-      // instead of forcing the client to delete the placeholder first.
-      if (!existing.isPlaceholder) {
-        fail(409, 'A time entry already exists for this date, project, and task');
-      }
-      const promoted = await entriesRepo.update(
-        existing.id,
-        {
-          version: existing.version,
-          clientId,
-          clientName,
-          projectId,
-          projectName,
-          task,
-          taskId: resolvedTaskId,
-          notes,
-          duration: resolvedDuration,
-          hourlyCost,
-          isPlaceholder: parsedIsPlaceholder ?? false,
-          location,
-        },
-        tx,
-      );
-      if (promoted === null) {
-        return fail(409, 'Entry has changed since it was loaded; reload and retry');
-      }
-      return promoted;
-    }
-
     return entriesRepo.create(
       {
         id: generatePrefixedId('te'),
@@ -536,9 +502,6 @@ export const updateTimeEntry = async (
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
-  const entryKeyChanging =
-    dateChanging || (catalogChanging && (projectId !== context.projectId || task !== context.task));
-
   const applyUpdate = (hourlyCost?: number, exec?: DbExecutor) => {
     const update = {
       version,
@@ -558,26 +521,14 @@ export const updateTimeEntry = async (
     return exec ? entriesRepo.update(entryId, update, exec) : entriesRepo.update(entryId, update);
   };
 
-  const updated = entryKeyChanging
+  const updated = dateChanging
     ? await withSerializableWriteTransaction(async (tx) => {
         await usersRepo.lockById(context.userId, tx);
-        const duplicateExists = await entriesRepo.existsForEntryKey(
-          {
-            userId: context.userId,
-            date: date ?? context.date,
-            projectId: projectId ?? context.projectId,
-            task: task ?? context.task,
-            excludeId: entryId,
-          },
+        const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(
+          context.userId,
+          date as string,
           tx,
         );
-        if (duplicateExists) {
-          fail(409, 'A time entry already exists for this date, project, and task');
-        }
-
-        const hourlyCost = dateChanging
-          ? await userHourlyCostPeriodsRepo.findCostForDate(context.userId, date as string, tx)
-          : undefined;
         return applyUpdate(hourlyCost, tx);
       })
     : await applyUpdate();

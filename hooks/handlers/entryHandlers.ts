@@ -11,12 +11,6 @@ export type AddBulkResult = {
   failed: unknown[];
 };
 
-const isConflictStatus = (err: unknown): boolean =>
-  typeof err === 'object' &&
-  err !== null &&
-  'status' in err &&
-  (err as { status: unknown }).status === 409;
-
 const upsertEntriesById = (prev: TimeEntry[], next: TimeEntry[]): TimeEntry[] => {
   const byId = new Map(prev.map((entry) => [entry.id, entry]));
   for (const entry of next) {
@@ -49,7 +43,6 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
         ...newEntry,
         userId: targetUserId,
       });
-      // Create may promote a placeholder in place; replace by id instead of always prepending.
       setEntries((prev) => upsertEntriesById(prev, [entry]));
     } catch (err) {
       console.error('Failed to add entry:', err);
@@ -77,16 +70,11 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
         created.push(createdEntry);
       } catch (err) {
         failures.push(err);
-        // 409 is an expected uniqueness conflict (same user/date/project/task).
-        if (!isConflictStatus(err)) {
-          console.error('Failed to add bulk entry:', err);
-        }
+        console.error('Failed to add bulk entry:', err);
       }
     }
 
     if (created.length > 0) {
-      // Create may promote a placeholder in place; merge by id so the local list
-      // does not keep a stale stub alongside the returned row.
       setEntries((prev) => upsertEntriesById(prev, created));
     }
 
