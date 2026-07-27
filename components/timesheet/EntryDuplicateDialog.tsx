@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Field, FieldLabel } from '@/components/ui/field';
 import type { TimeEntry } from '../../types';
 import { formatDateOnlyForLocale } from '../../utils/date';
 import { formatDecimal } from '../../utils/numbers';
@@ -35,18 +36,26 @@ const EntryDuplicateDialog: React.FC<EntryDuplicateDialogProps> = ({
   existingConflictDates = [],
   startOfWeek = 'Monday',
   treatSaturdayAsHoliday = false,
-}) =>
-  entry ? (
-    <EntryDuplicateDialogContent
-      key={entry.id}
-      entry={entry}
-      onClose={onClose}
-      onDuplicate={onDuplicate}
-      existingConflictDates={existingConflictDates}
-      startOfWeek={startOfWeek}
-      treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-    />
-  ) : null;
+}) => (
+  <Dialog
+    open={entry !== null}
+    onOpenChange={(open) => {
+      if (!open) onClose();
+    }}
+  >
+    {entry ? (
+      <EntryDuplicateDialogContent
+        key={entry.id}
+        entry={entry}
+        onClose={onClose}
+        onDuplicate={onDuplicate}
+        existingConflictDates={existingConflictDates}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
+      />
+    ) : null}
+  </Dialog>
+);
 
 type ContentProps = {
   entry: TimeEntry;
@@ -99,26 +108,37 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
       : t('entry.duplicate');
 
   return (
-    <Dialog
-      open
-      onOpenChange={(next) => {
-        if (!next && !isSubmitting) onClose();
+    <DialogContent
+      className="sm:max-w-md"
+      showCloseButton={!isSubmitting}
+      onEscapeKeyDown={(event) => {
+        if (isSubmitting) event.preventDefault();
+      }}
+      onInteractOutside={(event) => {
+        if (isSubmitting) event.preventDefault();
       }}
     >
-      <DialogContent className="sm:max-w-md gap-5" showCloseButton={!isSubmitting}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Copy className="size-4 text-praetor" aria-hidden="true" />
-            {t('entry.duplicateEntry')}
-          </DialogTitle>
-          <DialogDescription>{t('entry.selectTargetDates')}</DialogDescription>
-        </DialogHeader>
+      <DialogHeader>
+        <div className="flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
+            <Copy className="size-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 space-y-1">
+            <DialogTitle>{t('entry.duplicateEntry')}</DialogTitle>
+            <DialogDescription>{t('entry.selectTargetDates')}</DialogDescription>
+          </div>
+        </div>
+      </DialogHeader>
 
-        <p className="text-sm text-muted-foreground truncate" title={summary}>
+      <div className="space-y-4">
+        <div
+          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground truncate"
+          title={summary}
+        >
           {summary}
-        </p>
+        </div>
 
-        <div className="rounded-lg border border-border bg-muted/30 p-2">
+        <div className="rounded-md border border-border p-2">
           <Calendar
             selectionMode="multiple"
             selectedDates={selectedDates}
@@ -133,20 +153,14 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
           />
         </div>
 
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {t('entry.selectedDays')}
-          </p>
+        <Field>
+          <FieldLabel>{t('entry.selectedDays')}</FieldLabel>
           {targetDates.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('entry.selectTargetDates')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {targetDates.map((date) => (
-                <Badge
-                  key={date}
-                  variant="secondary"
-                  className="gap-1 pr-1 animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none"
-                >
+                <Badge key={date} variant="secondary" className="gap-1 pr-1">
                   <span>
                     {formatDateOnlyForLocale(date, i18n.language, {
                       day: '2-digit',
@@ -166,24 +180,24 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
               ))}
             </div>
           )}
-        </div>
+        </Field>
+      </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-            {t('entry.cancel')}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              void handleSubmit();
-            }}
-            disabled={targetDates.length === 0 || isSubmitting}
-          >
-            {ctaLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+          {t('entry.cancel')}
+        </Button>
+        <Button
+          type="button"
+          onClick={() => {
+            void handleSubmit();
+          }}
+          disabled={targetDates.length === 0 || isSubmitting}
+        >
+          {ctaLabel}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   );
 };
 
