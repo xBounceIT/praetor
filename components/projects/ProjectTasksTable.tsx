@@ -44,34 +44,6 @@ const ProjectTaskEmptyState: React.FC<{ label: string }> = ({ label }) => (
   <span className="text-xs italic text-muted-foreground">{label}</span>
 );
 
-const ProjectTaskActionButton: React.FC<{
-  label: string;
-  iconClassName: string;
-  onClick: () => void;
-  className?: string;
-}> = ({ label, iconClassName, onClick, className }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <span className="inline-flex">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick();
-          }}
-          aria-label={label}
-          className={className}
-        >
-          <i className={`fa-solid ${iconClassName} text-xs`}></i>
-        </Button>
-      </span>
-    </TooltipTrigger>
-    <TooltipContent>{label}</TooltipContent>
-  </Tooltip>
-);
-
 const ProjectTaskAddButton: React.FC<{
   label: string;
   onAddTask: () => void | Promise<void>;
@@ -314,23 +286,53 @@ const useProjectTaskColumns = ({
         align: 'right',
         cell: ({ row }) => {
           if (!canManageAssignments && !canDelete) return null;
+          // Keep Tooltip + Button inline (not a custom wrapper): StandardTable's
+          // collapsed … menu introspects TooltipContent / aria-label / icon children.
           return (
             <div className="flex items-center justify-end gap-1">
               {canManageAssignments && (
-                <ProjectTaskActionButton
-                  label={t('tasks.manageMembers')}
-                  iconClassName="fa-users"
-                  onClick={() => onManageMembers(row)}
-                  className="text-muted-foreground hover:text-foreground"
-                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onManageMembers(row);
+                        }}
+                        aria-label={t('tasks.manageMembers')}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <i className="fa-solid fa-users text-xs"></i>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('tasks.manageMembers')}</TooltipContent>
+                </Tooltip>
               )}
               {canDelete && (
-                <ProjectTaskActionButton
-                  label={t('common:buttons.delete')}
-                  iconClassName="fa-trash-can"
-                  onClick={() => onRequestDeleteTask(row)}
-                  className="text-muted-foreground hover:text-destructive"
-                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRequestDeleteTask(row);
+                        }}
+                        aria-label={t('common:buttons.delete')}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <i className="fa-solid fa-trash-can text-xs"></i>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+                </Tooltip>
               )}
             </div>
           );

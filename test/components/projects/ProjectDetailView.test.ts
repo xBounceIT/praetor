@@ -245,10 +245,13 @@ describe('ProjectDetailView wiring', () => {
 
     expect(tableSource).toContain('canManageAssignments: boolean');
     expect(tableSource).toContain('onManageMembers: (task: ProjectTask) => void');
+    // StandardTable's collapsed … menu needs Tooltip + aria-label on the button itself
+    // (not a custom wrapper) so icon/label text are visible in the overflow menu.
     expect(tableSource).toMatch(
-      /\{canManageAssignments && \(\s*<ProjectTaskActionButton[\s\S]*?onClick=\{\(\) => onManageMembers\(row\)\}/,
+      /\{canManageAssignments && \(\s*<Tooltip>[\s\S]*?onManageMembers\(row\)[\s\S]*?aria-label=\{t\('tasks\.manageMembers'\)\}/,
     );
-    expect(tableSource).toContain("label={t('tasks.manageMembers')}");
+    expect(tableSource).toContain("<TooltipContent>{t('tasks.manageMembers')}</TooltipContent>");
+    expect(tableSource).not.toContain('ProjectTaskActionButton');
 
     expect(source).toContain('managingTaskId: string | null');
     expect(source).toMatch(
