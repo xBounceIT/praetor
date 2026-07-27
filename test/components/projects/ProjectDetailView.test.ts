@@ -250,7 +250,10 @@ describe('ProjectDetailView wiring', () => {
     expect(tableSource).toMatch(
       /\{canManageAssignments && \(\s*<Tooltip>[\s\S]*?onManageMembers\(row\)[\s\S]*?aria-label=\{t\('tasks\.manageMembers'\)\}/,
     );
-    expect(tableSource).toContain("<TooltipContent>{t('tasks.manageMembers')}</TooltipContent>");
+    // Use a regex (escaped parens) so i18n:check does not treat this as a t() usage.
+    expect(tableSource).toMatch(
+      /<TooltipContent>\{t\('tasks\.manageMembers'\)\}<\/TooltipContent>/,
+    );
     expect(tableSource).not.toContain('ProjectTaskActionButton');
 
     expect(source).toContain('managingTaskId: string | null');
