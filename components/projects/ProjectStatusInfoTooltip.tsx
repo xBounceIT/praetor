@@ -3,7 +3,7 @@ import type React from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { PROJECT_STATUSES } from '../../types';
-import { getProjectStatusIcon } from './projectStatusUi';
+import { getProjectStatusIcon, PROJECT_STATUS_ICON_CLASS_NAME } from './projectStatusUi';
 
 export const ProjectStatusInfoTooltip: React.FC<{ t: (key: string) => string }> = ({ t }) => (
   <Tooltip>
@@ -20,7 +20,7 @@ export const ProjectStatusInfoTooltip: React.FC<{ t: (key: string) => string }> 
       <div className="space-y-1">
         {PROJECT_STATUSES.map((status) => (
           <p key={status} className="flex items-start gap-2">
-            {getProjectStatusIcon(status, 'mt-0.5 size-3.5 shrink-0')}
+            {getProjectStatusIcon(status, `mt-0.5 ${PROJECT_STATUS_ICON_CLASS_NAME}`)}
             <span>
               <span className="font-semibold">
                 {t(`projects:projects.statusValues.${status}`)}:

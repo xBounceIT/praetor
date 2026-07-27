@@ -1,6 +1,9 @@
 import type { Client, Project, ProjectTask } from '../types';
-import { isDateOnlyBeforeToday } from './date';
 import { hasPermission } from './permissions';
+import {
+  isProjectExpiredForTimeEntries,
+  isProjectStatusBlockingTimeEntries as isProjectStatusBlocked,
+} from './projectStatus';
 
 export type TrackerCatalogState = {
   userId: string;
@@ -16,11 +19,10 @@ export type TrackerCatalogs = {
 
 export const EXPIRED_PROJECT_TIME_ENTRY_PERMISSION = 'timesheets.expired_projects.create';
 
-export const isProjectExpiredForTimeEntries = (project: Pick<Project, 'endDate'>): boolean =>
-  !!project.endDate && isDateOnlyBeforeToday(project.endDate);
+export { isProjectExpiredForTimeEntries };
 
 export const isProjectStatusBlockedForTimeEntries = (project: Pick<Project, 'status'>): boolean =>
-  project.status === 'in_pausa' || project.status === 'terminato';
+  isProjectStatusBlocked(project.status);
 
 export const filterTrackerEntrySelectableCatalogs = ({
   clients,

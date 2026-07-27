@@ -63,6 +63,7 @@ import { formatInsertDate } from '../../utils/date';
 import { formatDocumentCode } from '../../utils/document-code';
 import { formatNumber } from '../../utils/numbers';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
+import { isProjectEndDateRequired } from '../../utils/projectStatus';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
@@ -1044,17 +1045,24 @@ const useProjectDetailController = ({
     if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
     if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
     // Existing commercial projects keep the legacy-compatible rule: a missing stored date does
-    // not block unrelated edits. Internal projects may always clear dates, while converting one
-    // back to a commercial type requires a complete planning window in the same save.
+    // not block unrelated edits. Internal and perpetuo projects may clear endDate; converting
+    // from internal or leaving perpetuo requires a complete commercial planning window.
     const isConvertingInternalToCommercial = project.tipo === 'interno' && !isInternalProject;
+    const baselineStatus = project.status ?? LEGACY_PROJECT_STATUS;
+    const isLeavingPerpetuo = baselineStatus === 'perpetuo' && status !== 'perpetuo';
     if (
       !isInternalProject &&
-      (project.startDate || isConvertingInternalToCommercial) &&
+      (project.startDate || isConvertingInternalToCommercial || isLeavingPerpetuo) &&
       !startDate
     ) {
       newErrors.startDate = t('projects:projects.startDateRequired');
     }
-    if (!isInternalProject && (project.endDate || isConvertingInternalToCommercial) && !endDate) {
+    // Conversion always needs an end date (server enforces it), even when status is perpetuo.
+    const endDateRequiredForSave =
+      isConvertingInternalToCommercial ||
+      (isProjectEndDateRequired({ tipo, status }) &&
+        (Boolean(project.endDate) || isLeavingPerpetuo));
+    if (endDateRequiredForSave && !endDate) {
       newErrors.endDate = t('projects:projects.endDateRequired');
     }
     if (startDate && endDate && startDate > endDate) {
@@ -1663,9 +1671,13 @@ const ProjectDetailStartDateField: React.FC<{ controller: ProjectDetailControlle
     errors,
     setErrors,
     isInternalProject,
+    status,
   } = controller;
+  const isLeavingPerpetuo =
+    (project.status ?? LEGACY_PROJECT_STATUS) === 'perpetuo' && status !== 'perpetuo';
   const isRequired =
-    !isInternalProject && (Boolean(project.startDate) || project.tipo === 'interno');
+    !isInternalProject &&
+    (Boolean(project.startDate) || project.tipo === 'interno' || isLeavingPerpetuo);
 
   return (
     <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
@@ -1693,17 +1705,16 @@ const ProjectDetailStartDateField: React.FC<{ controller: ProjectDetailControlle
 const ProjectDetailEndDateField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const {
-    t,
-    project,
-    endDate,
-    setEndDate,
-    canUpdateProjects,
-    errors,
-    setErrors,
-    isInternalProject,
-  } = controller;
-  const isRequired = !isInternalProject && (Boolean(project.endDate) || project.tipo === 'interno');
+  const { t, project, endDate, setEndDate, canUpdateProjects, errors, setErrors, status, tipo } =
+    controller;
+  const isLeavingPerpetuo =
+    (project.status ?? LEGACY_PROJECT_STATUS) === 'perpetuo' && status !== 'perpetuo';
+  const isConvertingInternalToCommercial =
+    project.tipo === 'interno' && Boolean(tipo) && tipo !== 'interno';
+  const isRequired =
+    isConvertingInternalToCommercial ||
+    (isProjectEndDateRequired({ tipo, status }) &&
+      (Boolean(project.endDate) || project.tipo === 'interno' || isLeavingPerpetuo));
 
   return (
     <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>

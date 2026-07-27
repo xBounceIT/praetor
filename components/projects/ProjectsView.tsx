@@ -40,6 +40,7 @@ import { formatDateOnlyForLocale, formatInsertDate } from '../../utils/date';
 import { formatDocumentCode } from '../../utils/document-code';
 import { formatNumber } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
+import { isProjectEndDateRequired, isProjectStartDateRequired } from '../../utils/projectStatus';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import FieldTooltip from '../shared/FieldTooltip';
@@ -511,10 +512,10 @@ const useProjectsController = ({
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
     if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
-    if (!isInternalProject && !startDate) {
+    if (isProjectStartDateRequired({ tipo }) && !startDate) {
       newErrors.startDate = t('projects:projects.startDateRequired');
     }
-    if (!isInternalProject && !endDate) {
+    if (isProjectEndDateRequired({ tipo, status }) && !endDate) {
       newErrors.endDate = t('projects:projects.endDateRequired');
     }
     if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired');
@@ -1433,15 +1434,18 @@ const ProjectDateField: React.FC<{
   const value = isStart ? controller.startDate : controller.endDate;
   const errorKey = isStart ? 'startDate' : 'endDate';
   const actionType = isStart ? 'setStartDate' : 'setEndDate';
+  const isRequired = isStart
+    ? isProjectStartDateRequired({ tipo: controller.tipo || null })
+    : isProjectEndDateRequired({ tipo: controller.tipo, status: controller.status });
 
   return (
     <Field data-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}>
       <FieldLabel htmlFor={id}>
-        {label} {!controller.isInternalProject && <RequiredMark />}
+        {label} {isRequired && <RequiredMark />}
       </FieldLabel>
       <DateField
         id={id}
-        required={!controller.isInternalProject}
+        required={isRequired}
         value={value}
         aria-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}
         onChange={(nextValue) => {

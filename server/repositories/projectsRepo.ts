@@ -486,12 +486,20 @@ export const update = async (
 export const findDateRangeById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ startDate: string | null; endDate: string | null } | null> => {
+): Promise<{
+  startDate: string | null;
+  endDate: string | null;
+  status: ProjectStatus;
+} | null> => {
   const rows = await exec
-    .select({ startDate: projects.startDate, endDate: projects.endDate })
+    .select({
+      startDate: projects.startDate,
+      endDate: projects.endDate,
+      status: projects.status,
+    })
     .from(projects)
     .where(eq(projects.id, id));
-  return rows[0] ?? null;
+  return rows[0] ? { ...rows[0], status: rows[0].status ?? DEFAULT_PROJECT_STATUS } : null;
 };
 
 export const findClientLinksById = async (

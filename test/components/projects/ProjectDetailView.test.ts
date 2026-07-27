@@ -120,12 +120,14 @@ describe('ProjectDetailView wiring', () => {
   test('date validation stays legacy-compatible and allows open-ended internal projects', async () => {
     const source = await readSource();
     expect(source).toContain("project.tipo === 'interno' && !isInternalProject");
+    expect(source).toContain('isLeavingPerpetuo');
+    expect(source).toContain('isProjectEndDateRequired({ tipo, status })');
+    expect(source).toContain('endDateRequiredForSave');
+    expect(source).toContain('isConvertingInternalToCommercial ||');
     expect(source).toMatch(
-      /if \(\s*!isInternalProject &&\s*\(project\.startDate \|\| isConvertingInternalToCommercial\) &&\s*!startDate\s*\)/,
+      /if \(\s*!isInternalProject &&\s*\(project\.startDate \|\| isConvertingInternalToCommercial \|\| isLeavingPerpetuo\) &&\s*!startDate\s*\)/,
     );
-    expect(source).toMatch(
-      /if \(\s*!isInternalProject &&\s*\(project\.endDate \|\| isConvertingInternalToCommercial\) &&\s*!endDate\s*\)/,
-    );
+    expect(source).toContain('if (endDateRequiredForSave && !endDate)');
     expect(source).toContain('{isRequired && <RequiredMark />}');
     expect(source).toContain('required={isRequired}');
     expect(source).toContain('<FieldLabel htmlFor="detail-name" required>');

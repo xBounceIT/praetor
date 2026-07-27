@@ -76,6 +76,21 @@ describe('<SelectControl />', () => {
     ).not.toBeNull();
   });
 
+  test('plain select renders displayValue when no option matches the value', () => {
+    render(
+      <SelectControl
+        options={options}
+        value=""
+        onChange={() => {}}
+        displayValue="Custom range"
+        placeholder="Pick something"
+      />,
+    );
+
+    expect(screen.getByText('Custom range')).toBeInTheDocument();
+    expect(screen.queryByText('Pick something')).toBeNull();
+  });
+
   test('plain select content renders above the shared modal layer', () => {
     render(<SelectControl options={options} value="b" onChange={() => {}} />);
 

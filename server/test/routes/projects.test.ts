@@ -1310,6 +1310,27 @@ describe('POST /api/projects', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('201: commercial perpetuo create allows missing endDate', async () => {
+    createMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      status: 'perpetuo',
+      endDate: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, status: 'perpetuo', endDate: undefined },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'perpetuo', endDate: null }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400: startDate after endDate', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -2247,6 +2268,11 @@ describe('PUT /api/projects/:id', () => {
 
   test('200: forwards status to the repo on update', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
+    findDateRangeByIdMock.mockResolvedValue({
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      status: 'in_corso',
+    });
     updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, status: 'terminato' });
 
     const res = await testApp.inject({
@@ -2264,6 +2290,64 @@ describe('PUT /api/projects/:id', () => {
     );
     expect(JSON.parse(res.body)).toMatchObject({ status: 'terminato' });
   });
+
+  test('400: leaving perpetuo without endDate on a commercial project is rejected', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findClientLinksByIdMock.mockResolvedValue({
+      orderId: 'ord-1',
+      offerId: null,
+      tipo: 'attivo',
+    });
+    findDateRangeByIdMock.mockResolvedValue({
+      startDate: '2026-01-01',
+      endDate: null,
+      status: 'perpetuo',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { status: 'in_corso' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error:
+        'startDate and endDate are required when leaving perpetuo status on a commercial project',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200: leaving perpetuo succeeds when endDate is already set', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findClientLinksByIdMock.mockResolvedValue({
+      orderId: 'ord-1',
+      offerId: null,
+      tipo: 'attivo',
+    });
+    findDateRangeByIdMock.mockResolvedValue({
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      status: 'perpetuo',
+    });
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, status: 'in_corso' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { status: 'in_corso' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ status: 'in_corso' }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400: invalid tipo on update is rejected', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
 

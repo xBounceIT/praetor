@@ -65,6 +65,13 @@ const terminatedProject: Project = {
   status: 'terminato',
 };
 
+const perpetualProject: Project = {
+  id: 'project-perpetual',
+  name: 'Perpetual Project',
+  clientId: 'client-a',
+  status: 'perpetuo',
+};
+
 const pausedProjectTask: ProjectTask = {
   id: 'task-paused',
   name: 'Paused Task',
@@ -75,6 +82,12 @@ const terminatedProjectTask: ProjectTask = {
   id: 'task-terminated',
   name: 'Terminated Task',
   projectId: 'project-terminated',
+};
+
+const perpetualProjectTask: ProjectTask = {
+  id: 'task-perpetual',
+  name: 'Perpetual Task',
+  projectId: 'project-perpetual',
 };
 const loadingState: TrackerCatalogState = {
   userId: 'user-b',
@@ -184,11 +197,15 @@ describe('filterTrackerEntrySelectableCatalogs', () => {
     expect(isProjectExpiredForTimeEntries({ endDate: '2000-01-01' })).toBe(true);
     expect(isProjectExpiredForTimeEntries({ endDate: '2999-01-01' })).toBe(false);
     expect(isProjectExpiredForTimeEntries({ endDate: null })).toBe(false);
+    expect(isProjectExpiredForTimeEntries({ endDate: '2000-01-01', status: 'perpetuo' })).toBe(
+      false,
+    );
   });
 
   test('detects project status blocks for time entries', () => {
     expect(isProjectStatusBlockedForTimeEntries(pausedProject)).toBe(true);
     expect(isProjectStatusBlockedForTimeEntries(terminatedProject)).toBe(true);
+    expect(isProjectStatusBlockedForTimeEntries(perpetualProject)).toBe(false);
     expect(isProjectStatusBlockedForTimeEntries(projects[0])).toBe(false);
   });
   test('removes expired projects and their tasks without the override permission', () => {
@@ -217,6 +234,42 @@ describe('filterTrackerEntrySelectableCatalogs', () => {
     expect(result.projectTasks.map((task) => task.id)).toContain('task-expired');
     expect(result.projectTasks.map((task) => task.id)).not.toContain('task-paused');
     expect(result.projectTasks.map((task) => task.id)).not.toContain('task-terminated');
+  });
+  test('keeps perpetual projects selectable for time entries', () => {
+    const result = filterTrackerEntrySelectableCatalogs({
+      clients,
+      projects: [...projects, perpetualProject, pausedProject],
+      projectTasks: [...projectTasks, perpetualProjectTask, pausedProjectTask],
+      permissions: [],
+    });
+
+    expect(result.projects.map((project) => project.id)).toContain('project-perpetual');
+    expect(result.projects.map((project) => project.id)).not.toContain('project-paused');
+    expect(result.projectTasks.map((task) => task.id)).toContain('task-perpetual');
+    expect(result.projectTasks.map((task) => task.id)).not.toContain('task-paused');
+  });
+  test('keeps expired perpetual projects selectable without the override permission', () => {
+    const expiredPerpetualProject: Project = {
+      ...perpetualProject,
+      id: 'project-expired-perpetual',
+      endDate: '2000-01-01',
+      status: 'perpetuo',
+    };
+    const expiredPerpetualTask: ProjectTask = {
+      id: 'task-expired-perpetual',
+      name: 'Expired Perpetual Task',
+      projectId: 'project-expired-perpetual',
+    };
+    const result = filterTrackerEntrySelectableCatalogs({
+      clients,
+      projects: [...projects, expiredProject, expiredPerpetualProject],
+      projectTasks: [...projectTasks, expiredProjectTask, expiredPerpetualTask],
+      permissions: [],
+    });
+
+    expect(result.projects.map((project) => project.id)).toContain('project-expired-perpetual');
+    expect(result.projects.map((project) => project.id)).not.toContain('project-expired');
+    expect(result.projectTasks.map((task) => task.id)).toContain('task-expired-perpetual');
   });
   test('keeps expired projects with the override permission', () => {
     const result = filterTrackerEntrySelectableCatalogs({

@@ -1,6 +1,6 @@
 import { CheckIcon, ChevronsUpDownIcon, XIcon } from 'lucide-react';
 import type React from 'react';
-import { useMemo, useReducer, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 export interface Option {
@@ -115,6 +115,10 @@ const getMultiButtonLabel = ({
   return `${selectedOptions.length} ${t('select.selected').toLowerCase()}`;
 };
 
+/** Clone option icons so trigger and list never fight over one React element (Radix portals ItemText). */
+const renderOptionIcon = (icon?: React.ReactNode) =>
+  isValidElement(icon) ? cloneElement(icon) : icon;
+
 const SelectLabel = ({
   id,
   label,
@@ -162,23 +166,25 @@ const TriggerLabel = ({
   const tooltipLabel = label.trim() === '' ? null : label;
 
   return (
-    <Tooltip disabled={!tooltipLabel}>
-      <TooltipTrigger asChild>
-        <span className="inline-flex min-w-0 flex-1 items-center gap-2">
-          {icon}
-          <span
-            className={cn(
-              'w-full truncate',
-              isPlaceholder ? 'text-muted-foreground' : 'font-semibold text-foreground',
-              valueClassName,
-            )}
-          >
-            {label}
+    <TooltipProvider>
+      <Tooltip disabled={!tooltipLabel}>
+        <TooltipTrigger asChild>
+          <span className="inline-flex min-w-0 flex-1 items-center gap-2">
+            {icon}
+            <span
+              className={cn(
+                'w-full truncate',
+                isPlaceholder ? 'text-muted-foreground' : 'font-semibold text-foreground',
+                valueClassName,
+              )}
+            >
+              {label}
+            </span>
           </span>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{tooltipLabel}</TooltipContent>
-    </Tooltip>
+        </TooltipTrigger>
+        <TooltipContent>{tooltipLabel}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 
@@ -253,13 +259,22 @@ const PlainSelectControl = ({
         <SelectTrigger id={id} className={cn(baseTriggerClassName, buttonClassName)}>
           {displayValue ? (
             <TriggerLabel
-              icon={selectedOption?.icon}
+              icon={renderOptionIcon(selectedOption?.icon)}
               isPlaceholder={!hasSelection}
               label={labelText}
               valueClassName={valueClassName}
             />
           ) : (
-            <SelectValue placeholder={placeholder || t('select.placeholder')} />
+            <SelectValue placeholder={placeholder || t('select.placeholder')}>
+              {selectedOption ? (
+                <TriggerLabel
+                  icon={renderOptionIcon(selectedOption.icon)}
+                  isPlaceholder={false}
+                  label={labelText}
+                  valueClassName={valueClassName}
+                />
+              ) : null}
+            </SelectValue>
           )}
         </SelectTrigger>
         <SelectContent>
@@ -271,7 +286,7 @@ const PlainSelectControl = ({
                 disabled={option.disabled}
               >
                 <span className="flex items-center gap-2 min-w-0 flex-1">
-                  {option.icon}
+                  {renderOptionIcon(option.icon)}
                   <span className="truncate">{option.name}</span>
                   {option.badge && (
                     <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase leading-none">
@@ -441,7 +456,7 @@ const SearchableSelectControl = ({
               </span>
             ) : (
               <TriggerLabel
-                icon={selectedOption?.icon}
+                icon={renderOptionIcon(selectedOption?.icon)}
                 isPlaceholder={isPlaceholder}
                 label={buttonLabel}
                 valueClassName={valueClassName}
@@ -497,7 +512,7 @@ const SearchableSelectControl = ({
                       onSelect={() => handleSelect(option)}
                     >
                       <span className="flex items-center gap-2 min-w-0 flex-1">
-                        {option.icon}
+                        {renderOptionIcon(option.icon)}
                         <span className="truncate">{option.name}</span>
                         {option.badge && (
                           <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase leading-none">
