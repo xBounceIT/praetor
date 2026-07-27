@@ -173,9 +173,11 @@ restoring any archived rows whose key no longer conflicts.
 
 Deploy migration `0130_allow_duplicate_time_entry_keys.sql` with the application image that
 always appends on create/duplicate. It drops `idx_time_entries_entry_key_unique` and replaces
-it with a non-unique `(user_id, date, project_id, task)` lookup index. Multiple rows with the
-same key are allowed; `POST /api/entries` always inserts, and tracker duplicate always appends.
-Recurring generation still skips existing `(date, project, task)` tuples for idempotency.
+it with a non-unique `(user_id, date, project_id, task)` lookup index using
+`DROP/CREATE INDEX CONCURRENTLY` so `migrationsRunner.ts` runs those statements in autocommit
+and does not block tracker writes for the full index build. Multiple rows with the same key are
+allowed; `POST /api/entries` always inserts, and tracker duplicate always appends. Recurring
+generation still skips existing `(date, project, task)` tuples for idempotency.
 `PUT /api/entries/:id` returns `409` only for stale optimistic-lock versions. Run `db:migrate`,
 `db:ready`, and `db:check` after deploy. Older images that still expect uniqueness must not run
 against a database that has already applied 0130.
