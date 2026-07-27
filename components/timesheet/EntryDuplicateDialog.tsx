@@ -17,6 +17,7 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import type { TimeEntry } from '../../types';
 import { formatDateOnlyForLocale } from '../../utils/date';
 import { formatDecimal } from '../../utils/numbers';
+import { filterDuplicateTargetDates } from '../../utils/timeEntryDuplicate';
 import Calendar from '../shared/Calendar';
 
 export interface EntryDuplicateDialogProps {
@@ -84,14 +85,12 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
     [entry.clientName, entry.projectName, entry.task, entry.duration],
   );
 
-  const conflictDateSet = useMemo(() => new Set(existingConflictDates), [existingConflictDates]);
-
-  const skipCount = useMemo(
-    () => selectedDates.filter((date) => conflictDateSet.has(date)).length,
-    [selectedDates, conflictDateSet],
+  const creatableDates = useMemo(
+    () => filterDuplicateTargetDates(selectedDates, existingConflictDates),
+    [selectedDates, existingConflictDates],
   );
-
-  const creatableCount = selectedDates.length - skipCount;
+  const creatableCount = creatableDates.length;
+  const skipCount = selectedDates.length - creatableCount;
 
   const handleRemoveDate = (date: string) => {
     setSelectedDates((prev) => prev.filter((d) => d !== date));

@@ -85,8 +85,8 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     }
 
     if (created.length > 0) {
-      // Create may promote/overwrite an existing row in place; merge by id so the
-      // local list does not keep a stale stub alongside the returned row.
+      // Create may promote a placeholder in place; merge by id so the local list
+      // does not keep a stale stub alongside the returned row.
       setEntries((prev) => upsertEntriesById(prev, created));
     }
 

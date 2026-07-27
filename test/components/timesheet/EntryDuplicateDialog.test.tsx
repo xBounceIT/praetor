@@ -89,6 +89,30 @@ describe('<EntryDuplicateDialog />', () => {
     expect(screen.getByRole('button', { name: 'entry.duplicate' })).toBeDisabled();
   });
 
+  test('keeps submit enabled for mixed selection and still submits all selected dates', async () => {
+    const onDuplicate = mock(async (_dates: string[]) => {});
+
+    render(
+      <EntryDuplicateDialog
+        entry={sampleEntry}
+        onClose={mock(() => {})}
+        onDuplicate={onDuplicate}
+        existingConflictDates={['2024-03-12']}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('12'));
+    fireEvent.click(screen.getByText('15'));
+    expect(screen.getByText(/entry\.duplicateSkipWarning/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /entry\.duplicateToDays/ })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /entry\.duplicateToDays/ }));
+
+    await waitFor(() => {
+      expect(onDuplicate).toHaveBeenCalledWith(['2024-03-12', '2024-03-15']);
+    });
+  });
+
   test('keeps the dialog open when onDuplicate rejects', async () => {
     const onDuplicate = mock(async () => {
       throw new Error('failed');
