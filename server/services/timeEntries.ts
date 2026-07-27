@@ -286,7 +286,6 @@ export const createTimeEntry = async (
     isPlaceholder?: unknown;
     userId?: unknown;
     location?: unknown;
-    overwriteExisting?: unknown;
   },
 ): Promise<TimeEntry> => {
   if (!hasTrackerPermission(actor, 'create')) fail(403, 'Insufficient permissions');
@@ -336,7 +335,6 @@ export const createTimeEntry = async (
 
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
-  const overwriteExisting = requireValid(parseBooleanField(input, 'overwriteExisting')) === true;
   const notes = parseOptionalNotes(input.notes);
   const resolvedDuration = duration ?? 0;
 
@@ -348,21 +346,12 @@ export const createTimeEntry = async (
       tx,
     );
     if (existing) {
-      // Placeholders always promote under create permission. Overwriting a real entry
-      // is an update of an existing row, so require update permission as well.
+      // Recurring stubs reserve the uniqueness key; promote them into a real entry
+      // instead of forcing the client to delete the placeholder first.
       if (!existing.isPlaceholder) {
-        if (!overwriteExisting) {
-          fail(409, 'A time entry already exists for this date, project, and task');
-        }
-        if (!hasTrackerPermission(actor, 'update')) {
-          fail(403, 'Insufficient permissions');
-        }
-        if (targetUserId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.update')) {
-          const allowed = await workUnitsRepo.isUserManagedBy(actor.id, targetUserId);
-          if (!allowed) fail(403, 'Not authorized to update this entry');
-        }
+        fail(409, 'A time entry already exists for this date, project, and task');
       }
-      const replaced = await entriesRepo.update(
+      const promoted = await entriesRepo.update(
         existing.id,
         {
           version: existing.version,
@@ -380,10 +369,10 @@ export const createTimeEntry = async (
         },
         tx,
       );
-      if (replaced === null) {
+      if (promoted === null) {
         return fail(409, 'Entry has changed since it was loaded; reload and retry');
       }
-      return replaced;
+      return promoted;
     }
 
     return entriesRepo.create(

@@ -23,7 +23,7 @@ export interface EntryDuplicateDialogProps {
   entry: TimeEntry | null;
   onClose: () => void;
   onDuplicate: (dates: string[]) => Promise<void>;
-  /** Dates that already have the same project+task (warning only; still selectable). */
+  /** Dates that already have the same project+task (skipped on confirm; still selectable). */
   existingConflictDates?: string[];
   startOfWeek?: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday?: boolean;
@@ -86,17 +86,19 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
 
   const conflictDateSet = useMemo(() => new Set(existingConflictDates), [existingConflictDates]);
 
-  const overwriteCount = useMemo(
+  const skipCount = useMemo(
     () => selectedDates.filter((date) => conflictDateSet.has(date)).length,
     [selectedDates, conflictDateSet],
   );
+
+  const creatableCount = selectedDates.length - skipCount;
 
   const handleRemoveDate = (date: string) => {
     setSelectedDates((prev) => prev.filter((d) => d !== date));
   };
 
   const handleSubmit = async () => {
-    if (selectedDates.length === 0 || isSubmitting) return;
+    if (creatableCount === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
       await onDuplicate(selectedDates);
@@ -109,8 +111,8 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
   };
 
   const ctaLabel =
-    selectedDates.length > 0
-      ? t('entry.duplicateToDays', { count: selectedDates.length })
+    creatableCount > 0
+      ? t('entry.duplicateToDays', { count: creatableCount })
       : t('entry.duplicate');
 
   return (
@@ -155,11 +157,11 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
           />
         </div>
 
-        {overwriteCount > 0 ? (
+        {skipCount > 0 ? (
           <Alert>
             <AlertTriangle aria-hidden="true" />
             <AlertDescription>
-              {t('entry.duplicateOverwriteWarning', { count: overwriteCount })}
+              {t('entry.duplicateSkipWarning', { count: skipCount })}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -203,7 +205,7 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
           onClick={() => {
             void handleSubmit();
           }}
-          disabled={selectedDates.length === 0 || isSubmitting}
+          disabled={creatableCount === 0 || isSubmitting}
         >
           {ctaLabel}
         </Button>

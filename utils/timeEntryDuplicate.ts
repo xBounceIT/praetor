@@ -3,10 +3,7 @@ import type { TimeEntry } from '../types';
 export type TimeEntryDuplicateDraft = Omit<
   TimeEntry,
   'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
-> & {
-  /** When true, POST /entries overwrites an existing same-key entry instead of 409. */
-  overwriteExisting?: boolean;
-};
+>;
 
 /** Build create payloads that copy catalog fields onto new dates (never placeholders). */
 export const buildDuplicateTimeEntryDrafts = (
@@ -36,7 +33,6 @@ export const buildDuplicateTimeEntryDrafts = (
     duration: entry.duration,
     location: entry.location,
     isPlaceholder: false,
-    overwriteExisting: true,
   }));
 
 /** Dates that already have the same project+task key as the source entry (excluding source). */
@@ -53,4 +49,13 @@ export const collectDuplicateConflictDates = (
     }
   }
   return [...dates].sort();
+};
+
+/** Keep only dates that do not already hold the same project+task key. */
+export const filterDuplicateTargetDates = (
+  selectedDates: string[],
+  conflictDates: Iterable<string>,
+): string[] => {
+  const blocked = new Set(conflictDates);
+  return selectedDates.filter((date) => !blocked.has(date));
 };

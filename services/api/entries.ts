@@ -52,12 +52,7 @@ export type GenerateRecurringResponse = {
   range: { fromDate: string; toDate: string };
 };
 
-type CreateTimeEntryInput = Omit<
-  TimeEntry,
-  'id' | 'createdAt' | 'version' | 'hourlyCost' | 'cost'
-> & {
-  overwriteExisting?: boolean;
-};
+type CreateTimeEntryInput = Omit<TimeEntry, 'id' | 'createdAt' | 'version' | 'hourlyCost' | 'cost'>;
 type UpdateTimeEntryInput = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
 
 export const entriesApi = {

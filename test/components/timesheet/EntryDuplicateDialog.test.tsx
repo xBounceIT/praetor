@@ -73,7 +73,7 @@ describe('<EntryDuplicateDialog />', () => {
     });
   });
 
-  test('shows an overwrite warning when a selected day already has the same project/task', () => {
+  test('shows a skip warning when a selected day already has the same project/task', () => {
     render(
       <EntryDuplicateDialog
         entry={sampleEntry}
@@ -83,9 +83,10 @@ describe('<EntryDuplicateDialog />', () => {
       />,
     );
 
-    expect(screen.queryByText(/entry\.duplicateOverwriteWarning/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/entry\.duplicateSkipWarning/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('12'));
-    expect(screen.getByText(/entry\.duplicateOverwriteWarning/)).toBeInTheDocument();
+    expect(screen.getByText(/entry\.duplicateSkipWarning/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'entry.duplicate' })).toBeDisabled();
   });
 
   test('keeps the dialog open when onDuplicate rejects', async () => {

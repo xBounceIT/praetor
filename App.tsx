@@ -174,6 +174,7 @@ import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import {
   buildDuplicateTimeEntryDrafts,
   collectDuplicateConflictDates,
+  filterDuplicateTargetDates,
 } from './utils/timeEntryDuplicate';
 import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
 import { toastError, toastSuccess, toastWarning } from './utils/toast';
@@ -1061,9 +1062,13 @@ const TrackerView: React.FC<{
       if (!duplicatingEntry) {
         throw new Error('duplicate-entry-missing');
       }
-      const conflictSet = new Set(duplicateConflictDates);
-      const overwriteCount = dates.filter((date) => conflictSet.has(date)).length;
-      const drafts = buildDuplicateTimeEntryDrafts(duplicatingEntry, dates);
+      const targetDates = filterDuplicateTargetDates(dates, duplicateConflictDates);
+      const skippedCount = dates.length - targetDates.length;
+      if (targetDates.length === 0) {
+        toastError(t('entry.duplicateFailed'));
+        throw new Error('duplicate-failed');
+      }
+      const drafts = buildDuplicateTimeEntryDrafts(duplicatingEntry, targetDates);
       const result = await onAddBulkEntries(drafts, { silent: true });
       const createdCount = result.created.length;
       const failedCount = result.failed.length;
@@ -1078,16 +1083,16 @@ const TrackerView: React.FC<{
           t('entry.duplicatePartial', {
             created: createdCount,
             total,
-            failed: failedCount,
+            failed: failedCount + skippedCount,
           }),
         );
         return;
       }
-      if (overwriteCount > 0) {
+      if (skippedCount > 0) {
         toastWarning(
-          t('entry.duplicatedWithOverwrite', {
+          t('entry.duplicatedWithSkip', {
             count: createdCount,
-            overwritten: overwriteCount,
+            skipped: skippedCount,
           }),
         );
         return;

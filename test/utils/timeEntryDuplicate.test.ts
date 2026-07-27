@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildDuplicateTimeEntryDrafts,
   collectDuplicateConflictDates,
+  filterDuplicateTargetDates,
 } from '../../utils/timeEntryDuplicate';
 
 describe('timeEntryDuplicate helpers', () => {
@@ -32,7 +33,6 @@ describe('timeEntryDuplicate helpers', () => {
         duration: 2,
         location: 'remote',
         isPlaceholder: false,
-        overwriteExisting: true,
       },
       {
         date: '2024-03-13',
@@ -46,7 +46,6 @@ describe('timeEntryDuplicate helpers', () => {
         duration: 2,
         location: 'remote',
         isPlaceholder: false,
-        overwriteExisting: true,
       },
     ]);
   });
@@ -62,5 +61,14 @@ describe('timeEntryDuplicate helpers', () => {
         { id: 'te-1', date: '2024-03-11', projectId: 'p1', task: 'Task' },
       ),
     ).toEqual(['2024-03-12']);
+  });
+
+  test('filterDuplicateTargetDates drops days that already have the same key', () => {
+    expect(
+      filterDuplicateTargetDates(
+        ['2024-03-12', '2024-03-13', '2024-03-14'],
+        ['2024-03-12', '2024-03-14'],
+      ),
+    ).toEqual(['2024-03-13']);
   });
 });
