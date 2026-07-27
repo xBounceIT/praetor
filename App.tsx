@@ -820,6 +820,7 @@ const TrackerActivityTable: React.FC<{
                       type="button"
                       variant="ghost"
                       size="icon-xs"
+                      aria-label={t('entry.duplicate')}
                       onClick={(e) => {
                         e.stopPropagation();
                         onDuplicateEntry(row);
