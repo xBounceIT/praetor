@@ -134,6 +134,11 @@ const canAccessTask = makeAccessChecker(
   'projects.tasks_all.view',
 );
 
+const canAccessTaskAssignments = async (request: FastifyRequest, taskId: string) =>
+  hasPermission(request, 'projects.assignments.view') ||
+  (await canAccessTask(request, taskId)) ||
+  (await canAccessTask(request, taskId, 'projects.tasks_all.update'));
+
 const resolveTaskHoursScope = (
   request: FastifyRequest,
   actorId: string,
@@ -758,13 +763,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      // `projects.assignments.view` is the "view all assignments" marker (issue #720); without it,
-      // access stays scoped to membership / tasks_all.view so callers who can already see a task
-      // can also open its assignment dialog.
-      const canViewAssignments =
-        hasPermission(request, 'projects.assignments.view') ||
-        (await canAccessTask(request, idResult.value));
-      if (!canViewAssignments) {
+      // `projects.assignments.view` is the "view all assignments" marker (issue #720). Without it,
+      // access stays scoped to membership or an all-tasks capability (view or update).
+      if (!(await canAccessTaskAssignments(request, idResult.value))) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -801,13 +802,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      // `projects.assignments.view` is the "manages all assignments" marker (issue #720); without
-      // it, editing stays scoped to membership / tasks_all.view so callers who can already see a
-      // task and hold assignments.update can edit its members.
-      const canEditAssignments =
-        hasPermission(request, 'projects.assignments.view') ||
-        (await canAccessTask(request, idResult.value));
-      if (!canEditAssignments) {
+      // `projects.assignments.view` is the "manages all assignments" marker (issue #720). Without
+      // it, editing stays scoped to membership or an all-tasks capability (view or update).
+      if (!(await canAccessTaskAssignments(request, idResult.value))) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
