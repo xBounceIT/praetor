@@ -300,10 +300,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['entries'],
         summary: 'Create time entry',
         description:
-          'Creates one time entry. Returns 409 when the target user already has an entry ' +
-          'for the same date, project, and task. Returns 403 when the selected project is ' +
-          'in a status that blocks time entries, or when it is expired and the role lacks ' +
-          'timesheets.expired_projects.create.',
+          'Creates one time entry. If a matching placeholder already exists for the same ' +
+          'user, date, project, and task, promotes that stub instead of inserting a new row. ' +
+          'Returns 409 when a non-placeholder entry already exists for that key. Returns 403 ' +
+          'when the selected project is in a status that blocks time entries, or when it is ' +
+          'expired and the role lacks timesheets.expired_projects.create.',
         body: entryCreateBodySchema,
         response: {
           201: entrySchema,

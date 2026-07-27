@@ -576,9 +576,21 @@ describe('findExistingRecurringKeys', () => {
   });
 });
 
-describe('existsForEntryKey', () => {
-  test('checks the full user/date/project/task tuple and returns true when found', async () => {
-    exec.enqueue({ rows: [['e-1']] });
+describe('findForEntryKey / existsForEntryKey', () => {
+  test('findForEntryKey returns the matching row', async () => {
+    exec.enqueue({ rows: [entryRow()] });
+
+    const result = await entriesRepo.findForEntryKey(
+      { userId: 'u-1', date: '2026-04-30', projectId: 'p-1', task: 'Dev' },
+      testDb,
+    );
+
+    expect(result?.id).toBe('e-1');
+    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', 'p-1', 'Dev', 1]);
+  });
+
+  test('existsForEntryKey returns true when found', async () => {
+    exec.enqueue({ rows: [entryRow()] });
 
     const result = await entriesRepo.existsForEntryKey(
       { userId: 'u-1', date: '2026-04-30', projectId: 'p-1', task: 'Dev' },
@@ -586,15 +598,9 @@ describe('existsForEntryKey', () => {
     );
 
     expect(result).toBe(true);
-    expect(exec.calls[0].params).toEqual(['u-1', '2026-04-30', 'p-1', 'Dev', 1]);
-    const sql = exec.calls[0].sql;
-    expect(sql).toContain('user_id');
-    expect(sql).toContain('project_id');
-    expect(sql).toContain('task');
-    expect(sql).toContain('limit $5');
   });
 
-  test('returns false when no matching tuple exists', async () => {
+  test('existsForEntryKey returns false when no matching tuple exists', async () => {
     exec.enqueue({ rows: [] });
 
     const result = await entriesRepo.existsForEntryKey(

@@ -339,12 +339,38 @@ export const createTimeEntry = async (
   const created = await withSerializableWriteTransaction(async (tx) => {
     await usersRepo.lockById(targetUserId, tx);
     const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(targetUserId, date, tx);
-    const duplicateExists = await entriesRepo.existsForEntryKey(
+    const existing = await entriesRepo.findForEntryKey(
       { userId: targetUserId, date, projectId, task },
       tx,
     );
-    if (duplicateExists) {
-      fail(409, 'A time entry already exists for this date, project, and task');
+    if (existing) {
+      // Recurring stubs reserve the uniqueness key; promote them into a real entry
+      // instead of forcing the client to delete the placeholder first.
+      if (!existing.isPlaceholder) {
+        fail(409, 'A time entry already exists for this date, project, and task');
+      }
+      const promoted = await entriesRepo.update(
+        existing.id,
+        {
+          version: existing.version,
+          clientId,
+          clientName,
+          projectId,
+          projectName,
+          task,
+          taskId: resolvedTaskId,
+          notes: parseOptionalNotes(input.notes),
+          duration: duration ?? 0,
+          hourlyCost,
+          isPlaceholder: parsedIsPlaceholder ?? false,
+          location,
+        },
+        tx,
+      );
+      if (promoted === null) {
+        fail(409, 'Entry has changed since it was loaded; reload and retry');
+      }
+      return promoted;
     }
 
     return entriesRepo.create(

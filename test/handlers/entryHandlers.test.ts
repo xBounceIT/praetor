@@ -263,6 +263,55 @@ describe('makeEntryHandlers', () => {
     }
   });
 
+  test('addBulk replaces an existing entry id when create promotes a placeholder', async () => {
+    apiMocks.entriesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({
+        id: 'e-ph',
+        createdAt: 200,
+        isPlaceholder: false,
+        ...(data as object),
+      }),
+    );
+    const entries = makeStubSetter<EntryLike>([
+      { id: 'e-ph', createdAt: 50, task: 'stub' },
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1' } as never,
+      viewingUserId: 'u1',
+      setEntries: entries.setter,
+    });
+
+    await handlers.addBulk([{ task: 'promoted' } as never]);
+
+    expect(entries.get()).toEqual([
+      expect.objectContaining({ id: 'e-ph', task: 'promoted', createdAt: 200 }),
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+  });
+
+  test('addBulk does not console.error expected 409 conflicts', async () => {
+    apiMocks.entriesCreate.mockImplementation(() =>
+      Promise.reject(new ApiErrorStub('A time entry already exists', 409)),
+    );
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u' } as never,
+      viewingUserId: '',
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy as unknown as typeof console.error;
+    try {
+      const result = await handlers.addBulk([{ task: 'a' } as never], { silent: true });
+      expect(result.failed).toHaveLength(1);
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('delete removes matching entry', async () => {
     apiMocks.entriesDelete.mockImplementation(() => Promise.resolve());
     const entries = makeStubSetter<EntryLike>([

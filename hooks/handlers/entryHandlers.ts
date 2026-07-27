@@ -14,6 +14,12 @@ export type AddBulkResult = {
   failed: unknown[];
 };
 
+const isConflictStatus = (err: unknown): boolean =>
+  typeof err === 'object' &&
+  err !== null &&
+  'status' in err &&
+  (err as { status: unknown }).status === 409;
+
 export type EntryHandlersDeps = {
   currentUser: User | null;
   viewingUserId: string;
@@ -65,12 +71,23 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
         created.push(createdEntry);
       } catch (err) {
         failures.push(err);
-        console.error('Failed to add bulk entry:', err);
+        // 409 is an expected uniqueness conflict (same user/date/project/task).
+        if (!isConflictStatus(err)) {
+          console.error('Failed to add bulk entry:', err);
+        }
       }
     }
 
     if (created.length > 0) {
-      setEntries((prev) => [...created, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+      // Create may promote an existing placeholder in place; merge by id so the
+      // local list does not keep a stale stub alongside the promoted row.
+      setEntries((prev) => {
+        const byId = new Map(prev.map((entry) => [entry.id, entry]));
+        for (const entry of created) {
+          byId.set(entry.id, entry);
+        }
+        return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+      });
     }
 
     if (failures.length > 0 && !options?.silent) {

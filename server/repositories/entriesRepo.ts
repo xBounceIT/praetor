@@ -355,12 +355,12 @@ type EntryKeyLookup = EntryUniquenessKey & {
   excludeId?: string;
 };
 
-export const existsForEntryKey = async (
+export const findForEntryKey = async (
   key: EntryKeyLookup,
   exec: DbExecutor = db,
-): Promise<boolean> => {
+): Promise<TimeEntry | null> => {
   const rows = await exec
-    .select({ id: timeEntries.id })
+    .select()
     .from(timeEntries)
     .where(
       and(
@@ -372,8 +372,13 @@ export const existsForEntryKey = async (
       ),
     )
     .limit(1);
-  return rows.length > 0;
+  return rows[0] ? mapBuilderRow(rows[0]) : null;
 };
+
+export const existsForEntryKey = async (
+  key: EntryKeyLookup,
+  exec: DbExecutor = db,
+): Promise<boolean> => (await findForEntryKey(key, exec)) !== null;
 
 export const sumDurationForUserDate = async (
   userId: string,
