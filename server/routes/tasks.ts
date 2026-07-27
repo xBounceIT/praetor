@@ -759,10 +759,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       // `projects.assignments.view` is the "view all assignments" marker (issue #720); without it,
-      // access stays scoped to membership / tasks_all.update exactly as before.
+      // access stays scoped to membership / tasks_all.view so callers who can already see a task
+      // can also open its assignment dialog.
       const canViewAssignments =
         hasPermission(request, 'projects.assignments.view') ||
-        (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));
+        (await canAccessTask(request, idResult.value));
       if (!canViewAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
@@ -801,10 +802,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       // `projects.assignments.view` is the "manages all assignments" marker (issue #720); without
-      // it, editing stays scoped to membership / tasks_all.update exactly as before.
+      // it, editing stays scoped to membership / tasks_all.view so callers who can already see a
+      // task and hold assignments.update can edit its members.
       const canEditAssignments =
         hasPermission(request, 'projects.assignments.view') ||
-        (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));
+        (await canAccessTask(request, idResult.value));
       if (!canEditAssignments) {
         return replyError(request, reply, {
           statusCode: 403,
