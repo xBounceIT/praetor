@@ -21,7 +21,7 @@ export interface ProjectTasksTableProps {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
-  canManageAssignments: boolean;
+  canViewAssignments: boolean;
   onAddTask: () => void | Promise<void>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onRequestDeleteTask: (task: ProjectTask) => void;
@@ -69,7 +69,7 @@ interface ProjectTaskColumnsParams {
   currency: string;
   canUpdate: boolean;
   canDelete: boolean;
-  canManageAssignments: boolean;
+  canViewAssignments: boolean;
   hoursState: ProjectTaskHoursState;
   getTaskFieldValue: (taskId: string, field: string, fallback: string) => string;
   setTaskFieldValue: (taskId: string, field: string, value: string) => void;
@@ -88,7 +88,7 @@ const useProjectTaskColumns = ({
   currency,
   canUpdate,
   canDelete,
-  canManageAssignments,
+  canViewAssignments,
   hoursState,
   getTaskFieldValue,
   setTaskFieldValue,
@@ -285,12 +285,12 @@ const useProjectTaskColumns = ({
         disableFiltering: true,
         align: 'right',
         cell: ({ row }) => {
-          if (!canManageAssignments && !canDelete) return null;
+          if (!canViewAssignments && !canDelete) return null;
           // Keep Tooltip + Button inline (not a custom wrapper): StandardTable's
           // collapsed … menu introspects TooltipContent / aria-label / icon children.
           return (
             <div className="flex items-center justify-end gap-1">
-              {canManageAssignments && (
+              {canViewAssignments && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex">
@@ -341,7 +341,7 @@ const useProjectTaskColumns = ({
     ],
     [
       canDelete,
-      canManageAssignments,
+      canViewAssignments,
       canUpdate,
       commitTaskField,
       currency,
@@ -367,7 +367,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
   canCreate,
   canUpdate,
   canDelete,
-  canManageAssignments,
+  canViewAssignments,
   onAddTask,
   onUpdateTask,
   onRequestDeleteTask,
@@ -444,7 +444,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     currency,
     canUpdate,
     canDelete,
-    canManageAssignments,
+    canViewAssignments,
     hoursState,
     getTaskFieldValue,
     setTaskFieldValue,

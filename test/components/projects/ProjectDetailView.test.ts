@@ -239,16 +239,16 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toMatch(/<TooltipContent>\{u\.name\}<\/TooltipContent>/);
   });
 
-  test('task-row manage-members action is gated on canManageAssignments and opens task UserAssignmentModal', async () => {
+  test('task-row manage-members action opens for assignments view/update and keeps save gated on update', async () => {
     const source = await readSource();
     const tableSource = await readProjectTasksTableSource();
 
-    expect(tableSource).toContain('canManageAssignments: boolean');
+    expect(tableSource).toContain('canViewAssignments: boolean');
     expect(tableSource).toContain('onManageMembers: (task: ProjectTask) => void');
     // StandardTable's collapsed … menu needs Tooltip + aria-label on the button itself
     // (not a custom wrapper) so icon/label text are visible in the overflow menu.
     expect(tableSource).toMatch(
-      /\{canManageAssignments && \(\s*<Tooltip>[\s\S]*?onManageMembers\(row\)[\s\S]*?aria-label=\{t\('tasks\.manageMembers'\)\}/,
+      /\{canViewAssignments && \(\s*<Tooltip>[\s\S]*?onManageMembers\(row\)[\s\S]*?aria-label=\{t\('tasks\.manageMembers'\)\}/,
     );
     // Use a regex (escaped parens) so i18n:check does not treat this as a t() usage.
     expect(tableSource).toMatch(
@@ -258,13 +258,16 @@ describe('ProjectDetailView wiring', () => {
 
     expect(source).toContain('managingTaskId: string | null');
     expect(source).toMatch(
-      /const openTaskAssignments = useCallback\(\s*\(taskId: string\) => \{\s*if \(!canManageAssignments\) return;[\s\S]*?setIsAssignmentsOpen\(false\);[\s\S]*?setManagingTaskId\(taskId\);/,
+      /const canViewAssignments =\s*canManageAssignments \|\|\s*hasScopedActionPermission\(permissions,\s*'projects\.assignments',\s*'view'\);/,
+    );
+    expect(source).toMatch(
+      /const openTaskAssignments = useCallback\(\s*\(taskId: string\) => \{\s*if \(!canViewAssignments\) return;[\s\S]*?setIsAssignmentsOpen\(false\);[\s\S]*?setManagingTaskId\(taskId\);/,
     );
     expect(source).toMatch(
       /const openProjectAssignments = useCallback\(\(\) => \{\s*if \(!canManageAssignments\) return;[\s\S]*?setManagingTaskId\(null\);[\s\S]*?setIsAssignmentsOpen\(true\);/,
     );
     expect(source).toContain('onClick={openProjectAssignments}');
-    expect(source).toContain('canManageAssignments={canManageAssignments}');
+    expect(source).toContain('canViewAssignments={canViewAssignments}');
     expect(source).toContain('onManageMembers={(task) => openTaskAssignments(task.id)}');
     expect(source).toMatch(/tasksApi\.getUsers\(managingTaskId as string,\s*signal\)/);
     expect(source).toMatch(/tasksApi\.updateUsers\(managingTaskId as string,\s*ids\)/);
@@ -272,6 +275,7 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain("entityName={managingTask?.name || ''}");
     expect(source).toContain('isOpen={!!managingTaskId}');
     expect(source).toContain('onClose={closeTaskAssignments}');
+    expect(source).toContain('disabled={!canManageAssignments}');
     expect(source).toMatch(
       /if \(managingTaskId === taskToDelete\.id\) \{\s*setManagingTaskId\(null\);\s*\}/,
     );

@@ -1265,7 +1265,11 @@ describe('POST /api/tasks/:id/users', () => {
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 
-  test('400: empty userIds array', async () => {
+  test('200: empty userIds clears non-top-manager assignments', async () => {
+    findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
+    clearNonTopManagerAssignmentsMock.mockResolvedValue(undefined);
+    addManualAssignmentsMock.mockResolvedValue(undefined);
+
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/tasks/t-1/users',
@@ -1273,8 +1277,10 @@ describe('POST /api/tasks/:id/users', () => {
       payload: { userIds: [] },
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/userIds must contain at least one item/);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ message: 'Task assignments updated' });
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
+    expect(addManualAssignmentsMock).toHaveBeenCalledWith('t-1', [], TX_SENTINEL);
   });
 
   test('404: task not found', async () => {

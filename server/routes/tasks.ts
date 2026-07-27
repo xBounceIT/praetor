@@ -33,12 +33,12 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
+  ensureArrayOfStrings,
   optionalDateString,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
   parseBooleanField,
   parseDateString,
-  requireNonEmptyArrayOfStrings,
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
@@ -816,7 +816,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
+      const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
       const validUserIds = userIdsResult.value;
 

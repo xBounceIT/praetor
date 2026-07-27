@@ -354,6 +354,8 @@ const useProjectDetailController = ({
     'projects.assignments',
     'update',
   );
+  const canViewAssignments =
+    canManageAssignments || hasScopedActionPermission(permissions, 'projects.assignments', 'view');
   const canViewCost = permissions.includes('reports.cost.view');
   // Probed up front so we can short-circuit the entries fetch without round-tripping
   // through a guaranteed 403 ten times per detail-view navigation. Mirrors the route's
@@ -1148,11 +1150,11 @@ const useProjectDetailController = ({
 
   const openTaskAssignments = useCallback(
     (taskId: string) => {
-      if (!canManageAssignments) return;
+      if (!canViewAssignments) return;
       setIsAssignmentsOpen(false);
       setManagingTaskId(taskId);
     },
-    [canManageAssignments, setIsAssignmentsOpen, setManagingTaskId],
+    [canViewAssignments, setIsAssignmentsOpen, setManagingTaskId],
   );
 
   const closeTaskAssignments = useCallback(() => {
@@ -1248,6 +1250,7 @@ const useProjectDetailController = ({
     canUpdateTasks,
     canDeleteTasks,
     canManageAssignments,
+    canViewAssignments,
     companyDisplayName,
     canViewCost,
     name,
@@ -2002,7 +2005,7 @@ const ProjectDetailTasksSection: React.FC<{ controller: ProjectDetailController 
     canCreateTasks,
     canUpdateTasks,
     canDeleteTasks,
-    canManageAssignments,
+    canViewAssignments,
     handleAddTask,
     onUpdateTask,
     setTaskToDelete,
@@ -2024,7 +2027,7 @@ const ProjectDetailTasksSection: React.FC<{ controller: ProjectDetailController 
         canCreate={canCreateTasks}
         canUpdate={canUpdateTasks}
         canDelete={canDeleteTasks}
-        canManageAssignments={canManageAssignments}
+        canViewAssignments={canViewAssignments}
         onAddTask={handleAddTask}
         onUpdateTask={onUpdateTask}
         onRequestDeleteTask={(task) => {
