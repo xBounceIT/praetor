@@ -1297,7 +1297,7 @@
           "type": "varchar(10)",
           "primaryKey": false,
           "notNull": false,
-          "default": "'\u00e2\u201a\u00ac'"
+          "default": "'\u20ac'"
         },
         "daily_limit": {
           "name": "daily_limit",
