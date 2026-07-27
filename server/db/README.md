@@ -181,8 +181,15 @@ allowed; `POST /api/entries` always inserts, and tracker duplicate always append
 generation still skips existing `(date, project, task)` tuples for idempotency.
 `PUT /api/entries/:id` returns `409` only for stale optimistic-lock versions. Run `db:migrate`,
 `db:ready`, and `db:check` after deploy. CI also replays migration 0130 against a legacy unique
-index fixture when `RUN_TIME_ENTRY_DUPLICATE_KEY_MIGRATION_TEST=1`. Older images that still expect
-uniqueness must not run against a database that has already applied 0130.
+index fixture when `RUN_TIME_ENTRY_DUPLICATE_KEY_MIGRATION_TEST=1`.
+
+**Deploy / rollback.** This is intentionally not image-rollback-safe after same-key rows exist:
+old images still assume uniqueness and will reject or fail on those rows. Prefer roll-forward.
+If the new image must be abandoned before any same-key appends are created, restore a
+pre-0130 database backup (or recreate `idx_time_entries_entry_key_unique` only while the table
+still has unique keys) before redeploying the previous image. Once duplicate keys have been
+written, rollback requires restoring that backup; do not attempt to reimpose uniqueness on a
+database that already contains colliding rows.
 
 ## Internal category name uniqueness rollout (migration 0123)
 

@@ -1092,7 +1092,8 @@ const TrackerView: React.FC<{
             failed: failedCount,
           }),
         );
-        return;
+        // Keep only failed dates selected so retry does not re-append successes.
+        return result.failed.map((failure) => failure.entry.date);
       }
       if (sameTaskDayCount > 0) {
         toastWarning(

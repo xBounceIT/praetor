@@ -8,7 +8,7 @@ type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 've
 
 export type AddBulkResult = {
   created: TimeEntry[];
-  failed: unknown[];
+  failed: Array<{ error: unknown; entry: TimeEntryDuplicateDraft }>;
 };
 
 const upsertEntriesById = (prev: TimeEntry[], next: TimeEntry[]): TimeEntry[] => {
@@ -57,7 +57,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     if (!currentUser) return { created: [], failed: [] };
     const targetUserId = viewingUserId || currentUser.id;
     const created: TimeEntry[] = [];
-    const failures: unknown[] = [];
+    const failures: Array<{ error: unknown; entry: TimeEntryDuplicateDraft }> = [];
 
     // Each POST locks the user row inside a SERIALIZABLE transaction; parallel
     // creates for the same user trigger Postgres 40001 serialization failures.
@@ -69,7 +69,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
         });
         created.push(createdEntry);
       } catch (err) {
-        failures.push(err);
+        failures.push({ error: err, entry });
         console.error('Failed to add bulk entry:', err);
       }
     }

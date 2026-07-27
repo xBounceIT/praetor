@@ -23,7 +23,7 @@ import Calendar from '../shared/Calendar';
 export interface EntryDuplicateDialogProps {
   entry: TimeEntry | null;
   onClose: () => void;
-  onDuplicate: (dates: string[]) => Promise<void>;
+  onDuplicate: (dates: string[]) => Promise<string[] | void>;
   /** Dates that already have the same project+task (informational warning only). */
   existingConflictDates?: string[];
   startOfWeek?: 'Monday' | 'Sunday';
@@ -61,7 +61,7 @@ const EntryDuplicateDialog: React.FC<EntryDuplicateDialogProps> = ({
 type ContentProps = {
   entry: TimeEntry;
   onClose: () => void;
-  onDuplicate: (dates: string[]) => Promise<void>;
+  onDuplicate: (dates: string[]) => Promise<string[] | void>;
   existingConflictDates: string[];
   startOfWeek: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday: boolean;
@@ -98,7 +98,11 @@ const EntryDuplicateDialogContent: React.FC<ContentProps> = ({
     if (selectedDates.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await onDuplicate(selectedDates);
+      const remainingDates = await onDuplicate(selectedDates);
+      if (remainingDates && remainingDates.length > 0) {
+        setSelectedDates(remainingDates);
+        return;
+      }
       onClose();
     } catch {
       // Caller handles toasts; keep dialog open for retry.
