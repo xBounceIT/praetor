@@ -226,6 +226,9 @@ describe('<DailyView /> RBAC catalog sync', () => {
     });
 
     fireEvent.change(screen.getByPlaceholderText('0,0'), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText('entry.notesPlaceholder'), {
+      target: { value: 'Validated task selection' },
+    });
     fireEvent.click(screen.getByText('entry.logTime'));
 
     await waitFor(() => {
