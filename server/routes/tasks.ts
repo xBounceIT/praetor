@@ -33,12 +33,12 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
+  ensureArrayOfStrings,
   optionalDateString,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
   parseBooleanField,
   parseDateString,
-  requireNonEmptyArrayOfStrings,
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
@@ -133,6 +133,11 @@ const canAccessTask = makeAccessChecker(
   (userId, taskId) => userAssignmentsRepo.isTaskAssignedToUser(userId, taskId),
   'projects.tasks_all.view',
 );
+
+const canAccessTaskAssignments = async (request: FastifyRequest, taskId: string) =>
+  hasPermission(request, 'projects.assignments.view') ||
+  (await canAccessTask(request, taskId)) ||
+  (await canAccessTask(request, taskId, 'projects.tasks_all.update'));
 
 const resolveTaskHoursScope = (
   request: FastifyRequest,
@@ -758,12 +763,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      // `projects.assignments.view` is the "view all assignments" marker (issue #720); without it,
-      // access stays scoped to membership / tasks_all.update exactly as before.
-      const canViewAssignments =
-        hasPermission(request, 'projects.assignments.view') ||
-        (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));
-      if (!canViewAssignments) {
+      // `projects.assignments.view` is the "view all assignments" marker (issue #720). Without it,
+      // access stays scoped to membership or an all-tasks capability (view or update).
+      if (!(await canAccessTaskAssignments(request, idResult.value))) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -800,12 +802,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      // `projects.assignments.view` is the "manages all assignments" marker (issue #720); without
-      // it, editing stays scoped to membership / tasks_all.update exactly as before.
-      const canEditAssignments =
-        hasPermission(request, 'projects.assignments.view') ||
-        (await canAccessTask(request, idResult.value, 'projects.tasks_all.update'));
-      if (!canEditAssignments) {
+      // `projects.assignments.view` is the "manages all assignments" marker (issue #720). Without
+      // it, editing stays scoped to membership or an all-tasks capability (view or update).
+      if (!(await canAccessTaskAssignments(request, idResult.value))) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
@@ -816,7 +815,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const userIdsResult = requireNonEmptyArrayOfStrings(userIds, 'userIds');
+      const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
       const validUserIds = userIdsResult.value;
 

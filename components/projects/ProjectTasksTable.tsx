@@ -21,9 +21,11 @@ export interface ProjectTasksTableProps {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
+  canViewAssignments: boolean;
   onAddTask: () => void | Promise<void>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onRequestDeleteTask: (task: ProjectTask) => void;
+  onManageMembers: (task: ProjectTask) => void;
 }
 
 type ProjectTaskHoursState = {
@@ -67,6 +69,7 @@ interface ProjectTaskColumnsParams {
   currency: string;
   canUpdate: boolean;
   canDelete: boolean;
+  canViewAssignments: boolean;
   hoursState: ProjectTaskHoursState;
   getTaskFieldValue: (taskId: string, field: string, fallback: string) => string;
   setTaskFieldValue: (taskId: string, field: string, value: string) => void;
@@ -78,12 +81,14 @@ interface ProjectTaskColumnsParams {
   parseTaskNumber: (row: ProjectTask, field: keyof ProjectTask, fallback: number) => number;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onRequestDeleteTask: (task: ProjectTask) => void;
+  onManageMembers: (task: ProjectTask) => void;
 }
 
 const useProjectTaskColumns = ({
   currency,
   canUpdate,
   canDelete,
+  canViewAssignments,
   hoursState,
   getTaskFieldValue,
   setTaskFieldValue,
@@ -91,6 +96,7 @@ const useProjectTaskColumns = ({
   parseTaskNumber,
   onUpdateTask,
   onRequestDeleteTask,
+  onManageMembers,
 }: ProjectTaskColumnsParams): Column<ProjectTask>[] => {
   const { t } = useTranslation(['projects', 'common']);
   const translatedBillingTypeOptions = useBillingTypeOptions();
@@ -278,41 +284,71 @@ const useProjectTaskColumns = ({
         id: 'actions',
         disableFiltering: true,
         align: 'right',
-        cell: ({ row }) => (
-          <div className="flex justify-end">
-            {canDelete && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRequestDeleteTask(row);
-                      }}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <i className="fa-solid fa-trash-can text-xs"></i>
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        ),
+        cell: ({ row }) => {
+          if (!canViewAssignments && !canDelete) return null;
+          // Keep Tooltip + Button inline (not a custom wrapper): StandardTable's
+          // collapsed … menu introspects TooltipContent / aria-label / icon children.
+          return (
+            <div className="flex items-center justify-end gap-1">
+              {canViewAssignments && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onManageMembers(row);
+                        }}
+                        aria-label={t('tasks.manageMembers')}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <i className="fa-solid fa-users text-xs"></i>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('tasks.manageMembers')}</TooltipContent>
+                </Tooltip>
+              )}
+              {canDelete && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRequestDeleteTask(row);
+                        }}
+                        aria-label={t('common:buttons.delete')}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <i className="fa-solid fa-trash-can text-xs"></i>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          );
+        },
       },
     ],
     [
       canDelete,
+      canViewAssignments,
       canUpdate,
       commitTaskField,
       currency,
       getTaskFieldValue,
       hoursState.hours,
       hoursState.loadState,
+      onManageMembers,
       onRequestDeleteTask,
       onUpdateTask,
       parseTaskNumber,
@@ -331,9 +367,11 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
   canCreate,
   canUpdate,
   canDelete,
+  canViewAssignments,
   onAddTask,
   onUpdateTask,
   onRequestDeleteTask,
+  onManageMembers,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
 
@@ -406,6 +444,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     currency,
     canUpdate,
     canDelete,
+    canViewAssignments,
     hoursState,
     getTaskFieldValue,
     setTaskFieldValue,
@@ -413,6 +452,7 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
     parseTaskNumber,
     onUpdateTask,
     onRequestDeleteTask,
+    onManageMembers,
   });
 
   return (

@@ -1265,7 +1265,11 @@ describe('POST /api/tasks/:id/users', () => {
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 
-  test('400: empty userIds array', async () => {
+  test('200: empty userIds clears non-top-manager assignments', async () => {
+    findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
+    clearNonTopManagerAssignmentsMock.mockResolvedValue(undefined);
+    addManualAssignmentsMock.mockResolvedValue(undefined);
+
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/tasks/t-1/users',
@@ -1273,8 +1277,10 @@ describe('POST /api/tasks/:id/users', () => {
       payload: { userIds: [] },
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toMatch(/userIds must contain at least one item/);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ message: 'Task assignments updated' });
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
+    expect(addManualAssignmentsMock).toHaveBeenCalledWith('t-1', [], TX_SENTINEL);
   });
 
   test('404: task not found', async () => {
@@ -1370,5 +1376,49 @@ describe('POST /api/tasks/:id/users', () => {
 
     expect(res.statusCode).toBe(403);
     expect(clearNonTopManagerAssignmentsMock).not.toHaveBeenCalled();
+  });
+
+  test('200: assignments.update with tasks_all.view can save without membership', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'projects.assignments.update',
+      'projects.tasks_all.view',
+    ]);
+    isTaskAssignedToUserMock.mockResolvedValue(false);
+    findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
+    clearNonTopManagerAssignmentsMock.mockResolvedValue(undefined);
+    addManualAssignmentsMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks/t-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
+    expect(addManualAssignmentsMock).toHaveBeenCalledWith('t-1', ['u2'], TX_SENTINEL);
+  });
+
+  test('200: assignments.update with tasks_all.update can save without membership', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'projects.assignments.update',
+      'projects.tasks_all.update',
+    ]);
+    isTaskAssignedToUserMock.mockResolvedValue(false);
+    findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
+    clearNonTopManagerAssignmentsMock.mockResolvedValue(undefined);
+    addManualAssignmentsMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks/t-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('t-1', TX_SENTINEL);
+    expect(addManualAssignmentsMock).toHaveBeenCalledWith('t-1', ['u2'], TX_SENTINEL);
   });
 });

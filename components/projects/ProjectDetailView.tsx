@@ -42,7 +42,7 @@ import {
   toStoredBillingType,
 } from '@/utils/billing';
 import { useCurrentUserId } from '../../contexts/useCurrentUserId';
-import { entriesApi, projectsApi } from '../../services/api';
+import { entriesApi, projectsApi, tasksApi } from '../../services/api';
 import type {
   BillingFrequency,
   BillingType,
@@ -246,6 +246,7 @@ type ProjectDetailUiState = {
   taskToDelete: ProjectTask | null;
   isTaskDeleteConfirmOpen: boolean;
   isAssignmentsOpen: boolean;
+  managingTaskId: string | null;
   isInternalConversionOpen: boolean;
 };
 
@@ -305,6 +306,7 @@ const createProjectDetailUiState = (): ProjectDetailUiState => ({
   taskToDelete: null,
   isTaskDeleteConfirmOpen: false,
   isAssignmentsOpen: false,
+  managingTaskId: null,
   isInternalConversionOpen: false,
 });
 
@@ -353,6 +355,8 @@ const useProjectDetailController = ({
     'projects.assignments',
     'update',
   );
+  const canViewAssignments =
+    canManageAssignments || hasScopedActionPermission(permissions, 'projects.assignments', 'view');
   const canViewCost = permissions.includes('reports.cost.view');
   // Probed up front so we can short-circuit the entries fetch without round-tripping
   // through a guaranteed 403 ten times per detail-view navigation. Mirrors the route's
@@ -412,6 +416,7 @@ const useProjectDetailController = ({
     taskToDelete,
     isTaskDeleteConfirmOpen,
     isAssignmentsOpen,
+    managingTaskId,
     isInternalConversionOpen,
   } = uiState;
   const setUiState = useCallback(
@@ -480,6 +485,11 @@ const useProjectDetailController = ({
   const setIsAssignmentsOpen = useCallback(
     (value: React.SetStateAction<ProjectDetailUiState['isAssignmentsOpen']>) =>
       setUiState('isAssignmentsOpen', value),
+    [setUiState],
+  );
+  const setManagingTaskId = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['managingTaskId']>) =>
+      setUiState('managingTaskId', value),
     [setUiState],
   );
   const setIsInternalConversionOpen = useCallback(
@@ -1132,10 +1142,34 @@ const useProjectDetailController = ({
 
   const handleConfirmDeleteTask = () => {
     if (!taskToDelete) return;
+    if (managingTaskId === taskToDelete.id) {
+      setManagingTaskId(null);
+    }
     onDeleteTask(taskToDelete.id);
     setTaskToDelete(null);
     setIsTaskDeleteConfirmOpen(false);
   };
+
+  const openProjectAssignments = useCallback(() => {
+    if (!canManageAssignments) return;
+    setManagingTaskId(null);
+    setIsAssignmentsOpen(true);
+  }, [canManageAssignments, setIsAssignmentsOpen, setManagingTaskId]);
+
+  const openTaskAssignments = useCallback(
+    (taskId: string) => {
+      if (!canViewAssignments) return;
+      setIsAssignmentsOpen(false);
+      setManagingTaskId(taskId);
+    },
+    [canViewAssignments, setIsAssignmentsOpen, setManagingTaskId],
+  );
+
+  const closeTaskAssignments = useCallback(() => {
+    setManagingTaskId(null);
+  }, [setManagingTaskId]);
+
+  const managingTask = projectTasks.find((task) => task.id === managingTaskId) ?? null;
 
   // Chart configs (theme-aware via --chart-N). One series per displayed task —
   // the legend lists task names, and var(--color-<seriesKey>) feeds each Bar.
@@ -1224,6 +1258,7 @@ const useProjectDetailController = ({
     canUpdateTasks,
     canDeleteTasks,
     canManageAssignments,
+    canViewAssignments,
     companyDisplayName,
     canViewCost,
     name,
@@ -1262,6 +1297,11 @@ const useProjectDetailController = ({
     setIsTaskDeleteConfirmOpen,
     isAssignmentsOpen,
     setIsAssignmentsOpen,
+    managingTaskId,
+    managingTask,
+    openProjectAssignments,
+    openTaskAssignments,
+    closeTaskAssignments,
     isInternalConversionOpen,
     setIsInternalConversionOpen,
     confirmInternalConversion,
@@ -1346,7 +1386,7 @@ const ProjectDetailHeader: React.FC<{ controller: ProjectDetailController }> = (
     onBack,
     isClientDisabled,
     canManageAssignments,
-    setIsAssignmentsOpen,
+    openProjectAssignments,
     canDeleteProjects,
     setIsDeleteConfirmOpen,
   } = controller;
@@ -1387,12 +1427,7 @@ const ProjectDetailHeader: React.FC<{ controller: ProjectDetailController }> = (
       </div>
       <div className="flex items-center gap-2">
         {canManageAssignments && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsAssignmentsOpen(true)}
-          >
+          <Button type="button" variant="outline" size="sm" onClick={openProjectAssignments}>
             <i className="fa-solid fa-users text-xs" aria-hidden="true"></i>
             <span className="ml-2">{t('projects:projects.manageMembers')}</span>
           </Button>
@@ -1981,10 +2016,12 @@ const ProjectDetailTasksSection: React.FC<{ controller: ProjectDetailController 
     canCreateTasks,
     canUpdateTasks,
     canDeleteTasks,
+    canViewAssignments,
     handleAddTask,
     onUpdateTask,
     setTaskToDelete,
     setIsTaskDeleteConfirmOpen,
+    openTaskAssignments,
   } = controller;
   return (
     <div className="space-y-3">
@@ -2001,12 +2038,14 @@ const ProjectDetailTasksSection: React.FC<{ controller: ProjectDetailController 
         canCreate={canCreateTasks}
         canUpdate={canUpdateTasks}
         canDelete={canDeleteTasks}
+        canViewAssignments={canViewAssignments}
         onAddTask={handleAddTask}
         onUpdateTask={onUpdateTask}
         onRequestDeleteTask={(task) => {
           setTaskToDelete(task);
           setIsTaskDeleteConfirmOpen(true);
         }}
+        onManageMembers={(task) => openTaskAssignments(task.id)}
       />
     </div>
   );
@@ -2834,6 +2873,9 @@ const ProjectDetailModals: React.FC<{ controller: ProjectDetailController }> = (
     handleConfirmDeleteTask,
     isAssignmentsOpen,
     setIsAssignmentsOpen,
+    managingTaskId,
+    managingTask,
+    closeTaskAssignments,
     assignableUsers,
     setAssignedUserIds,
     isInternalConversionOpen,
@@ -2892,6 +2934,17 @@ const ProjectDetailModals: React.FC<{ controller: ProjectDetailController }> = (
         }}
         entityLabel={t('projects:projects.entityLabel')}
         entityName={project.name}
+        disabled={!canManageAssignments}
+      />
+      <UserAssignmentModal
+        isOpen={!!managingTaskId}
+        onClose={closeTaskAssignments}
+        users={assignableUsers}
+        roles={roles}
+        loadAssignedUserIds={(signal) => tasksApi.getUsers(managingTaskId as string, signal)}
+        saveAssignedUserIds={(ids) => tasksApi.updateUsers(managingTaskId as string, ids)}
+        entityLabel={t('common:labels.task')}
+        entityName={managingTask?.name || ''}
         disabled={!canManageAssignments}
       />
     </>
