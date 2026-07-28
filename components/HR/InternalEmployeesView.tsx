@@ -156,7 +156,7 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         accessorKey: 'name',
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <div className="size-9 rounded-full bg-praetor/10 text-praetor flex items-center justify-center font-bold text-xs">
+            <div className="size-6 rounded-full bg-praetor/10 text-praetor flex items-center justify-center font-bold text-xs">
               {row.avatarInitials}
             </div>
             <span className="font-semibold text-foreground">{row.name}</span>

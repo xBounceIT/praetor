@@ -102,6 +102,7 @@ describe('<ExternalEmployeesView /> row click', () => {
     expect(cellTexts).toContain('+39 02 9876');
     expect(cellTexts).toContain('Paola Manager');
     expect(cellTexts).not.toContain('mario.contractor@example.com+39 02 9876');
+    expect(within(row).getByText('MR')).toHaveClass('size-6');
   });
 
   test('clicking a row opens the edit modal populated for that employee', () => {
