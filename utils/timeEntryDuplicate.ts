@@ -15,10 +15,9 @@ export const buildDuplicateTimeEntryDrafts = (
     | 'projectName'
     | 'task'
     | 'taskId'
-    | 'notes'
     | 'duration'
     | 'location'
-  >,
+  > & { notes?: string | null },
   dates: string[],
 ): TimeEntryDuplicateDraft[] =>
   dates.map((date) => ({
@@ -29,7 +28,7 @@ export const buildDuplicateTimeEntryDrafts = (
     projectName: entry.projectName,
     task: entry.task,
     taskId: entry.taskId,
-    notes: entry.notes,
+    ...(typeof entry.notes === 'string' ? { notes: entry.notes } : {}),
     duration: entry.duration,
     location: entry.location,
     isPlaceholder: false,

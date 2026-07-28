@@ -734,6 +734,29 @@ describe('POST /api/entries', () => {
     );
   });
 
+  test('201: notes null is accepted and stored as null', async () => {
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, duration: 2, notes: null },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: null }),
+      TX_SENTINEL,
+    );
+  });
+
   test('201: creates even when another entry already has the same date/project/task', async () => {
     findCostPerHourMock.mockResolvedValue(50);
     findIdByProjectAndNameMock.mockResolvedValue('t1');

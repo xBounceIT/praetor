@@ -50,6 +50,25 @@ describe('timeEntryDuplicate helpers', () => {
     ]);
   });
 
+  test('buildDuplicateTimeEntryDrafts omits null notes so create validation accepts the payload', () => {
+    const drafts = buildDuplicateTimeEntryDrafts({ ...source, notes: null }, ['2024-03-12']);
+    expect(drafts).toEqual([
+      {
+        date: '2024-03-12',
+        clientId: 'c1',
+        clientName: 'Client',
+        projectId: 'p1',
+        projectName: 'Project',
+        task: 'Task',
+        taskId: 't1',
+        duration: 2,
+        location: 'remote',
+        isPlaceholder: false,
+      },
+    ]);
+    expect(drafts[0]).not.toHaveProperty('notes');
+  });
+
   test('collectDuplicateConflictDates lists other days with the same project+task', () => {
     expect(
       collectDuplicateConflictDates(

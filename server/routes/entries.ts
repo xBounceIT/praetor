@@ -80,7 +80,7 @@ const entryCreateBodySchema = {
     projectId: { type: 'string' },
     projectName: { type: 'string' },
     task: { type: 'string' },
-    notes: { type: 'string', maxLength: MAX_NOTES_LENGTH },
+    notes: { type: ['string', 'null'], maxLength: MAX_NOTES_LENGTH },
     duration: { type: 'number', maximum: MAX_DURATION_HOURS },
     isPlaceholder: { type: 'boolean' },
     userId: { type: 'string' },
