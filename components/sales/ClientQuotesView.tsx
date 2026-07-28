@@ -2096,9 +2096,14 @@ const useClientQuotesController = ({
             : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
         const restoreTooltip = restoreDisabled
           ? restoreTitle
-          : t('sales:clientQuotes.restoreToDraftTooltip', {
-              defaultValue: 'The quote will return to Draft. All linked records will be deleted.',
-            });
+          : canRollbackDraftOffer
+            ? t('sales:clientQuotes.rollbackPromotionTooltip', {
+                defaultValue:
+                  'The quote will return to Draft. The linked draft offer will be deleted.',
+              })
+            : t('sales:clientQuotes.restoreToDraftTooltip', {
+                defaultValue: 'The quote will return to Draft.',
+              });
 
         // Gate the edit action on the SAME predicate as the row click (#812 round 13): some
         // history rows still open — accepted/denied read-only, expired (non-offer-linked) to
@@ -2971,7 +2976,7 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
   });
   let restoreDisabled = true;
   let restoreTooltip = t('sales:clientQuotes.restoreToDraftTooltip', {
-    defaultValue: 'The quote will return to Draft. All linked records will be deleted.',
+    defaultValue: 'The quote will return to Draft.',
   });
   let onRestoreClick: (() => void) | undefined;
 
@@ -2991,6 +2996,12 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
       isPromoting ||
       !canRestore ||
       (history && (!canRollbackDraftOffer || expired));
+
+    if (canRollbackDraftOffer) {
+      restoreTooltip = t('sales:clientQuotes.rollbackPromotionTooltip', {
+        defaultValue: 'The quote will return to Draft. The linked draft offer will be deleted.',
+      });
+    }
 
     if (!transitionAllowed) {
       restoreTooltip = t('sales:clientQuotes.restoreStatusNotCompatible', {
