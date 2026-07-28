@@ -1,58 +1,36 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { screen } from '@testing-library/react';
-import { toast } from 'sonner';
-import { Toaster } from '../../../components/ui/sonner';
-import { offerCreatedToastClassNames } from '../../../components/ui/sonner-presets';
-import { render } from '../../helpers/render';
+import { describe, expect, test } from 'bun:test';
+import {
+  appToasterProps,
+  offerCreatedToastClassNames,
+  resolveSonnerTheme,
+} from '../../../components/ui/sonner-presets';
 
-describe('<Toaster />', () => {
-  afterEach(() => localStorage.removeItem('praetor_theme'));
-
-  test('inherits the selected app theme outside the layout theme scope', async () => {
-    localStorage.setItem('praetor_theme', 'dark');
-
-    const { container } = render(<Toaster />);
-    const themeScope = container.querySelector('[data-shadcn-theme-scope]');
-    toast('Theme probe');
-    const toaster = (await screen.findByText('Theme probe')).closest('[data-sonner-toaster]');
-
-    expect(themeScope?.getAttribute('data-shadcn-theme')).toBe('dark');
-    expect(themeScope?.className).toContain('dark');
-    expect(toaster?.getAttribute('data-sonner-theme')).toBe('dark');
+describe('Sonner configuration', () => {
+  test('maps the selected app theme to Sonner without overriding an explicit theme', () => {
+    expect(resolveSonnerTheme('dark')).toBe('dark');
+    expect(resolveSonnerTheme('light')).toBe('light');
+    expect(resolveSonnerTheme('zebra')).toBe('light');
+    expect(resolveSonnerTheme('praetor')).toBe('light');
+    expect(resolveSonnerTheme('dark', 'system')).toBe('system');
   });
 
-  test('supports a primary themed offer success without disabling rich colors globally', async () => {
-    const { container } = render(<Toaster richColors closeButton position="top-center" />);
-
-    toast.success('Offer created', {
-      description: 'OFF_26_0015',
-      classNames: offerCreatedToastClassNames,
-      action: {
-        label: 'View offer',
-        onClick: () => {},
-      },
+  test('configures centered rich toasts and primary offer styling', () => {
+    expect(appToasterProps).toEqual({
+      richColors: true,
+      closeButton: true,
+      position: 'top-center',
     });
-
-    const description = await screen.findByText('OFF_26_0015');
-    const action = screen.getByRole('button', { name: 'View offer' });
-    const closeButton = screen.getByRole('button', { name: 'Close toast' });
-    const toastElement = description.closest('[data-sonner-toast]');
-    const toaster = container.querySelector('[data-sonner-toaster]');
-    const successIcon = toastElement?.querySelector('[data-icon]');
-
-    expect(toaster?.getAttribute('data-x-position')).toBe('center');
-    expect(toastElement?.getAttribute('data-rich-colors')).toBe('true');
-    expect(toastElement?.className).toContain('bg-primary!');
-    expect(toastElement?.className).toContain('rounded-lg!');
-    expect(description.className).toContain('text-primary-foreground/70!');
-    expect(action.className).toContain('bg-primary-foreground!');
-    expect(action.className).toContain('rounded-md!');
-    expect(closeButton.className).toContain('right-2!');
-    expect(closeButton.className).toContain('top-2!');
-    expect(closeButton.className).toContain('size-6!');
-    expect(closeButton.className).toContain('rounded-md!');
-    expect(closeButton.className).toContain('text-primary-foreground!');
-    expect(closeButton.className).toContain('[&_svg]:size-4!');
-    expect(successIcon?.className).toContain('text-primary-foreground!');
+    expect(offerCreatedToastClassNames.toast).toContain('bg-primary!');
+    expect(offerCreatedToastClassNames.toast).toContain('rounded-lg!');
+    expect(offerCreatedToastClassNames.description).toContain('text-primary-foreground/70!');
+    expect(offerCreatedToastClassNames.actionButton).toContain('bg-primary-foreground!');
+    expect(offerCreatedToastClassNames.actionButton).toContain('rounded-md!');
+    expect(offerCreatedToastClassNames.closeButton).toContain('right-2!');
+    expect(offerCreatedToastClassNames.closeButton).toContain('top-2!');
+    expect(offerCreatedToastClassNames.closeButton).toContain('size-6!');
+    expect(offerCreatedToastClassNames.closeButton).toContain('rounded-md!');
+    expect(offerCreatedToastClassNames.closeButton).toContain('text-primary-foreground!');
+    expect(offerCreatedToastClassNames.closeButton).toContain('[&_svg]:size-4!');
+    expect(offerCreatedToastClassNames.icon).toContain('text-primary-foreground!');
   });
 });

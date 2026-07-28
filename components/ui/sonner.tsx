@@ -8,6 +8,7 @@ import {
 import type * as React from 'react';
 import { Toaster as Sonner, type ToasterProps } from 'sonner';
 import { cn } from '@/lib/utils';
+import { resolveSonnerTheme } from './sonner-presets';
 import { getShadcnThemeClassName, useResolvedShadcnTheme } from './use-shadcn-theme';
 
 const Toaster = ({ className, theme, ...props }: ToasterProps) => {
@@ -21,7 +22,7 @@ const Toaster = ({ className, theme, ...props }: ToasterProps) => {
       className={cn('shadcn-theme-bridge', themeClassName)}
     >
       <Sonner
-        theme={theme ?? (resolvedTheme === 'dark' ? 'dark' : 'light')}
+        theme={resolveSonnerTheme(resolvedTheme, theme)}
         className={cn('toaster group', className)}
         icons={{
           success: <CircleCheckIcon className="size-4" />,

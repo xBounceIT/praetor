@@ -69,7 +69,7 @@ import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings, { type UserSettingsTab } from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
-import { offerCreatedToastClassNames } from './components/ui/sonner-presets';
+import { appToasterProps, offerCreatedToastClassNames } from './components/ui/sonner-presets';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
@@ -4909,7 +4909,7 @@ const App: React.FC = () => (
       <AppContent />
     </ErrorBoundary>
     {/* Outside the boundary so toasts keep rendering if the boundary trips. */}
-    <Toaster richColors closeButton position="top-center" />
+    <Toaster {...appToasterProps} />
   </>
 );
 

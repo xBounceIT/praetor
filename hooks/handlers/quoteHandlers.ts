@@ -89,18 +89,24 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     setInvoices(invoicesData);
   };
 
+  const refreshBestEffort = async (refresh: () => Promise<void>, errorMessage: string) => {
+    try {
+      await refresh();
+    } catch (refreshErr) {
+      console.error(errorMessage, refreshErr);
+    }
+  };
+
   // A linked supplier quote derives its visible status / isStatusSynced from its client quote at
   // read time (#779), so creating, changing, or severing that link — or changing the client
   // quote's status — can leave the separately-cached supplier quotes table showing stale
   // unsynced/draft state until a full module reload. Refresh it too, best-effort: a refresh
   // failure must not fail the primary write.
-  const refreshLinkedSupplierQuotes = async () => {
-    try {
-      await refreshSupplierQuoteFlow();
-    } catch (refreshErr) {
-      console.error('Failed to refresh supplier data:', refreshErr);
-    }
-  };
+  const refreshLinkedSupplierQuotes = () =>
+    refreshBestEffort(refreshSupplierQuoteFlow, 'Failed to refresh supplier data:');
+
+  const refreshClientQuoteFlowBestEffort = () =>
+    refreshBestEffort(refreshClientQuoteFlow, 'Failed to refresh client quote data:');
 
   const surfaceWarnings = (warnings?: string[]) => {
     for (const warning of warnings ?? []) {
@@ -146,19 +152,19 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       // so a plain edit of an unsourced quote would otherwise refetch needlessly. The two flows
       // set disjoint state, so they run in parallel.
       const supplierRefreshNeeded = wasSourcing || sourcesSupplierQuote(updated);
-      if (
-        updated.status === 'offer' &&
-        previousQuote?.status !== 'offer' &&
-        updated.linkedOfferId
-      ) {
+      const createdOffer =
+        updated.status === 'offer' && previousQuote?.status !== 'offer' && updated.linkedOfferId
+          ? {
+              id: updated.linkedOfferId,
+              revisionCode: updated.linkedOfferRevisionCode,
+            }
+          : undefined;
+      if (createdOffer) {
         // Confirm the completed mutation immediately; the follow-up list refreshes can be slow.
-        notifyClientOfferCreated?.({
-          id: updated.linkedOfferId,
-          revisionCode: updated.linkedOfferRevisionCode,
-        });
+        notifyClientOfferCreated?.(createdOffer);
       }
       await Promise.all([
-        refreshClientQuoteFlow(),
+        createdOffer ? refreshClientQuoteFlowBestEffort() : refreshClientQuoteFlow(),
         supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
     } catch (err) {
@@ -175,7 +181,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         id: result.offer.id,
         revisionCode: result.offer.revisionCode,
       });
-      await Promise.all([refreshClientQuoteFlow(), refreshLinkedSupplierQuotes()]);
+      await Promise.all([refreshClientQuoteFlowBestEffort(), refreshLinkedSupplierQuotes()]);
       return result;
     } catch (err) {
       console.error('Failed to promote quote candidate:', err);

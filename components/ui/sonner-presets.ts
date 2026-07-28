@@ -1,4 +1,16 @@
-import type { ToastClassnames } from 'sonner';
+import type { ToastClassnames, ToasterProps } from 'sonner';
+import type { ResolvedTheme } from '@/utils/theme';
+
+export const resolveSonnerTheme = (
+  resolvedTheme: ResolvedTheme,
+  theme?: ToasterProps['theme'],
+): ToasterProps['theme'] => theme ?? (resolvedTheme === 'dark' ? 'dark' : 'light');
+
+export const appToasterProps = {
+  richColors: true,
+  closeButton: true,
+  position: 'top-center',
+} satisfies Pick<ToasterProps, 'richColors' | 'closeButton' | 'position'>;
 
 export const offerCreatedToastClassNames = {
   toast: 'rounded-lg! border-primary! bg-primary! pr-12! text-primary-foreground! shadow-lg',

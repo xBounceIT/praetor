@@ -133,6 +133,14 @@ const makeStubScalar = <T>(initial: T) => {
   return { setter, get: () => value };
 };
 
+const deferValue = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+};
+
 const buildHandlers = (overrides: Record<string, unknown> = {}) => {
   const quotes = makeStubSetter<QuoteLike>((overrides.quotes as QuoteLike[] | undefined) ?? []);
   const clientOffers = makeStubSetter<ClientOfferLike>(
@@ -397,17 +405,14 @@ describe('makeQuoteHandlers', () => {
   });
 
   test('updateQuote notifies before the client flow refetch completes', async () => {
-    let resolveQuotesRefetch: (quotes: unknown[]) => void = () => {};
-    const pendingQuotesRefetch = new Promise<unknown[]>((resolve) => {
-      resolveQuotesRefetch = resolve;
-    });
+    const quotesRefetch = deferValue<unknown[]>();
     stubQuoteUpdateFlow({
       status: 'offer',
       linkedOfferId: 'q1-OF',
       linkedOfferRevisionCode: 'REV2',
       items: [],
     });
-    apiMocks.quotesList.mockImplementation(() => pendingQuotesRefetch);
+    apiMocks.quotesList.mockImplementation(() => quotesRefetch.promise);
     const ctx = buildHandlers({
       quotes: [{ id: 'q1', status: 'sent', items: [] }],
     });
@@ -421,8 +426,34 @@ describe('makeQuoteHandlers', () => {
       revisionCode: 'REV2',
     });
 
-    resolveQuotesRefetch([]);
+    quotesRefetch.resolve([]);
     await pendingUpdate;
+  });
+
+  test('updateQuote keeps a created offer successful when the client refetch fails', async () => {
+    stubQuoteUpdateFlow({
+      status: 'offer',
+      linkedOfferId: 'q1-OF',
+      linkedOfferRevisionCode: 'REV2',
+      items: [],
+    });
+    apiMocks.quotesList.mockImplementation(() => Promise.reject(new Error('refresh failed')));
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+    });
+    const restore = silenceConsole();
+
+    try {
+      await expect(
+        ctx.handlers.updateQuote('q1', { status: 'offer' } as never),
+      ).resolves.toBeUndefined();
+      expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+        id: 'q1-OF',
+        revisionCode: 'REV2',
+      });
+    } finally {
+      restore();
+    }
   });
 
   test('deleteQuote refreshes supplier quotes when the deleted quote sourced one', async () => {
@@ -947,14 +978,11 @@ describe('makeQuoteHandlers', () => {
   });
 
   test('promoteQuoteCandidate notifies before flow refetches complete', async () => {
-    let resolveQuotesRefetch: (quotes: unknown[]) => void = () => {};
-    const pendingQuotesRefetch = new Promise<unknown[]>((resolve) => {
-      resolveQuotesRefetch = resolve;
-    });
+    const quotesRefetch = deferValue<unknown[]>();
     apiMocks.quotesPromote.mockImplementation(() =>
       Promise.resolve({ quote: { id: 'q-1' }, offer: { id: 'of-1', revisionCode: 'REV1' } }),
     );
-    apiMocks.quotesList.mockImplementation(() => pendingQuotesRefetch);
+    apiMocks.quotesList.mockImplementation(() => quotesRefetch.promise);
     apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-1' }]));
     apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
     const ctx = buildHandlers();
@@ -968,8 +996,32 @@ describe('makeQuoteHandlers', () => {
       revisionCode: 'REV1',
     });
 
-    resolveQuotesRefetch([]);
+    quotesRefetch.resolve([]);
     await pendingPromotion;
+  });
+
+  test('promoteQuoteCandidate stays successful when the client refetch fails', async () => {
+    const result = {
+      quote: { id: 'q-1' },
+      offer: { id: 'of-1', revisionCode: 'REV1' },
+    };
+    apiMocks.quotesPromote.mockImplementation(() => Promise.resolve(result));
+    apiMocks.quotesList.mockImplementation(() => Promise.reject(new Error('refresh failed')));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-1' }]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers();
+    const restore = silenceConsole();
+
+    try {
+      const promotion = await ctx.handlers.promoteQuoteCandidate('q-1', 'candidate-b');
+      expect(promotion.offer.id).toBe('of-1');
+      expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+        id: 'of-1',
+        revisionCode: 'REV1',
+      });
+    } finally {
+      restore();
+    }
   });
 
   test('createClientOfferFromLegacyQuote creates and links the missing first offer', async () => {
