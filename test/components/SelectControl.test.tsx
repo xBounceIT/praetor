@@ -1,5 +1,6 @@
 import { describe, expect, mock } from 'bun:test';
 import { fireEvent, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { installI18nMock } from '../helpers/i18n';
 import { reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
@@ -137,6 +138,30 @@ describe('<SelectControl />', () => {
 
     fireEvent.click(screen.getByText('Banana'));
     expect(onChange).toHaveBeenCalledWith('b');
+  });
+
+  test('searchable combobox shows an option description in a shadcn tooltip on hover', async () => {
+    const user = userEvent.setup();
+    render(
+      <SelectControl
+        options={[
+          { id: 'a', name: 'Apple', description: 'A crisp project description' },
+          { id: 'b', name: 'Banana' },
+        ]}
+        value=""
+        onChange={() => {}}
+        searchable
+      />,
+    );
+
+    await user.click(screen.getByRole('button'));
+    const describedOption = screen.getByText('Apple').closest('[data-slot="tooltip-trigger"]');
+    expect(describedOption).not.toBeNull();
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    await user.hover(describedOption as HTMLElement);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('A crisp project description');
   });
 
   test('searchable combobox renders displayValue with muted placeholder styling when displayValueIsPlaceholder is set', () => {

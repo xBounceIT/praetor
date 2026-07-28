@@ -9,6 +9,8 @@ sidebar:
 
 Usa il tracker per registrare il tempo lavorato su progetto e attività. Ogni registrazione deve indicare periodo, progetto, attività, descrizione e luogo quando richiesto.
 
+Nei selettori del tracker, passa il puntatore su un progetto o un'attività per leggerne la descrizione senza cambiare la selezione. Il suggerimento compare solo quando l'elemento ha una descrizione.
+
 Prima di salvare, verifica che le date siano corrette e che l'attività appartenga al progetto selezionato. Questo mantiene coerenti report, consuntivi e costi.
 
 Il tracker consente sempre registrazioni su sabati, domeniche e festività italiane. Quando il totale giornaliero supera **8 ore**, oppure quando vengono registrate ore in un weekend o in una festività italiana, Praetor crea una notifica di straordinario per i responsabili del centro di competenza dell'utente e per i Top Manager. Ogni evento viene notificato una sola volta per utente, data e origine tracker.

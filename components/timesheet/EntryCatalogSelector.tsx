@@ -2,7 +2,7 @@ import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntryLocation } from '../../types';
-import SelectControl from '../shared/SelectControl';
+import SelectControl, { type Option } from '../shared/SelectControl';
 import { CUSTOM_TASK_SENTINEL } from './useCatalogSelection';
 
 export interface EntryCatalogSelectorErrors {
@@ -54,8 +54,16 @@ const EntryCatalogSelector: React.FC<EntryCatalogSelectorProps> = ({
   const { t } = useTranslation('timesheets');
 
   const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
-  const projectOptions = filteredProjects.map((p) => ({ id: p.id, name: p.name }));
-  const taskOptions = filteredTasks.map((task) => ({ id: task.id, name: task.name }));
+  const projectOptions = filteredProjects.map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+  }));
+  const taskOptions: Option[] = filteredTasks.map((task) => ({
+    id: task.id,
+    name: task.name,
+    description: task.description,
+  }));
   if (allowCustomTask) {
     taskOptions.push({ id: CUSTOM_TASK_SENTINEL, name: t('entry.customTask') });
   }

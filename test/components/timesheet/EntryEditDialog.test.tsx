@@ -1,5 +1,6 @@
 import { describe, expect, mock } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { reactTest as test } from '../../helpers/reactTest';
@@ -110,6 +111,47 @@ describe('<EntryEditDialog />', () => {
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
     });
+  });
+
+  test('shows project and task descriptions when their catalog options are hovered', async () => {
+    const user = userEvent.setup();
+    render(
+      <EntryEditDialog
+        {...baseProps}
+        projects={projects.map((project) =>
+          project.id === 'project-alpha'
+            ? { ...project, description: 'Alpha project description' }
+            : project,
+        )}
+        projectTasks={projectTasks.map((task) =>
+          task.id === 'task-alpha' ? { ...task, description: 'Alpha task description' } : task,
+        )}
+        entry={sampleEntry}
+        onClose={mock(() => {})}
+        onSave={mock(() => {})}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Alpha Project/ }));
+    const projectOptions = document.querySelector<HTMLElement>('[data-slot="popover-content"]');
+    expect(projectOptions).not.toBeNull();
+    const projectOption = within(projectOptions as HTMLElement)
+      .getByText('Alpha Project')
+      .closest('[data-slot="tooltip-trigger"]');
+    expect(projectOption).not.toBeNull();
+    await user.hover(projectOption as HTMLElement);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Alpha project description');
+    await user.click(projectOption as HTMLElement);
+
+    await user.click(screen.getByRole('button', { name: /Alpha Task/ }));
+    const taskOptions = document.querySelector<HTMLElement>('[data-slot="popover-content"]');
+    expect(taskOptions).not.toBeNull();
+    const taskOption = within(taskOptions as HTMLElement)
+      .getByText('Alpha Task')
+      .closest('[data-slot="tooltip-trigger"]');
+    expect(taskOption).not.toBeNull();
+    await user.hover(taskOption as HTMLElement);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Alpha task description');
   });
 
   test('does not call onSave when no field changed; still closes', async () => {

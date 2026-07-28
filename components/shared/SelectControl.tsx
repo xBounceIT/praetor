@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 export interface Option {
   id: string;
   name: string;
+  description?: string | null;
   icon?: React.ReactNode;
   badge?: string;
   disabled?: boolean;
@@ -504,6 +505,19 @@ const SearchableSelectControl = ({
                 )}
                 {filteredOptions.map((option) => {
                   const selected = isMulti ? selectedValueSet.has(option.id) : value === option.id;
+                  const optionLabel = (
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      {renderOptionIcon(option.icon)}
+                      <span className="truncate">{option.name}</span>
+                      {option.badge && (
+                        <span className="rounded bg-praetor px-2 py-0.5 font-bold text-[10px] text-white uppercase leading-none">
+                          {option.badge}
+                        </span>
+                      )}
+                    </span>
+                  );
+                  const description = option.description?.trim();
+
                   return (
                     <CommandItem
                       key={option.id || EMPTY_VALUE_SENTINEL}
@@ -511,15 +525,16 @@ const SearchableSelectControl = ({
                       disabled={option.disabled && !(isMulti && selected)}
                       onSelect={() => handleSelect(option)}
                     >
-                      <span className="flex items-center gap-2 min-w-0 flex-1">
-                        {renderOptionIcon(option.icon)}
-                        <span className="truncate">{option.name}</span>
-                        {option.badge && (
-                          <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase leading-none">
-                            {option.badge}
-                          </span>
-                        )}
-                      </span>
+                      {description ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>{optionLabel}</TooltipTrigger>
+                          <TooltipContent side="right" sideOffset={6}>
+                            {description}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        optionLabel
+                      )}
                       <CheckIcon
                         className={cn('ml-auto size-4', selected ? 'opacity-100' : 'opacity-0')}
                       />

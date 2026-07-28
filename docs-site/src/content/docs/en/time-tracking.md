@@ -9,6 +9,8 @@ sidebar:
 
 Use the tracker to record time spent on projects and tasks. Each entry should include period, project, task, description, and location when required.
 
+In the tracker selectors, hover over a project or task to read its description without changing the selection. The tooltip appears only when the item has a description.
+
 Before saving, verify that dates are correct and that the task belongs to the selected project. This keeps reports, totals, and costs consistent.
 
 The tracker always allows entries on Saturdays, Sundays, and Italian holidays. When the daily total exceeds **8 hours**, or when any time is recorded on a weekend or Italian holiday, Praetor creates an overtime notification for the user's competence-center managers and all Top Managers. Each event is notified only once per user, date, and tracker source.
