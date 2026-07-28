@@ -89,7 +89,7 @@
     "offerCreatedToast": "Client offer created",
     "quoteDeleted": "Quote deleted",
     "convertToSale": "Convert to Sale",
-    "convertToOffer": "Convert to Offer",
+    "convertToOffer": "Convert to offer",
     "convertConfirm": "Convert this quote to a sale?",
     "readOnlyStatus": "Read-only due to non-draft status",
     "readOnlyExpired": "Read-only: the quote has expired — extend the expiration date to revalidate it",
