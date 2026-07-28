@@ -1,5 +1,6 @@
 import { describe, expect, mock } from 'bun:test';
 import { fireEvent, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { installI18nMock } from '../helpers/i18n';
 import { reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
@@ -137,6 +138,38 @@ describe('<SelectControl />', () => {
 
     fireEvent.click(screen.getByText('Banana'));
     expect(onChange).toHaveBeenCalledWith('b');
+  });
+
+  test('searchable combobox exposes option descriptions on hover and keyboard navigation', async () => {
+    const user = userEvent.setup();
+    render(
+      <SelectControl
+        options={[
+          { id: 'a', name: 'Apple', description: 'A crisp project description' },
+          { id: 'b', name: 'Banana', description: 'A ripe project description' },
+        ]}
+        value=""
+        onChange={() => {}}
+        searchable
+      />,
+    );
+
+    await user.click(screen.getByRole('button'));
+    const commandInput = screen.getByRole('combobox');
+    await user.keyboard('{ArrowDown}');
+    const accessibleOption = screen.getByRole('option', {
+      name: 'Banana. A ripe project description',
+    });
+    const describedOption = screen.getByText('Apple').closest('[data-slot="tooltip-trigger"]');
+    expect(describedOption).not.toBeNull();
+    expect(commandInput.getAttribute('aria-activedescendant')).toBe(accessibleOption.id);
+    expect(describedOption).toHaveClass('-mx-2', '-my-1.5', 'px-2', 'py-1.5');
+    expect(describedOption?.querySelector('svg')).not.toBeNull();
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    await user.hover(describedOption as HTMLElement);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('A crisp project description');
   });
 
   test('searchable combobox renders displayValue with muted placeholder styling when displayValueIsPlaceholder is set', () => {

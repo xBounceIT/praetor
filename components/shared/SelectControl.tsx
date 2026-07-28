@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 export interface Option {
   id: string;
   name: string;
+  description?: string | null;
   icon?: React.ReactNode;
   badge?: string;
   disabled?: boolean;
@@ -504,18 +505,13 @@ const SearchableSelectControl = ({
                 )}
                 {filteredOptions.map((option) => {
                   const selected = isMulti ? selectedValueSet.has(option.id) : value === option.id;
-                  return (
-                    <CommandItem
-                      key={option.id || EMPTY_VALUE_SENTINEL}
-                      value={option.name}
-                      disabled={option.disabled && !(isMulti && selected)}
-                      onSelect={() => handleSelect(option)}
-                    >
-                      <span className="flex items-center gap-2 min-w-0 flex-1">
+                  const optionRow = (
+                    <span className="-mx-2 -my-1.5 flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5">
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
                         {renderOptionIcon(option.icon)}
                         <span className="truncate">{option.name}</span>
                         {option.badge && (
-                          <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase leading-none">
+                          <span className="rounded bg-praetor px-2 py-0.5 font-bold text-[10px] text-white uppercase leading-none">
                             {option.badge}
                           </span>
                         )}
@@ -523,6 +519,28 @@ const SearchableSelectControl = ({
                       <CheckIcon
                         className={cn('ml-auto size-4', selected ? 'opacity-100' : 'opacity-0')}
                       />
+                    </span>
+                  );
+                  const description = option.description?.trim();
+
+                  return (
+                    <CommandItem
+                      key={option.id || EMPTY_VALUE_SENTINEL}
+                      value={option.name}
+                      aria-label={description ? `${option.name}. ${description}` : undefined}
+                      disabled={option.disabled && !(isMulti && selected)}
+                      onSelect={() => handleSelect(option)}
+                    >
+                      {description ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>{optionRow}</TooltipTrigger>
+                          <TooltipContent side="right" sideOffset={6}>
+                            {description}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        optionRow
+                      )}
                     </CommandItem>
                   );
                 })}
