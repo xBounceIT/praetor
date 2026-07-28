@@ -69,6 +69,7 @@ import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings, { type UserSettingsTab } from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
+import { neutralSuccessToastClassNames } from './components/ui/sonner-presets';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
@@ -1823,6 +1824,7 @@ const useAppContentController = () => {
     (offer: Pick<ClientOffer, 'id' | 'revisionCode'>) => {
       toast.success(tApp('sales:clientQuotes.offerCreatedToast'), {
         description: formatDocumentCode(offer.id, offer.revisionCode),
+        classNames: neutralSuccessToastClassNames,
         action: {
           label: tApp('sales:clientQuotes.viewOffer'),
           onClick: () => {
