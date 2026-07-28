@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { screen } from '@testing-library/react';
 import { toast } from 'sonner';
 import { Toaster } from '../../../components/ui/sonner';
@@ -6,6 +6,21 @@ import { offerCreatedToastClassNames } from '../../../components/ui/sonner-prese
 import { render } from '../../helpers/render';
 
 describe('<Toaster />', () => {
+  afterEach(() => localStorage.removeItem('praetor_theme'));
+
+  test('inherits the selected app theme outside the layout theme scope', async () => {
+    localStorage.setItem('praetor_theme', 'dark');
+
+    const { container } = render(<Toaster />);
+    const themeScope = container.querySelector('[data-shadcn-theme-scope]');
+    toast('Theme probe');
+    const toaster = (await screen.findByText('Theme probe')).closest('[data-sonner-toaster]');
+
+    expect(themeScope?.getAttribute('data-shadcn-theme')).toBe('dark');
+    expect(themeScope?.className).toContain('dark');
+    expect(toaster?.getAttribute('data-sonner-theme')).toBe('dark');
+  });
+
   test('supports a primary themed offer success without disabling rich colors globally', async () => {
     const { container } = render(<Toaster richColors closeButton position="top-center" />);
 
