@@ -157,6 +157,8 @@ describe('<SelectControl />', () => {
     await user.click(screen.getByRole('button'));
     const describedOption = screen.getByText('Apple').closest('[data-slot="tooltip-trigger"]');
     expect(describedOption).not.toBeNull();
+    expect(describedOption).toHaveClass('-mx-2', '-my-1.5', 'px-2', 'py-1.5');
+    expect(describedOption?.querySelector('svg')).not.toBeNull();
     expect(screen.queryByRole('tooltip')).toBeNull();
 
     await user.hover(describedOption as HTMLElement);
