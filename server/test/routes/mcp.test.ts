@@ -351,6 +351,7 @@ const makeCreateTimeEntryArgs = (task: string) => ({
   projectId: 'p1',
   projectName: 'Project One',
   task,
+  notes: `Work completed for ${task}`,
   duration: 1,
 });
 const FULL_HR_USER = {
@@ -1087,6 +1088,24 @@ describe('/api/mcp', () => {
     const body = parseMcpBody(res.body);
     expect(body.result.isError).toBe(true);
     expect(body.result.content[0].text).toMatch(/duration.*<=\s*24/i);
+    expect(createTimeEntryMock).not.toHaveBeenCalled();
+  });
+
+  test('bulk_create_time_entries requires notes via Zod, never reaching the service', async () => {
+    const { notes: _notes, ...entryWithoutNotes } = makeCreateTimeEntryArgs('Task One');
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 82,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_create_time_entries',
+        arguments: { entries: [entryWithoutNotes] },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = parseMcpBody(res.body);
+    expect(body.result.isError).toBe(true);
     expect(createTimeEntryMock).not.toHaveBeenCalled();
   });
 

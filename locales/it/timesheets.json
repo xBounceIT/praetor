@@ -69,7 +69,7 @@
     "project": "Progetto",
     "task": "Attività",
     "hours": "Ore",
-    "notes": "Note (opzionali)",
+    "notes": "Note",
     "hourlyRate": "Tariffa Oraria",
     "dailyGoal": "Obiettivo Giornaliero",
     "addToTimesheet": "Aggiungi al Timesheet",
@@ -119,6 +119,7 @@
     "clientRequired": "Il cliente è obbligatorio",
     "projectRequired": "Il progetto è obbligatorio",
     "taskRequired": "L'attività è obbligatoria",
+    "notesRequired": "Le note sono obbligatorie per ogni voce timesheet",
     "endDateAfterStart": "La data di fine deve essere successiva alla data di inizio",
     "recurrencePatterns": {
       "daily": "Giornaliero",

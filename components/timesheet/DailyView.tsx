@@ -2,7 +2,7 @@ import { Save } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
+import type { Client, Project, ProjectTask, TimeEntryDraft, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { formatRecurrencePattern } from '../../utils/recurrence';
@@ -16,21 +16,17 @@ import DateField from '../shared/DateField';
 import SelectControl from '../shared/SelectControl';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { Button } from '../ui/button';
-import { Field, FieldLabel, RequiredMark } from '../ui/field';
+import { Field, FieldError, FieldLabel, RequiredMark } from '../ui/field';
 import { Input } from '../ui/input';
 import { Separator } from '../ui/separator';
 import EntryCatalogSelector from './EntryCatalogSelector';
 import { CUSTOM_TASK_SENTINEL, useCatalogSelection } from './useCatalogSelection';
 
-type TimeEntryDraft = Omit<
-  TimeEntry,
-  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
->;
-
 type DailyEntryErrors = {
   clientId?: string;
   projectId?: string;
   task?: string;
+  notes?: string;
   recurrenceEndDate?: string;
 };
 
@@ -325,6 +321,7 @@ const DailyView: React.FC<DailyViewProps> = ({
     if (!selection.taskName) {
       newErrors.task = t('entry.taskRequired');
     }
+    if (!notes.trim()) newErrors.notes = t('entry.notesRequired');
 
     if (makeRecurring && recurrenceEndDate && date && recurrenceEndDate < date) {
       newErrors.recurrenceEndDate = t('entry.endDateAfterStart');
@@ -454,22 +451,34 @@ const DailyView: React.FC<DailyViewProps> = ({
         />
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
-          <Field className="min-w-0">
-            <FieldLabel htmlFor="daily-entry-notes">{t('entry.notesDescription')}</FieldLabel>
+          <Field className="min-w-0" data-invalid={Boolean(errors.notes)}>
+            <FieldLabel htmlFor="daily-entry-notes">
+              {t('entry.notesDescription')} <RequiredMark />
+            </FieldLabel>
             <Input
               id="daily-entry-notes"
               type="text"
               value={notes}
-              onChange={(e) => dispatchForm({ type: 'setNotes', notes: e.target.value })}
+              onChange={(e) => {
+                dispatchForm({ type: 'setNotes', notes: e.target.value });
+                dispatchForm({ type: 'clearError', field: 'notes' });
+              }}
               placeholder={t('entry.notesPlaceholder')}
               className="h-10 rounded-lg"
+              required
+              aria-invalid={Boolean(errors.notes)}
               // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
               maxLength={2000}
             />
+            <FieldError className="text-xs">{errors.notes}</FieldError>
           </Field>
 
           <div className="min-w-0 flex items-end">
-            <Button type="submit" disabled={!hasValidDuration} className="h-10 w-full rounded-lg">
+            <Button
+              type="submit"
+              disabled={!hasValidDuration || !notes.trim()}
+              className="h-10 w-full rounded-lg"
+            >
               <Save className="size-4" aria-hidden="true" />
               {t('entry.logTime')}
             </Button>

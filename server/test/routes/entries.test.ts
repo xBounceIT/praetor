@@ -240,6 +240,7 @@ type SampleContextOverrides = Partial<{
   projectName: string;
   task: string;
   taskId: string | null;
+  notes: string | null;
 }>;
 
 const sampleContext = (overrides: SampleContextOverrides = {}) => ({
@@ -251,6 +252,7 @@ const sampleContext = (overrides: SampleContextOverrides = {}) => ({
   projectName: SAMPLE_ENTRY.projectName,
   task: SAMPLE_ENTRY.task,
   taskId: SAMPLE_ENTRY.taskId as string | null,
+  notes: 'Existing work note',
   ...overrides,
 });
 
@@ -670,6 +672,7 @@ describe('POST /api/entries', () => {
     projectId: 'p1',
     projectName: 'Project',
     task: 'Dev',
+    notes: 'Worked on Dev',
   };
 
   test('201 happy path', async () => {
@@ -734,15 +737,7 @@ describe('POST /api/entries', () => {
     );
   });
 
-  test('201: notes null is accepted and stored as null', async () => {
-    findCostPerHourMock.mockResolvedValue(50);
-    findIdByProjectAndNameMock.mockResolvedValue('t1');
-    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
-      ...entry,
-      createdAt: 1_700_000_000_000,
-      version: 1,
-    }));
-
+  test('400: notes are required', async () => {
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/entries',
@@ -750,11 +745,34 @@ describe('POST /api/entries', () => {
       payload: { ...validBody, duration: 2, notes: null },
     });
 
-    expect(res.statusCode).toBe(201);
-    expect(entriesCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ notes: null }),
-      TX_SENTINEL,
-    );
+    expect(res.statusCode).toBe(400);
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('400: omitted notes are rejected', async () => {
+    const { notes: _notes, ...bodyWithoutNotes } = validBody;
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: bodyWithoutNotes,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('400: whitespace-only notes are rejected', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, notes: '   ' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'notes is required' });
+    expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
   test('201: creates even when another entry already has the same date/project/task', async () => {
@@ -1518,6 +1536,34 @@ describe('PUT /api/entries/:id', () => {
     expect(entriesUpdateMock).toHaveBeenCalledWith('te-1', expect.objectContaining({ notes }));
   });
 
+  test('400 empty notes do not update entry', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ notes: '   ' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'notes is required' });
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 legacy entries without notes require a note before other updates', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext({ notes: null }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 6 }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'notes is required' });
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
     entriesUpdateMock.mockResolvedValue(SAMPLE_ENTRY);
@@ -2177,6 +2223,7 @@ describe('POST /api/entries/recurring/generate', () => {
         projectName: 'Project One',
         task: 'Daily standup',
         taskId: 't1',
+        notes: 'Daily standup',
         duration: 0.5,
         hourlyCost: 40,
         isPlaceholder: true,

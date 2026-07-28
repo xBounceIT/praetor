@@ -1,14 +1,13 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { TimeEntry, User } from '../../types';
-import type { TimeEntryDuplicateDraft } from '../../utils/timeEntryDuplicate';
+import type { TimeEntry, TimeEntryDraft, User } from '../../types';
 import { toastError } from '../../utils/toast';
 
 type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
 
 export type AddBulkResult = {
   created: TimeEntry[];
-  failed: Array<{ error: unknown; entry: TimeEntryDuplicateDraft }>;
+  failed: Array<{ error: unknown; entry: TimeEntryDraft }>;
 };
 
 const upsertEntriesById = (prev: TimeEntry[], next: TimeEntry[]): TimeEntry[] => {
@@ -35,7 +34,7 @@ export type EntryHandlersDeps = {
 export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   const { currentUser, viewingUserId, setEntries } = deps;
 
-  const add = async (newEntry: TimeEntryDuplicateDraft) => {
+  const add = async (newEntry: TimeEntryDraft) => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
@@ -51,13 +50,13 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   };
 
   const addBulk = async (
-    newEntries: TimeEntryDuplicateDraft[],
+    newEntries: TimeEntryDraft[],
     options?: { silent?: boolean },
   ): Promise<AddBulkResult> => {
     if (!currentUser) return { created: [], failed: [] };
     const targetUserId = viewingUserId || currentUser.id;
     const created: TimeEntry[] = [];
-    const failures: Array<{ error: unknown; entry: TimeEntryDuplicateDraft }> = [];
+    const failures: Array<{ error: unknown; entry: TimeEntryDraft }> = [];
 
     // Each POST locks the user row inside a SERIALIZABLE transaction; parallel
     // creates for the same user trigger Postgres 40001 serialization failures.

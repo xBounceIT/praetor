@@ -69,7 +69,7 @@
     "project": "Project",
     "task": "Task",
     "hours": "Hours",
-    "notes": "Notes (optional)",
+    "notes": "Notes",
     "hourlyRate": "Hourly Rate",
     "dailyGoal": "Daily Goal",
     "addToTimesheet": "Add to Timesheet",
@@ -119,6 +119,7 @@
     "clientRequired": "Client is required",
     "projectRequired": "Project is required",
     "taskRequired": "Task is required",
+    "notesRequired": "Notes are required for every time entry",
     "endDateAfterStart": "End date must be after start date",
     "recurrencePatterns": {
       "daily": "Daily",

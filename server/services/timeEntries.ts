@@ -141,15 +141,12 @@ const enforceDurationMax = (value: number): void => {
   }
 };
 
-const parseOptionalNotes = (value: unknown): string | null => {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== 'string') {
-    return badRequest('notes must be a string');
-  }
-  if (value.length > MAX_NOTES_LENGTH) {
+const parseRequiredNotes = (value: unknown): string => {
+  const notes = requireValid(requireNonEmptyString(value, 'notes'));
+  if (notes.length > MAX_NOTES_LENGTH) {
     return badRequest(`notes must be ${MAX_NOTES_LENGTH} characters or fewer`);
   }
-  return value === '' ? null : value;
+  return notes;
 };
 
 const parseExpectedVersion = (value: unknown): number => {
@@ -297,6 +294,7 @@ export const createTimeEntry = async (
   const projectId = requireValid(requireNonEmptyString(input.projectId, 'projectId'));
   const projectName = requireValid(requireNonEmptyString(input.projectName, 'projectName'));
   const task = requireValid(requireNonEmptyString(input.task, 'task'));
+  const notes = parseRequiredNotes(input.notes);
   const duration = requireValid(optionalLocalizedNonNegativeNumber(input.duration, 'duration'));
   if (duration !== null) enforceDurationMax(duration);
 
@@ -335,7 +333,6 @@ export const createTimeEntry = async (
 
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
-  const notes = parseOptionalNotes(input.notes);
   const resolvedDuration = duration ?? 0;
 
   const created = await withSerializableWriteTransaction(async (tx) => {
@@ -390,13 +387,16 @@ export const updateTimeEntry = async (
     enforceDurationMax(parsedDuration);
   }
 
-  let validatedNotes: string | null | undefined;
+  let validatedNotes: string | undefined;
   if (input.notes !== undefined) {
-    validatedNotes = parseOptionalNotes(input.notes);
+    validatedNotes = parseRequiredNotes(input.notes);
   }
 
   const context = await entriesRepo.findContext(entryId);
   if (context === null) return fail(404, 'Entry not found');
+  if (validatedNotes === undefined && !context.notes?.trim()) {
+    badRequest('notes is required');
+  }
 
   if (context.userId !== actor.id && !hasPermission(actor, 'timesheets.tracker_all.update')) {
     const allowed = await workUnitsRepo.isUserManagedBy(actor.id, context.userId);
@@ -725,21 +725,24 @@ export const generateRecurringEntries = async (
     task: (typeof allowedTasks)[number],
     project: NonNullable<ReturnType<typeof projectsByProjectId.get>>,
     dateStr: string,
-  ) => ({
-    id: generatePrefixedId('te'),
-    userId: targetUserId,
-    date: dateStr,
-    clientId: project.clientId,
-    clientName: project.clientName,
-    projectId: task.projectId,
-    projectName: project.projectName,
-    task: task.name,
-    taskId: task.id,
-    notes: null,
-    duration: task.recurrenceDuration ?? 0,
-    isPlaceholder: true,
-    location: settings?.defaultLocation ?? 'remote',
-  });
+  ) => {
+    const notes = task.notes?.trim() || task.description?.trim() || task.name;
+    return {
+      id: generatePrefixedId('te'),
+      userId: targetUserId,
+      date: dateStr,
+      clientId: project.clientId,
+      clientName: project.clientName,
+      projectId: task.projectId,
+      projectName: project.projectName,
+      task: task.name,
+      taskId: task.id,
+      notes: notes.slice(0, MAX_NOTES_LENGTH),
+      duration: task.recurrenceDuration ?? 0,
+      isPlaceholder: true,
+      location: settings?.defaultLocation ?? 'remote',
+    };
+  };
   type PendingEntryCandidate = ReturnType<typeof buildPendingEntry>;
   type PendingEntry = PendingEntryCandidate & { hourlyCost: number };
 

@@ -1,9 +1,6 @@
-import type { TimeEntry } from '../types';
+import type { TimeEntry, TimeEntryDraft } from '../types';
 
-export type TimeEntryDuplicateDraft = Omit<
-  TimeEntry,
-  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
->;
+export type TimeEntryDuplicateDraft = TimeEntryDraft;
 
 /** Build create payloads that copy catalog fields onto new dates (never placeholders). */
 export const buildDuplicateTimeEntryDrafts = (
@@ -19,8 +16,11 @@ export const buildDuplicateTimeEntryDrafts = (
     | 'location'
   > & { notes?: string | null },
   dates: string[],
-): TimeEntryDuplicateDraft[] =>
-  dates.map((date) => ({
+): TimeEntryDuplicateDraft[] => {
+  const notes = entry.notes?.trim();
+  if (!notes) throw new Error('notes is required');
+
+  return dates.map((date) => ({
     date,
     clientId: entry.clientId,
     clientName: entry.clientName,
@@ -28,11 +28,12 @@ export const buildDuplicateTimeEntryDrafts = (
     projectName: entry.projectName,
     task: entry.task,
     taskId: entry.taskId,
-    ...(typeof entry.notes === 'string' ? { notes: entry.notes } : {}),
+    notes,
     duration: entry.duration,
     location: entry.location,
     isPlaceholder: false,
   }));
+};
 
 /** Dates that already have the same project+task key as the source entry (excluding source). */
 export const collectDuplicateConflictDates = (

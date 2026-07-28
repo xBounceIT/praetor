@@ -7,6 +7,12 @@ sidebar:
 
 ## Tracker
 
+Ogni registrazione timesheet richiede una nota non vuota. La regola vale per inserimenti
+giornalieri e settimanali, duplicazioni, modifiche che cambiano la nota e chiamate API/MCP.
+Nella vista settimanale è possibile indicare una nota per il singolo giorno oppure usare la
+nota settimanale come valore comune. Le registrazioni ricorrenti usano, in ordine, le note,
+la descrizione o il nome dell'attività.
+
 Usa il tracker per registrare il tempo lavorato su progetto e attività. Ogni registrazione deve indicare periodo, progetto, attività, descrizione e luogo quando richiesto.
 
 Prima di salvare, verifica che le date siano corrette e che l'attività appartenga al progetto selezionato. Questo mantiene coerenti report, consuntivi e costi.

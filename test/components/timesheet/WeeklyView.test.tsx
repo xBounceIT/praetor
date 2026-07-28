@@ -279,6 +279,7 @@ const entryBOn = (date: string): TimeEntry => ({
   projectId: 'project-b',
   projectName: 'Project B',
   task: 'Task B',
+  notes: 'Existing work note',
   duration: 3.5,
   hourlyCost: 0,
   createdAt: 1700000000,
@@ -315,6 +316,74 @@ const waitForDurationInputs = async (predicate: (inputs: HTMLInputElement[]) => 
   });
 
 describe('<WeeklyView /> submit mutations', () => {
+  test('does not create a weekly entry without an effective note', async () => {
+    const addCalls: unknown[][] = [];
+
+    render(
+      <WeeklyView
+        entries={[]}
+        {...alphaCatalog}
+        {...sharedProps}
+        onAddBulkEntries={async (entries) => {
+          addCalls.push(entries);
+          return { created: [], failed: [] };
+        }}
+      />,
+    );
+
+    const inputs = await waitForDurationInputs((items) => items.some((input) => !input.disabled));
+    const emptyInput = inputs.find((input) => !input.disabled && input.value === '');
+    if (!emptyInput) throw new Error('no editable weekly duration input found');
+
+    setDurationInput(emptyInput, '1');
+    clickSubmit();
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('entry.notesRequired');
+    });
+    expect(addCalls).toEqual([]);
+  });
+
+  test('uses the weekly note when updating a legacy entry without notes', async () => {
+    const today = todayDateOnly();
+    const updateCalls: Array<{ id: string; updates: Record<string, unknown> }> = [];
+
+    render(
+      <WeeklyView
+        entries={[{ ...entryBOn(today), notes: undefined }]}
+        {...twoComboCatalog}
+        {...sharedProps}
+        onUpdateEntry={(id, updates) => {
+          updateCalls.push({ id, updates });
+        }}
+      />,
+    );
+
+    const durationInput = await waitFor(() => {
+      const input = findDurationInputWithValue('3,5');
+      if (!input) throw new Error('pre-filled 3,5 input not found');
+      return input;
+    });
+
+    setDurationInput(durationInput, '4');
+    fireEvent.change(screen.getByPlaceholderText('weekly.weekNotePlaceholder'), {
+      target: { value: 'Recovered legacy note' },
+    });
+    clickSubmit();
+
+    await waitFor(() => {
+      expect(updateCalls).toHaveLength(1);
+    });
+    expect(updateCalls[0]).toEqual({
+      id: 'entry-b',
+      updates: expect.objectContaining({
+        duration: 4,
+        notes: 'Recovered legacy note',
+        version: 7,
+      }),
+    });
+  });
+
   test('clearing an existing entry-row cell calls onDeleteEntry and not onUpdateEntry', async () => {
     const today = todayDateOnly();
     const updateCalls: Array<{ id: string; updates: unknown }> = [];
@@ -439,6 +508,9 @@ describe('<WeeklyView /> submit mutations', () => {
     ).find((i) => i.value === '' && !i.disabled && i !== prevInput);
     if (!emptyInput) throw new Error('no empty day-cell input available');
     setDurationInput(emptyInput, '1,5');
+    fireEvent.change(screen.getByPlaceholderText('weekly.weekNotePlaceholder'), {
+      target: { value: 'Shared weekly note' },
+    });
 
     clickSubmit();
 
@@ -526,6 +598,9 @@ describe('<WeeklyView /> submit mutations', () => {
     if (!emptyInRow) throw new Error('no empty day cell in the phase 1 row');
 
     setDurationInput(emptyInRow, '1,5');
+    fireEvent.change(screen.getByPlaceholderText('weekly.weekNotePlaceholder'), {
+      target: { value: 'Shared weekly note' },
+    });
     clickSubmit();
 
     await waitFor(() => {

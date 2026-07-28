@@ -11,7 +11,7 @@ import TaskFormModal, {
   type TaskFormDetails,
 } from '../projects/TaskFormModal';
 import { Button } from '../ui/button';
-import { Field, FieldLabel } from '../ui/field';
+import { Field, FieldError, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import EntryCatalogSelector from './EntryCatalogSelector';
 import { CUSTOM_TASK_SENTINEL, type UseCatalogSelectionResult } from './useCatalogSelection';
@@ -20,6 +20,7 @@ export interface WeeklyEntryFormErrors {
   clientId?: string;
   projectId?: string;
   task?: string;
+  notes?: string;
 }
 
 export interface WeeklyEntryFormProps {
@@ -28,7 +29,7 @@ export interface WeeklyEntryFormProps {
   weekNote: string;
   errors: WeeklyEntryFormErrors;
   onWeekNoteChange: (value: string) => void;
-  onClearError: (field: 'clientId' | 'projectId' | 'task') => void;
+  onClearError: (field: 'clientId' | 'projectId' | 'task' | 'notes') => void;
   clients: Client[];
   projects: Project[];
   permissions: string[];
@@ -137,18 +138,23 @@ const WeeklyEntryForm: React.FC<WeeklyEntryFormProps> = ({
         />
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px] gap-4 items-end">
-          <Field className="min-w-0">
+          <Field className="min-w-0" data-invalid={Boolean(errors.notes)}>
             <FieldLabel htmlFor="weekly-form-week-note">{t('weekly.weekNoteLabel')}</FieldLabel>
             <Input
               id="weekly-form-week-note"
               type="text"
               value={weekNote}
-              onChange={(e) => onWeekNoteChange(e.target.value)}
+              onChange={(e) => {
+                onWeekNoteChange(e.target.value);
+                onClearError('notes');
+              }}
               placeholder={t('weekly.weekNotePlaceholder')}
               className="h-10 rounded-lg"
+              aria-invalid={Boolean(errors.notes)}
               // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
               maxLength={2000}
             />
+            <FieldError className="text-xs">{errors.notes}</FieldError>
           </Field>
 
           <div className="min-w-0 flex items-end">
