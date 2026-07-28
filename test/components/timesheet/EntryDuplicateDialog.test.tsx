@@ -96,8 +96,8 @@ describe('<EntryDuplicateDialog />', () => {
     });
   });
 
-  test('keeps failed dates selected when onDuplicate returns remaining dates', async () => {
-    const onDuplicate = mock(async () => ['2024-03-15']);
+  test('closes after onDuplicate resolves even when some days failed upstream', async () => {
+    const onDuplicate = mock(async () => {});
     const onClose = mock(() => {});
 
     render(
@@ -111,10 +111,9 @@ describe('<EntryDuplicateDialog />', () => {
     await waitFor(() => {
       expect(onDuplicate).toHaveBeenCalledWith(['2024-03-12', '2024-03-15']);
     });
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /entry\.duplicateToDays/ })).toHaveTextContent(
-      'entry.duplicateToDays',
-    );
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
   });
 
   test('keeps the dialog open when onDuplicate rejects', async () => {

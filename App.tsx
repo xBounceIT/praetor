@@ -1081,8 +1081,10 @@ const TrackerView: React.FC<{
       const failedCount = result.failed.length;
 
       if (createdCount === 0) {
+        // Always-append creates are not idempotent: after a lost response the row may
+        // already exist, so close and ask the user to verify before trying again.
         toastError(t('entry.duplicateFailed'));
-        throw new Error('duplicate-failed');
+        return;
       }
       if (failedCount > 0) {
         toastSuccess(
@@ -1092,8 +1094,7 @@ const TrackerView: React.FC<{
             failed: failedCount,
           }),
         );
-        // Keep only failed dates selected so retry does not re-append successes.
-        return result.failed.map((failure) => failure.entry.date);
+        return;
       }
       if (sameTaskDayCount > 0) {
         toastWarning(
