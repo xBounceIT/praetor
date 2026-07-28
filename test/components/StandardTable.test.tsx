@@ -1214,7 +1214,12 @@ describe('<StandardTable />', () => {
 
   test('shows a clear-filters toolbar button only while filters are active', async () => {
     const { container } = render(
-      <StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />,
+      <StandardTable<Row>
+        title="People"
+        data={sampleRows}
+        columns={sampleColumns}
+        initialFilterState={{ name: [] }}
+      />,
     );
 
     expect(screen.queryByRole('button', { name: 'table.clearFilters' })).toBeNull();

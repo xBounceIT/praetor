@@ -1891,6 +1891,7 @@ const useStandardTableController = <T extends object>({
     () => Object.entries(filterState).map(([id, value]) => ({ id, value })),
     [filterState],
   );
+  const hasActiveFilters = Object.values(filterState).some((values) => values.length > 0);
 
   const pagination = useMemo<PaginationState>(
     () => ({ pageIndex: currentPage - 1, pageSize: rowsPerPage }),
@@ -2759,7 +2760,7 @@ const useStandardTableController = <T extends object>({
     shouldRenderTable,
     processedRows,
     handleExportToCsv,
-    hasActiveFilters: columnFilters.length > 0,
+    hasActiveFilters,
     clearAllFilters,
     showSaveColumnLayoutTip,
     isViewCreationDisabled,
