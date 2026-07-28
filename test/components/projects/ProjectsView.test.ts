@@ -314,6 +314,17 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('<output className="flex h-8');
   });
 
+  test('requires draft task effort and revenue only for commercial jobs', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    const monthlyEffortColumn = source.match(/id: 'monthlyEffort'[\s\S]*?id: 'duration'/)?.[0];
+    const revenueColumn = source.match(/id: 'revenue'[\s\S]*?id: 'totalRevenue'/)?.[0];
+
+    expect(monthlyEffortColumn).toContain('required={!isInternalProject}');
+    expect(revenueColumn).toContain('required={!isInternalProject}');
+  });
+
   test('order selector auto-fills the client and disables the client picker while bound', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),

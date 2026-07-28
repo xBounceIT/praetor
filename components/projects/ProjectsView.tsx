@@ -773,7 +773,7 @@ const useProjectsController = ({
           type="number"
           min="0"
           step="1"
-          required
+          required={!isInternalProject}
           value={row.monthlyEffort}
           placeholder="0"
           onKeyDown={(e) => {
@@ -822,7 +822,7 @@ const useProjectsController = ({
       cell: ({ row }) => (
         <ValidatedNumberInput
           min="0"
-          required
+          required={!isInternalProject}
           value={row.revenue}
           placeholder="0,00"
           onValueChange={(value) => updateDraftTask(row._id, 'revenue', value)}
