@@ -6957,6 +6957,16 @@
                           "clientId": {
                             "type": "string"
                           },
+                          "description": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "isDisabled": {
                             "type": "boolean"
                           },
@@ -6990,6 +7000,16 @@
                           },
                           "projectId": {
                             "type": "string"
+                          },
+                          "description": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "isDisabled": {
                             "type": "boolean"
@@ -20482,7 +20502,10 @@
                     "type": "string"
                   },
                   "notes": {
-                    "type": "string",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
                     "maxLength": 2000
                   },
                   "duration": {
