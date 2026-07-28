@@ -373,7 +373,6 @@ export type EntryContext = {
   projectName: string;
   task: string;
   taskId: string | null;
-  notes: string | null;
 };
 
 export const findContext = async (
@@ -390,7 +389,6 @@ export const findContext = async (
       projectName: timeEntries.projectName,
       task: timeEntries.task,
       taskId: timeEntries.taskId,
-      notes: timeEntries.notes,
     })
     .from(timeEntries)
     .where(eq(timeEntries.id, id));

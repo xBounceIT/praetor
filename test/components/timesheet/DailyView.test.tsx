@@ -237,9 +237,10 @@ describe('<DailyView /> RBAC catalog sync', () => {
     });
   });
 
-  test('disables submit until positive hours and required notes are entered', async () => {
+  test('keeps note validation reachable once positive hours are entered', async () => {
+    const onAdd = mock(() => {});
     const props = {
-      onAdd: mock(() => {}),
+      onAdd,
       selectedDate: '2026-05-11',
       permissions: [],
       dailyGoal: 8,
@@ -254,11 +255,18 @@ describe('<DailyView /> RBAC catalog sync', () => {
 
     const hoursInput = screen.getByPlaceholderText('0,0');
     fireEvent.change(hoursInput, { target: { value: '1,5' } });
-    expect(submitButton).toBeDisabled();
+    expect(submitButton).not.toBeDisabled();
+
+    fireEvent.click(submitButton);
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('entry.notesRequired');
+    });
+    expect(onAdd).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByPlaceholderText('entry.notesPlaceholder'), {
       target: { value: 'Implemented validation' },
     });
+    expect(document.body).not.toHaveTextContent('entry.notesRequired');
     expect(submitButton).not.toBeDisabled();
 
     fireEvent.change(hoursInput, { target: { value: '0' } });

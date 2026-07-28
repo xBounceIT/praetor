@@ -234,7 +234,11 @@ describe('<EntryEditDialog />', () => {
     const notesInput = document.getElementById('entry-edit-notes') as HTMLInputElement;
     fireEvent.change(notesInput, { target: { value: '   ' } });
 
-    expect(screen.getByRole('button', { name: 'common:buttons.save' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('entry.notesRequired');
+    });
     expect(onSave).not.toHaveBeenCalled();
   });
 

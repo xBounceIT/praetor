@@ -418,7 +418,7 @@ const DailyView: React.FC<DailyViewProps> = ({
     <div className="rounded-lg border border-border bg-background shadow-sm p-5">
       <DailyEntryHeader date={date} isExceedingGoal={isExceedingGoal} dailyGoal={dailyGoal} />
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <EntryCatalogSelector
           clients={selectableCatalogs.clients}
           filteredProjects={selection.filteredProjects}
@@ -474,11 +474,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </Field>
 
           <div className="min-w-0 flex items-end">
-            <Button
-              type="submit"
-              disabled={!hasValidDuration || !notes.trim()}
-              className="h-10 w-full rounded-lg"
-            >
+            <Button type="submit" disabled={!hasValidDuration} className="h-10 w-full rounded-lg">
               <Save className="size-4" aria-hidden="true" />
               {t('entry.logTime')}
             </Button>

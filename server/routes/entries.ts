@@ -80,13 +80,13 @@ const entryCreateBodySchema = {
     projectId: { type: 'string' },
     projectName: { type: 'string' },
     task: { type: 'string' },
-    notes: { type: 'string', minLength: 1, maxLength: MAX_NOTES_LENGTH },
+    notes: { type: ['string', 'null'], maxLength: MAX_NOTES_LENGTH },
     duration: { type: 'number', maximum: MAX_DURATION_HOURS },
     isPlaceholder: { type: 'boolean' },
     userId: { type: 'string' },
     location: { type: 'string' },
   },
-  required: ['date', 'clientId', 'clientName', 'projectId', 'projectName', 'task', 'notes'],
+  required: ['date', 'clientId', 'clientName', 'projectId', 'projectName', 'task'],
 } as const;
 
 const entryUpdateBodySchema = {
@@ -99,7 +99,7 @@ const entryUpdateBodySchema = {
     projectId: { type: 'string' },
     task: { type: 'string' },
     duration: { type: 'number', maximum: MAX_DURATION_HOURS },
-    notes: { type: 'string', minLength: 1, maxLength: MAX_NOTES_LENGTH },
+    notes: { type: ['string', 'null'], maxLength: MAX_NOTES_LENGTH },
     isPlaceholder: { type: 'boolean' },
     location: { type: 'string' },
     version: { type: 'integer', minimum: 1 },

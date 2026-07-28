@@ -240,7 +240,6 @@ type SampleContextOverrides = Partial<{
   projectName: string;
   task: string;
   taskId: string | null;
-  notes: string | null;
 }>;
 
 const sampleContext = (overrides: SampleContextOverrides = {}) => ({
@@ -252,7 +251,6 @@ const sampleContext = (overrides: SampleContextOverrides = {}) => ({
   projectName: SAMPLE_ENTRY.projectName,
   task: SAMPLE_ENTRY.task,
   taskId: SAMPLE_ENTRY.taskId as string | null,
-  notes: 'Existing work note',
   ...overrides,
 });
 
@@ -737,42 +735,33 @@ describe('POST /api/entries', () => {
     );
   });
 
-  test('400: notes are required', async () => {
+  test.each([
+    ['omitted', undefined],
+    ['null', null],
+    ['empty', ''],
+  ])('201: %s notes remain compatible during the UI rollout', async (_label, notes) => {
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const { notes: _validNotes, ...bodyWithoutNotes } = validBody;
+    const payload = notes === undefined ? bodyWithoutNotes : { ...validBody, notes };
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/entries',
       headers: authHeader(),
-      payload: { ...validBody, duration: 2, notes: null },
+      payload: { ...payload, duration: 2 },
     });
 
-    expect(res.statusCode).toBe(400);
-    expect(entriesCreateMock).not.toHaveBeenCalled();
-  });
-
-  test('400: omitted notes are rejected', async () => {
-    const { notes: _notes, ...bodyWithoutNotes } = validBody;
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/entries',
-      headers: authHeader(),
-      payload: bodyWithoutNotes,
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(entriesCreateMock).not.toHaveBeenCalled();
-  });
-
-  test('400: whitespace-only notes are rejected', async () => {
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/entries',
-      headers: authHeader(),
-      payload: { ...validBody, notes: '   ' },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({ error: 'notes is required' });
-    expect(entriesCreateMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: notes || null }),
+      TX_SENTINEL,
+    );
   });
 
   test('201: creates even when another entry already has the same date/project/task', async () => {
@@ -1534,34 +1523,6 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(entriesUpdateMock).toHaveBeenCalledWith('te-1', expect.objectContaining({ notes }));
-  });
-
-  test('400 empty notes do not update entry', async () => {
-    const res = await testApp.inject({
-      method: 'PUT',
-      url: '/api/entries/te-1',
-      headers: authHeader(),
-      payload: versionedPatch({ notes: '   ' }),
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({ error: 'notes is required' });
-    expect(entriesUpdateMock).not.toHaveBeenCalled();
-  });
-
-  test('400 legacy entries without notes require a note before other updates', async () => {
-    entriesFindContextMock.mockResolvedValue(sampleContext({ notes: null }));
-
-    const res = await testApp.inject({
-      method: 'PUT',
-      url: '/api/entries/te-1',
-      headers: authHeader(),
-      payload: versionedPatch({ duration: 6 }),
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({ error: 'notes is required' });
-    expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 empty-string location does not pass through to repo (would violate CHECK)', async () => {

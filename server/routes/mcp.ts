@@ -116,7 +116,7 @@ const createTimeEntryInputSchema = z.object({
   projectId: z.string(),
   projectName: z.string(),
   task: z.string(),
-  notes: z.string().trim().min(1).max(MAX_NOTES_LENGTH),
+  notes: z.string().max(MAX_NOTES_LENGTH).optional(),
   duration: z.number().nonnegative().max(MAX_DURATION_HOURS).optional(),
   isPlaceholder: z.boolean().optional(),
   userId: z.string().optional(),
@@ -127,7 +127,7 @@ const updateTimeEntryInputSchema = z.object({
   id: z.string(),
   version: z.number().int().positive(),
   duration: z.number().nonnegative().max(MAX_DURATION_HOURS).optional(),
-  notes: z.string().trim().min(1).max(MAX_NOTES_LENGTH).optional(),
+  notes: z.string().max(MAX_NOTES_LENGTH).nullable().optional(),
   isPlaceholder: z.boolean().optional(),
   location: z.string().optional(),
 });

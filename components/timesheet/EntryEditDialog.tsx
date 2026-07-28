@@ -247,7 +247,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
           <ModalTitle>{t('entry.editEntry')}</ModalTitle>
           <ModalCloseButton onClick={onClose} disabled={isSubmitting} />
         </ModalHeader>
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
           <ModalBody className="space-y-4">
             <EntryCatalogSelector
               clients={selectableCatalogs.clients}
@@ -325,10 +325,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               {t('common:buttons.cancel')}
             </Button>
-            <Button
-              type="submit"
-              disabled={isSubmitting || !isDirty || durationInvalid || !notes.trim()}
-            >
+            <Button type="submit" disabled={isSubmitting || !isDirty || durationInvalid}>
               <Save className="size-4" aria-hidden="true" />
               {t('common:buttons.save')}
             </Button>
