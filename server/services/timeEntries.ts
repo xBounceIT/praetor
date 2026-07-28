@@ -725,21 +725,24 @@ export const generateRecurringEntries = async (
     task: (typeof allowedTasks)[number],
     project: NonNullable<ReturnType<typeof projectsByProjectId.get>>,
     dateStr: string,
-  ) => ({
-    id: generatePrefixedId('te'),
-    userId: targetUserId,
-    date: dateStr,
-    clientId: project.clientId,
-    clientName: project.clientName,
-    projectId: task.projectId,
-    projectName: project.projectName,
-    task: task.name,
-    taskId: task.id,
-    notes: null,
-    duration: task.recurrenceDuration ?? 0,
-    isPlaceholder: true,
-    location: settings?.defaultLocation ?? 'remote',
-  });
+  ) => {
+    const notes = task.notes?.trim() || task.description?.trim() || task.name;
+    return {
+      id: generatePrefixedId('te'),
+      userId: targetUserId,
+      date: dateStr,
+      clientId: project.clientId,
+      clientName: project.clientName,
+      projectId: task.projectId,
+      projectName: project.projectName,
+      task: task.name,
+      taskId: task.id,
+      notes: notes.slice(0, MAX_NOTES_LENGTH),
+      duration: task.recurrenceDuration ?? 0,
+      isPlaceholder: true,
+      location: settings?.defaultLocation ?? 'remote',
+    };
+  };
   type PendingEntryCandidate = ReturnType<typeof buildPendingEntry>;
   type PendingEntry = PendingEntryCandidate & { hourlyCost: number };
 

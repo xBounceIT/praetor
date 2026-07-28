@@ -1,4 +1,4 @@
-import type { TimeEntry } from '../../types';
+import type { TimeEntry, TimeEntryDraft } from '../../types';
 import { fetchApi } from './client';
 import { normalizeTimeEntry } from './normalizers';
 
@@ -52,7 +52,7 @@ export type GenerateRecurringResponse = {
   range: { fromDate: string; toDate: string };
 };
 
-type CreateTimeEntryInput = Omit<TimeEntry, 'id' | 'createdAt' | 'version' | 'hourlyCost' | 'cost'>;
+type CreateTimeEntryInput = TimeEntryDraft & { userId?: string };
 type UpdateTimeEntryInput = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
 
 export const entriesApi = {

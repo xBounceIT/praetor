@@ -7,7 +7,14 @@ sidebar:
 
 ## Tracker
 
-Use the tracker to record time spent on projects and tasks. Each entry should include period, project, task, description, and location when required.
+Use the tracker to record time spent on projects and tasks. In the updated interface, every
+time entry requires a non-empty note. This applies to daily and weekly entry, duplication,
+and note edits. In the weekly view, enter a day-specific note or use the weekly note as a
+shared fallback. Recurring entries use the task notes, description, or name, in that order.
+During the rollout window, existing REST and MCP integrations continue to accept entries
+without notes.
+
+Each entry should include period, project, task, description, and location when required.
 
 Before saving, verify that dates are correct and that the task belongs to the selected project. This keeps reports, totals, and costs consistent.
 

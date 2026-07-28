@@ -670,6 +670,7 @@ describe('POST /api/entries', () => {
     projectId: 'p1',
     projectName: 'Project',
     task: 'Dev',
+    notes: 'Worked on Dev',
   };
 
   test('201 happy path', async () => {
@@ -734,7 +735,11 @@ describe('POST /api/entries', () => {
     );
   });
 
-  test('201: notes null is accepted and stored as null', async () => {
+  test.each([
+    ['omitted', undefined],
+    ['null', null],
+    ['empty', ''],
+  ])('201: %s notes remain compatible during the UI rollout', async (_label, notes) => {
     findCostPerHourMock.mockResolvedValue(50);
     findIdByProjectAndNameMock.mockResolvedValue('t1');
     entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
@@ -743,16 +748,18 @@ describe('POST /api/entries', () => {
       version: 1,
     }));
 
+    const { notes: _validNotes, ...bodyWithoutNotes } = validBody;
+    const payload = notes === undefined ? bodyWithoutNotes : { ...validBody, notes };
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/entries',
       headers: authHeader(),
-      payload: { ...validBody, duration: 2, notes: null },
+      payload: { ...payload, duration: 2 },
     });
 
     expect(res.statusCode).toBe(201);
     expect(entriesCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ notes: null }),
+      expect.objectContaining({ notes: notes || null }),
       TX_SENTINEL,
     );
   });
@@ -2177,6 +2184,7 @@ describe('POST /api/entries/recurring/generate', () => {
         projectName: 'Project One',
         task: 'Daily standup',
         taskId: 't1',
+        notes: 'Daily standup',
         duration: 0.5,
         hourlyCost: 40,
         isPlaceholder: true,

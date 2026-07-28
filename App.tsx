@@ -123,6 +123,7 @@ import type {
   SupplierQuote,
   SupplierSaleOrder,
   TimeEntry,
+  TimeEntryDraft,
   TimeEntryLocation,
   User,
   View,
@@ -576,11 +577,6 @@ const testEmail = async (recipientEmail: string): Promise<TestEmailResult> => {
     };
   }
 };
-
-type TimeEntryDraft = Omit<
-  TimeEntry,
-  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
->;
 
 const TrackerModeToggle: React.FC<{
   mode: 'daily' | 'weekly';
@@ -1079,6 +1075,7 @@ const TrackerView: React.FC<{
   const canDuplicateEntry = useCallback(
     (entry: TimeEntry) =>
       canCreateTrackerEntries &&
+      Boolean(entry.notes?.trim()) &&
       canCreateTimeEntryForProject(projectsById.get(entry.projectId), permissions),
     [canCreateTrackerEntries, permissions, projectsById],
   );

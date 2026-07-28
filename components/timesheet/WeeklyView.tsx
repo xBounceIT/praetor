@@ -16,7 +16,14 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { AddBulkResult } from '../../hooks/handlers/entryHandlers';
-import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
+import type {
+  Client,
+  Project,
+  ProjectTask,
+  TimeEntry,
+  TimeEntryDraft,
+  TimeEntryLocation,
+} from '../../types';
 import { downloadCsv } from '../../utils/csv';
 import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
@@ -78,11 +85,6 @@ const getWeekStart = (date: Date, startOfWeek: 'Monday' | 'Sunday'): Date => {
 
 type DayCell = { duration: string; note: string; entryId?: string; version?: number };
 type DayMap = Record<string, DayCell>;
-type TimeEntryDraft = Omit<
-  TimeEntry,
-  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
->;
-
 type EntryRow = {
   key: string;
   clientId: string;
@@ -519,6 +521,7 @@ const useWeeklyController = ({
     const entriesToAdd: TimeEntryDraft[] = [];
     const entriesToUpdate: Array<{ id: string; updates: TimeEntryUpdate }> = [];
     const entriesToDelete: string[] = [];
+    let hasMissingNotes = false;
 
     const submitRow = (
       rowKey: string,
@@ -544,12 +547,17 @@ const useWeeklyController = ({
           continue;
         }
         if (action === 'update' && base?.entryId) {
+          const notes = edit.note.trim() || weekNote.trim();
+          if (!notes) {
+            hasMissingNotes = true;
+            continue;
+          }
           entriesToUpdate.push({
             id: base.entryId,
             updates: {
               version: base.version ?? 1,
               duration: parseDuration(edit.duration),
-              notes: edit.note,
+              notes,
               task: meta.taskName,
               projectId: meta.projectId,
               clientId: meta.clientId,
@@ -560,6 +568,11 @@ const useWeeklyController = ({
           });
           continue;
         }
+        const notes = edit.note.trim() || weekNote.trim();
+        if (!notes) {
+          hasMissingNotes = true;
+          continue;
+        }
         entriesToAdd.push({
           date: day.dateStr,
           clientId: meta.clientId,
@@ -568,7 +581,7 @@ const useWeeklyController = ({
           projectName: project?.name || 'General',
           task: meta.taskName,
           duration: parseDuration(edit.duration),
-          notes: edit.note || weekNote,
+          notes,
           location: meta.location,
         });
       }
@@ -592,6 +605,12 @@ const useWeeklyController = ({
         location: row.location,
         baseDays: row.baseDays,
       });
+    }
+
+    if (hasMissingNotes) {
+      setErrors((prev) => ({ ...prev, notes: t('entry.notesRequired') }));
+      setIsLoading(false);
+      return;
     }
 
     try {

@@ -3,7 +3,7 @@ import type React from 'react';
 import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel, RequiredMark } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../types';
@@ -64,6 +64,7 @@ type EntryEditErrors = {
   clientId?: string;
   projectId?: string;
   task?: string;
+  notes?: string;
 };
 
 type EntryEditState = {
@@ -204,6 +205,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     if (!selection.clientId) newErrors.clientId = t('entry.clientRequired');
     if (!selection.projectId) newErrors.projectId = t('entry.projectRequired');
     if (!selection.taskName) newErrors.task = t('entry.taskRequired');
+    if (!notes.trim()) newErrors.notes = t('entry.notesRequired');
 
     if (Object.keys(newErrors).length > 0 || durationInvalid) {
       dispatch({ type: 'setErrors', errors: newErrors });
@@ -245,7 +247,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
           <ModalTitle>{t('entry.editEntry')}</ModalTitle>
           <ModalCloseButton onClick={onClose} disabled={isSubmitting} />
         </ModalHeader>
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
           <ModalBody className="space-y-4">
             <EntryCatalogSelector
               clients={selectableCatalogs.clients}
@@ -280,18 +282,26 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_110px] gap-4 items-start">
-              <Field className="min-w-0">
-                <FieldLabel htmlFor="entry-edit-notes">{t('entry.notesDescription')}</FieldLabel>
+              <Field className="min-w-0" data-invalid={Boolean(errors.notes)}>
+                <FieldLabel htmlFor="entry-edit-notes">
+                  {t('entry.notesDescription')} <RequiredMark />
+                </FieldLabel>
                 <Input
                   id="entry-edit-notes"
                   type="text"
                   value={notes}
-                  onChange={(e) => dispatch({ type: 'setNotes', notes: e.target.value })}
+                  onChange={(e) => {
+                    dispatch({ type: 'setNotes', notes: e.target.value });
+                    dispatch({ type: 'clearError', field: 'notes' });
+                  }}
                   placeholder={t('entry.notesPlaceholder')}
                   className="h-10 rounded-lg"
+                  required
+                  aria-invalid={Boolean(errors.notes)}
                   // Kept in sync with server MAX_NOTES_LENGTH (server/services/timeEntries.ts).
                   maxLength={2000}
                 />
+                <FieldError className="text-xs">{errors.notes}</FieldError>
               </Field>
               <Field className="min-w-0">
                 <FieldLabel htmlFor="entry-edit-hours">

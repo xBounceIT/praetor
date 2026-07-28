@@ -591,6 +591,13 @@ export interface TimeEntry {
   location?: TimeEntryLocation;
 }
 
+export type TimeEntryDraft = Omit<
+  TimeEntry,
+  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost' | 'notes'
+> & {
+  notes: string;
+};
+
 export interface LdapRoleMapping {
   ldapGroup: string;
   role: string;

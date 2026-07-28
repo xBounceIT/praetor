@@ -219,6 +219,29 @@ describe('<EntryEditDialog />', () => {
     expect(patch).toEqual({ version: 3, notes: 'just the note' });
   });
 
+  test('does not allow an existing note to be cleared', async () => {
+    const onSave = mock(() => Promise.resolve());
+
+    render(
+      <EntryEditDialog
+        {...baseProps}
+        entry={sampleEntry}
+        onClose={mock(() => {})}
+        onSave={onSave as never}
+      />,
+    );
+
+    const notesInput = document.getElementById('entry-edit-notes') as HTMLInputElement;
+    fireEvent.change(notesInput, { target: { value: '   ' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('entry.notesRequired');
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   test('hides paused and terminated projects from the edit catalog selector', () => {
     const pausedProject: Project = {
       id: 'project-paused',
