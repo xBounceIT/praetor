@@ -1152,6 +1152,10 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     expect(within(dialog).getByText('sales:clientOffers.readOnlyStatus')).toBeTruthy();
     const restore = within(dialog).getByTestId('client-offer-modal-restore-draft');
     expect(restore).not.toBeDisabled();
+    await user.hover(restore);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'sales:clientOffers.revertToDraftTooltip',
+    );
 
     await user.click(restore);
     await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledWith('O-SENT', { status: 'draft' }));

@@ -2094,6 +2094,16 @@ const useClientQuotesController = ({
                 defaultValue: 'History entries cannot be modified.',
               })
             : t('sales:clientQuotes.restoreQuote', { defaultValue: 'Restore quote' });
+        const restoreTooltip = restoreDisabled
+          ? restoreTitle
+          : canRollbackDraftOffer
+            ? t('sales:clientQuotes.rollbackPromotionTooltip', {
+                defaultValue:
+                  'The quote will return to Draft. The linked draft offer will be deleted.',
+              })
+            : t('sales:clientQuotes.restoreToDraftTooltip', {
+                defaultValue: 'The quote will return to Draft.',
+              });
 
         // Gate the edit action on the SAME predicate as the row click (#812 round 13): some
         // history rows still open — accepted/denied read-only, expired (non-offer-linked) to
@@ -2336,7 +2346,7 @@ const useClientQuotesController = ({
                       </button>
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent>{restoreTitle}</TooltipContent>
+                  <TooltipContent>{restoreTooltip}</TooltipContent>
                 </Tooltip>
               )}
           </div>
@@ -2965,7 +2975,9 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
     defaultValue: 'Restore quote',
   });
   let restoreDisabled = true;
-  let restoreTooltip = restoreLabel;
+  let restoreTooltip = t('sales:clientQuotes.restoreToDraftTooltip', {
+    defaultValue: 'The quote will return to Draft.',
+  });
   let onRestoreClick: (() => void) | undefined;
 
   if (editingQuote && showRestoreToDraft) {
@@ -2984,6 +2996,12 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
       isPromoting ||
       !canRestore ||
       (history && (!canRollbackDraftOffer || expired));
+
+    if (canRollbackDraftOffer) {
+      restoreTooltip = t('sales:clientQuotes.rollbackPromotionTooltip', {
+        defaultValue: 'The quote will return to Draft. The linked draft offer will be deleted.',
+      });
+    }
 
     if (!transitionAllowed) {
       restoreTooltip = t('sales:clientQuotes.restoreStatusNotCompatible', {

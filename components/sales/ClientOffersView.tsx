@@ -25,7 +25,6 @@ import type {
 import {
   addMonthsToDateOnly,
   formatDateOnlyForLocale,
-  formatInsertDateTime,
   getLocalDateString,
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
@@ -1026,8 +1025,9 @@ const useClientOffersController = ({
                   <TooltipContent>
                     {expired
                       ? expiredTitle
-                      : t('sales:clientOffers.revertToDraft', {
-                          defaultValue: 'Revert to Draft',
+                      : t('sales:clientOffers.revertToDraftTooltip', {
+                          defaultValue:
+                            'The offer will return to Draft. This action is available only when there are no linked sale orders.',
                         })}
                   </TooltipContent>
                 </Tooltip>
@@ -1085,8 +1085,9 @@ const useClientOffersController = ({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {t('sales:clientOffers.revertToDraft', {
-                    defaultValue: 'Revert to Draft',
+                  {t('sales:clientOffers.revertToDraftTooltip', {
+                    defaultValue:
+                      'The offer will return to Draft. This action is available only when there are no linked sale orders.',
                   })}
                 </TooltipContent>
               </Tooltip>
@@ -1616,7 +1617,10 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
     defaultValue: 'Revert to Draft',
   });
   let restoreDisabled = true;
-  let restoreTooltip = revertLabel;
+  let restoreTooltip = t('sales:clientOffers.revertToDraftTooltip', {
+    defaultValue:
+      'The offer will return to Draft. This action is available only when there are no linked sale orders.',
+  });
   let onRestoreClick: (() => void) | undefined;
 
   if (editingOffer && showRestoreToDraft) {
