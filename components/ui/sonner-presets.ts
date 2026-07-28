@@ -1,11 +1,11 @@
 import type { ToastClassnames } from 'sonner';
 
 export const neutralSuccessToastClassNames = {
-  toast: 'border-border! bg-popover! text-popover-foreground! shadow-lg',
+  toast: 'rounded-md! border-border! bg-popover! text-popover-foreground! shadow-lg',
   description: 'text-muted-foreground!',
-  icon: 'text-emerald-600! dark:text-emerald-400!',
+  icon: 'text-primary!',
   actionButton:
-    'bg-primary! text-primary-foreground! hover:bg-primary/90! focus-visible:ring-[3px] focus-visible:ring-ring/50',
+    'rounded-md! bg-primary! text-primary-foreground! hover:bg-primary/90! focus-visible:ring-[3px] focus-visible:ring-ring/50',
   closeButton:
-    'border-border! bg-background! text-muted-foreground! hover:bg-accent! hover:text-accent-foreground! focus-visible:ring-[3px] focus-visible:ring-ring/50',
+    'top-0.5! right-1! left-auto! size-5! transform-none! rounded-md! border-0! bg-transparent! text-muted-foreground! hover:bg-accent! hover:text-accent-foreground! focus-visible:ring-[3px] focus-visible:ring-ring/50',
 } satisfies ToastClassnames;

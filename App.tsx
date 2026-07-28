@@ -4909,7 +4909,7 @@ const App: React.FC = () => (
       <AppContent />
     </ErrorBoundary>
     {/* Outside the boundary so toasts keep rendering if the boundary trips. */}
-    <Toaster richColors closeButton position="top-right" />
+    <Toaster richColors closeButton position="top-center" />
   </>
 );
 
