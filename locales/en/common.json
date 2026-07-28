@@ -252,6 +252,7 @@
     "selectAll": "Select All",
     "noResults": "No results found",
     "clearFilter": "Clear Filter",
+    "clearFilters": "Clear filters",
     "increaseFont": "Increase font size",
     "decreaseFont": "Decrease font size",
     "columnSettings": "Column settings",
