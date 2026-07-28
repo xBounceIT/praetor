@@ -2056,6 +2056,14 @@ const useClientQuotesController = ({
         const denyDisabled = isPromoting || history;
         const hasCandidateMetadata = Boolean(row.candidates?.length);
         const hasPromotableCandidate = row.candidates?.some(isCandidatePromotable);
+        const hasVariants = (row.candidates?.length ?? 0) > 1;
+        const promotionActionLabel = hasVariants
+          ? t('sales:clientQuotes.candidates.chooseTitle', {
+              defaultValue: 'Choose the candidate to promote',
+            })
+          : t('sales:clientQuotes.convertToOffer', {
+              defaultValue: 'Convert to offer',
+            });
         // Sending presents every active variant, so one blocked supplier source blocks the family.
         // Promotion chooses exactly one winner, so the comparison must remain reachable whenever
         // at least one candidate is eligible.
@@ -2246,9 +2254,7 @@ const useClientQuotesController = ({
                         openPromotionDialog(row);
                       }}
                       disabled={promotionDisabled}
-                      aria-label={t('sales:clientQuotes.candidates.chooseTitle', {
-                        defaultValue: 'Scegli candidato',
-                      })}
+                      aria-label={promotionActionLabel}
                       className={`p-2 rounded-lg transition-all ${promotionDisabled ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
                     >
                       <i className="fa-solid fa-file-signature"></i>
@@ -2260,11 +2266,9 @@ const useClientQuotesController = ({
                     ? t('sales:clientQuotes.historyActionsDisabled', {
                         defaultValue: 'History entries cannot be modified.',
                       })
-                    : supplierExpired
+                    : promotionDisabled && supplierExpired
                       ? progressBlockedTitle
-                      : t('sales:clientQuotes.candidates.chooseTitle', {
-                          defaultValue: 'Scegli candidato',
-                        })}
+                      : promotionActionLabel}
                 </TooltipContent>
               </Tooltip>
             )}

@@ -1626,7 +1626,7 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     );
     expect(
       await screen.findByRole('button', {
-        name: 'sales:clientQuotes.candidates.chooseTitle',
+        name: 'sales:clientQuotes.convertToOffer',
       }),
     ).toBeDisabled();
     expect(onUpdateQuote).not.toHaveBeenCalled();
@@ -1663,7 +1663,7 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
 
     await openRowActions(user);
     await user.click(
-      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.chooseTitle' }),
+      await screen.findByRole('button', { name: 'sales:clientQuotes.convertToOffer' }),
     );
 
     await waitFor(() =>
@@ -1728,6 +1728,7 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
       name: 'sales:clientQuotes.candidates.chooseTitle',
     });
     expect(choose).not.toBeDisabled();
+    expect(choose).toHaveTextContent('sales:clientQuotes.candidates.chooseTitle');
     await user.click(choose);
 
     const comparisonDialog = await screen.findByRole('dialog');
