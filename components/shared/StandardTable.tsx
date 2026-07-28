@@ -20,6 +20,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  FilterX,
   GripVertical,
   Lightbulb,
   ZoomIn,
@@ -1947,6 +1948,11 @@ const useStandardTableController = <T extends object>({
     [columnFilters, setCurrentPage, storageIdentity],
   );
 
+  const clearAllFilters = useCallback(() => {
+    onColumnFiltersChange([]);
+    setFilterSearchByColumnId({});
+  }, [onColumnFiltersChange, setFilterSearchByColumnId]);
+
   const onPaginationChange = useCallback(
     (updater: Updater<PaginationState>) => {
       const next = functionalUpdate(updater, pagination);
@@ -2753,6 +2759,8 @@ const useStandardTableController = <T extends object>({
     shouldRenderTable,
     processedRows,
     handleExportToCsv,
+    hasActiveFilters: columnFilters.length > 0,
+    clearAllFilters,
     showSaveColumnLayoutTip,
     isViewCreationDisabled,
     stepFontSize,
@@ -2906,6 +2914,8 @@ const StandardTableToolbar = <T extends object>({
     showSaveColumnLayoutTip,
     isViewCreationDisabled,
     setModalState,
+    hasActiveFilters,
+    clearAllFilters,
     stepFontSize,
     fontSize,
     isExporting,
@@ -2923,6 +2933,14 @@ const StandardTableToolbar = <T extends object>({
           disabled={isViewCreationDisabled}
           active
           text={t('table.saveColumnOrder')}
+        />
+      )}
+      {hasActiveFilters && (
+        <StandardTableToolbarButton
+          label={t('table.clearFilters')}
+          icon={<FilterX className="size-3.5" aria-hidden="true" />}
+          onClick={clearAllFilters}
+          text={t('table.clearFilters')}
         />
       )}
       <StandardTableToolbarButton

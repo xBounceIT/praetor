@@ -1212,6 +1212,28 @@ describe('<StandardTable />', () => {
     expect(tbody.textContent).toContain('Charlie');
   });
 
+  test('shows a clear-filters toolbar button only while filters are active', async () => {
+    const { container } = render(
+      <StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'table.clearFilters' })).toBeNull();
+
+    const nameFilterUser = await selectFilterValue('Name', 'Alice');
+    await nameFilterUser.keyboard('{Escape}');
+    const ageFilterUser = await selectFilterValue('Age', '30');
+    await ageFilterUser.keyboard('{Escape}');
+    const clearFiltersButton = screen.getByRole('button', { name: 'table.clearFilters' });
+    const tbody = container.querySelector('tbody') as HTMLElement;
+    expect(tbody.textContent).not.toContain('Bob');
+
+    await act(async () => fireEvent.click(clearFiltersButton));
+
+    expect(tbody.textContent).toContain('Bob');
+    expect(tbody.textContent).toContain('Charlie');
+    expect(screen.queryByRole('button', { name: 'table.clearFilters' })).toBeNull();
+  });
+
   test('header filter menu uses shadcn border tokens and searches filter options', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     const user = await openHeaderFilter('Name');
