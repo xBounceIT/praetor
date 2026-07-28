@@ -9,7 +9,7 @@ sidebar:
 
 Usa il tracker per registrare il tempo lavorato su progetto e attività. Ogni registrazione deve indicare periodo, progetto, attività, descrizione e luogo quando richiesto.
 
-Nei selettori del tracker, passa il puntatore su un progetto o un'attività per leggerne la descrizione senza cambiare la selezione. Il suggerimento compare solo quando l'elemento ha una descrizione.
+Nei selettori del tracker, passa il puntatore su un progetto o un'attività per leggerne la descrizione senza cambiare la selezione. Il suggerimento compare solo quando l'elemento ha una descrizione. Durante la navigazione da tastiera, i lettori di schermo annunciano anche la descrizione dell'opzione attiva.
 
 Prima di salvare, verifica che le date siano corrette e che l'attività appartenga al progetto selezionato. Questo mantiene coerenti report, consuntivi e costi.
 

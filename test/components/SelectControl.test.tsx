@@ -140,13 +140,13 @@ describe('<SelectControl />', () => {
     expect(onChange).toHaveBeenCalledWith('b');
   });
 
-  test('searchable combobox shows an option description in a shadcn tooltip on hover', async () => {
+  test('searchable combobox exposes option descriptions on hover and keyboard navigation', async () => {
     const user = userEvent.setup();
     render(
       <SelectControl
         options={[
           { id: 'a', name: 'Apple', description: 'A crisp project description' },
-          { id: 'b', name: 'Banana' },
+          { id: 'b', name: 'Banana', description: 'A ripe project description' },
         ]}
         value=""
         onChange={() => {}}
@@ -155,8 +155,14 @@ describe('<SelectControl />', () => {
     );
 
     await user.click(screen.getByRole('button'));
+    const commandInput = screen.getByRole('combobox');
+    await user.keyboard('{ArrowDown}');
+    const accessibleOption = screen.getByRole('option', {
+      name: 'Banana. A ripe project description',
+    });
     const describedOption = screen.getByText('Apple').closest('[data-slot="tooltip-trigger"]');
     expect(describedOption).not.toBeNull();
+    expect(commandInput.getAttribute('aria-activedescendant')).toBe(accessibleOption.id);
     expect(describedOption).toHaveClass('-mx-2', '-my-1.5', 'px-2', 'py-1.5');
     expect(describedOption?.querySelector('svg')).not.toBeNull();
     expect(screen.queryByRole('tooltip')).toBeNull();

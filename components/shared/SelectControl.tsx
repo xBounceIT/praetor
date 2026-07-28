@@ -527,6 +527,7 @@ const SearchableSelectControl = ({
                     <CommandItem
                       key={option.id || EMPTY_VALUE_SENTINEL}
                       value={option.name}
+                      aria-label={description ? `${option.name}. ${description}` : undefined}
                       disabled={option.disabled && !(isMulti && selected)}
                       onSelect={() => handleSelect(option)}
                     >

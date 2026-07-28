@@ -9,7 +9,7 @@ sidebar:
 
 Use the tracker to record time spent on projects and tasks. Each entry should include period, project, task, description, and location when required.
 
-In the tracker selectors, hover over a project or task to read its description without changing the selection. The tooltip appears only when the item has a description.
+In the tracker selectors, hover over a project or task to read its description without changing the selection. The tooltip appears only when the item has a description. During keyboard navigation, screen readers also announce the active option's description.
 
 Before saving, verify that dates are correct and that the task belongs to the selected project. This keeps reports, totals, and costs consistent.
 
