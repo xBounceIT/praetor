@@ -396,6 +396,35 @@ describe('makeQuoteHandlers', () => {
     });
   });
 
+  test('updateQuote notifies before the client flow refetch completes', async () => {
+    let resolveQuotesRefetch: (quotes: unknown[]) => void = () => {};
+    const pendingQuotesRefetch = new Promise<unknown[]>((resolve) => {
+      resolveQuotesRefetch = resolve;
+    });
+    stubQuoteUpdateFlow({
+      status: 'offer',
+      linkedOfferId: 'q1-OF',
+      linkedOfferRevisionCode: 'REV2',
+      items: [],
+    });
+    apiMocks.quotesList.mockImplementation(() => pendingQuotesRefetch);
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+    });
+
+    const pendingUpdate = ctx.handlers.updateQuote('q1', { status: 'offer' } as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+      id: 'q1-OF',
+      revisionCode: 'REV2',
+    });
+
+    resolveQuotesRefetch([]);
+    await pendingUpdate;
+  });
+
   test('deleteQuote refreshes supplier quotes when the deleted quote sourced one', async () => {
     apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
     const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
@@ -915,6 +944,32 @@ describe('makeQuoteHandlers', () => {
     expect(apiMocks.quotesPromote).toHaveBeenCalledWith('q-1', 'candidate-b');
     expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({ id: 'of-1', revisionCode: 'REV1' });
     expect(ctx.refreshSupplierQuoteFlow).toHaveBeenCalled();
+  });
+
+  test('promoteQuoteCandidate notifies before flow refetches complete', async () => {
+    let resolveQuotesRefetch: (quotes: unknown[]) => void = () => {};
+    const pendingQuotesRefetch = new Promise<unknown[]>((resolve) => {
+      resolveQuotesRefetch = resolve;
+    });
+    apiMocks.quotesPromote.mockImplementation(() =>
+      Promise.resolve({ quote: { id: 'q-1' }, offer: { id: 'of-1', revisionCode: 'REV1' } }),
+    );
+    apiMocks.quotesList.mockImplementation(() => pendingQuotesRefetch);
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-1' }]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers();
+
+    const pendingPromotion = ctx.handlers.promoteQuoteCandidate('q-1', 'candidate-b');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+      id: 'of-1',
+      revisionCode: 'REV1',
+    });
+
+    resolveQuotesRefetch([]);
+    await pendingPromotion;
   });
 
   test('createClientOfferFromLegacyQuote creates and links the missing first offer', async () => {

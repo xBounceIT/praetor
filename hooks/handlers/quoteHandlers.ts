@@ -146,20 +146,21 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       // so a plain edit of an unsourced quote would otherwise refetch needlessly. The two flows
       // set disjoint state, so they run in parallel.
       const supplierRefreshNeeded = wasSourcing || sourcesSupplierQuote(updated);
-      await Promise.all([
-        refreshClientQuoteFlow(),
-        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
-      ]);
       if (
         updated.status === 'offer' &&
         previousQuote?.status !== 'offer' &&
         updated.linkedOfferId
       ) {
+        // Confirm the completed mutation immediately; the follow-up list refreshes can be slow.
         notifyClientOfferCreated?.({
           id: updated.linkedOfferId,
           revisionCode: updated.linkedOfferRevisionCode,
         });
       }
+      await Promise.all([
+        refreshClientQuoteFlow(),
+        supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
+      ]);
     } catch (err) {
       console.error('Failed to update quote:', err);
       throw err;
@@ -169,11 +170,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const promoteQuoteCandidate = async (quoteId: string, candidateId: string) => {
     try {
       const result = await api.quotes.promote(quoteId, candidateId);
-      await Promise.all([refreshClientQuoteFlow(), refreshLinkedSupplierQuotes()]);
+      // Confirm the completed promotion immediately; the follow-up list refreshes can be slow.
       notifyClientOfferCreated?.({
         id: result.offer.id,
         revisionCode: result.offer.revisionCode,
       });
+      await Promise.all([refreshClientQuoteFlow(), refreshLinkedSupplierQuotes()]);
       return result;
     } catch (err) {
       console.error('Failed to promote quote candidate:', err);
