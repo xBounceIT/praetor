@@ -51,9 +51,9 @@ describe('timeEntryDuplicate helpers', () => {
   });
 
   test('buildDuplicateTimeEntryDrafts rejects legacy entries without notes', () => {
-    expect(() =>
-      buildDuplicateTimeEntryDrafts({ ...source, notes: null }, ['2024-03-12']),
-    ).toThrow('notes is required');
+    expect(() => buildDuplicateTimeEntryDrafts({ ...source, notes: null }, ['2024-03-12'])).toThrow(
+      'notes is required',
+    );
   });
 
   test('collectDuplicateConflictDates lists other days with the same project+task', () => {
