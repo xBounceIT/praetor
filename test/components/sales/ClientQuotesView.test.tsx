@@ -1883,6 +1883,10 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     expect(within(dialog).getByText('sales:clientQuotes.readOnlyStatus')).toBeTruthy();
     const restore = within(dialog).getByTestId('client-quote-modal-restore-draft');
     expect(restore).not.toBeDisabled();
+    await user.hover(restore);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'sales:clientQuotes.restoreToDraftTooltip',
+    );
 
     await user.click(restore);
     await waitFor(() =>
