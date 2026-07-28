@@ -24,17 +24,31 @@ export { isProjectExpiredForTimeEntries };
 export const isProjectStatusBlockedForTimeEntries = (project: Pick<Project, 'status'>): boolean =>
   isProjectStatusBlocked(project.status);
 
+/** Same create rules as `enforceProjectCanAcceptTimeEntries` on the server. */
+export const canCreateTimeEntryForProject = (
+  project: Pick<Project, 'status' | 'endDate'> | null | undefined,
+  permissions: string[],
+): boolean => {
+  if (!project) return false;
+  if (isProjectStatusBlockedForTimeEntries(project)) return false;
+  if (
+    !hasPermission(permissions, EXPIRED_PROJECT_TIME_ENTRY_PERMISSION) &&
+    isProjectExpiredForTimeEntries(project)
+  ) {
+    return false;
+  }
+  return true;
+};
+
 export const filterTrackerEntrySelectableCatalogs = ({
   clients,
   projects,
   projectTasks,
   permissions,
 }: TrackerCatalogs & { permissions: string[] }): TrackerCatalogs => {
-  const canUseExpiredProjects = hasPermission(permissions, EXPIRED_PROJECT_TIME_ENTRY_PERMISSION);
-  const selectableProjects = projects.filter((project) => {
-    if (isProjectStatusBlockedForTimeEntries(project)) return false;
-    return canUseExpiredProjects || !isProjectExpiredForTimeEntries(project);
-  });
+  const selectableProjects = projects.filter((project) =>
+    canCreateTimeEntryForProject(project, permissions),
+  );
   const selectableProjectIds = new Set(selectableProjects.map((project) => project.id));
   const selectableClientIds = new Set(selectableProjects.map((project) => project.clientId));
 

@@ -179,7 +179,11 @@ import {
 } from './utils/timeEntryDuplicate';
 import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
 import { toastError, toastSuccess, toastWarning } from './utils/toast';
-import { filterTrackerCatalogs, type TrackerCatalogState } from './utils/trackerCatalogs';
+import {
+  canCreateTimeEntryForProject,
+  filterTrackerCatalogs,
+  type TrackerCatalogState,
+} from './utils/trackerCatalogs';
 
 type AppModuleState = {
   users: User[];
@@ -681,7 +685,7 @@ const TrackerActivityTable: React.FC<{
   entries: TimeEntry[];
   dailyTotal: number;
   dailyGoal: number;
-  canDuplicateEntries: boolean;
+  canDuplicateEntry: (entry: TimeEntry) => boolean;
   onEditEntry: (entry: TimeEntry) => void;
   onDuplicateEntry: (entry: TimeEntry) => void;
   onDeleteEntryClick: (entry: TimeEntry) => void;
@@ -690,7 +694,7 @@ const TrackerActivityTable: React.FC<{
   entries,
   dailyTotal,
   dailyGoal,
-  canDuplicateEntries,
+  canDuplicateEntry,
   onEditEntry,
   onDuplicateEntry,
   onDeleteEntryClick,
@@ -812,7 +816,7 @@ const TrackerActivityTable: React.FC<{
               </TooltipTrigger>
               <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
-            {canDuplicateEntries ? (
+            {canDuplicateEntry(row) ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
@@ -857,7 +861,7 @@ const TrackerActivityTable: React.FC<{
         ),
       },
     ],
-    [selectedDate, t, canDuplicateEntries, onEditEntry, onDuplicateEntry, onDeleteEntryClick],
+    [selectedDate, t, canDuplicateEntry, onEditEntry, onDuplicateEntry, onDeleteEntryClick],
   );
 
   return (
@@ -1063,10 +1067,20 @@ const TrackerView: React.FC<{
     return collectDuplicateConflictDates(entries, duplicatingEntry);
   }, [duplicatingEntry, entries]);
 
-  const canDuplicateEntries = hasScopedActionPermission(
+  const canCreateTrackerEntries = hasScopedActionPermission(
     permissions,
     'timesheets.tracker',
     'create',
+  );
+  const projectsById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects],
+  );
+  const canDuplicateEntry = useCallback(
+    (entry: TimeEntry) =>
+      canCreateTrackerEntries &&
+      canCreateTimeEntryForProject(projectsById.get(entry.projectId), permissions),
+    [canCreateTrackerEntries, permissions, projectsById],
   );
 
   const handleDuplicateEntry = useCallback(
@@ -1207,7 +1221,7 @@ const TrackerView: React.FC<{
               entries={filteredEntries}
               dailyTotal={dailyTotal}
               dailyGoal={dailyGoal}
-              canDuplicateEntries={canDuplicateEntries}
+              canDuplicateEntry={canDuplicateEntry}
               onEditEntry={setEditingEntry}
               onDuplicateEntry={setDuplicatingEntry}
               onDeleteEntryClick={handleDeleteClick}

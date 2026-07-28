@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Client, Project, ProjectTask } from '../../types';
 import {
+  canCreateTimeEntryForProject,
   EXPIRED_PROJECT_TIME_ENTRY_PERMISSION,
   filterTrackerCatalogs,
   filterTrackerEntrySelectableCatalogs,
@@ -207,6 +208,21 @@ describe('filterTrackerEntrySelectableCatalogs', () => {
     expect(isProjectStatusBlockedForTimeEntries(terminatedProject)).toBe(true);
     expect(isProjectStatusBlockedForTimeEntries(perpetualProject)).toBe(false);
     expect(isProjectStatusBlockedForTimeEntries(projects[0])).toBe(false);
+  });
+
+  test('canCreateTimeEntryForProject mirrors selectable create rules', () => {
+    expect(canCreateTimeEntryForProject(undefined, [])).toBe(false);
+    expect(canCreateTimeEntryForProject(projects[0], [])).toBe(true);
+    expect(canCreateTimeEntryForProject(expiredProject, [])).toBe(false);
+    expect(
+      canCreateTimeEntryForProject(expiredProject, [EXPIRED_PROJECT_TIME_ENTRY_PERMISSION]),
+    ).toBe(true);
+    expect(
+      canCreateTimeEntryForProject(pausedProject, [EXPIRED_PROJECT_TIME_ENTRY_PERMISSION]),
+    ).toBe(false);
+    expect(
+      canCreateTimeEntryForProject(terminatedProject, [EXPIRED_PROJECT_TIME_ENTRY_PERMISSION]),
+    ).toBe(false);
   });
   test('removes expired projects and their tasks without the override permission', () => {
     const result = filterTrackerEntrySelectableCatalogs({
