@@ -335,18 +335,12 @@ export const createTimeEntry = async (
 
   const location = parseOptionalLocation(input.location, fail) ?? 'remote';
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
+  const notes = parseOptionalNotes(input.notes);
+  const resolvedDuration = duration ?? 0;
 
   const created = await withSerializableWriteTransaction(async (tx) => {
     await usersRepo.lockById(targetUserId, tx);
     const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(targetUserId, date, tx);
-    const duplicateExists = await entriesRepo.existsForEntryKey(
-      { userId: targetUserId, date, projectId, task },
-      tx,
-    );
-    if (duplicateExists) {
-      fail(409, 'A time entry already exists for this date, project, and task');
-    }
-
     return entriesRepo.create(
       {
         id: generatePrefixedId('te'),
@@ -358,8 +352,8 @@ export const createTimeEntry = async (
         projectName,
         task,
         taskId: resolvedTaskId,
-        notes: parseOptionalNotes(input.notes),
-        duration: duration ?? 0,
+        notes,
+        duration: resolvedDuration,
         hourlyCost,
         isPlaceholder: parsedIsPlaceholder ?? false,
         location,
@@ -508,9 +502,6 @@ export const updateTimeEntry = async (
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
-  const entryKeyChanging =
-    dateChanging || (catalogChanging && (projectId !== context.projectId || task !== context.task));
-
   const applyUpdate = (hourlyCost?: number, exec?: DbExecutor) => {
     const update = {
       version,
@@ -530,26 +521,14 @@ export const updateTimeEntry = async (
     return exec ? entriesRepo.update(entryId, update, exec) : entriesRepo.update(entryId, update);
   };
 
-  const updated = entryKeyChanging
+  const updated = dateChanging
     ? await withSerializableWriteTransaction(async (tx) => {
         await usersRepo.lockById(context.userId, tx);
-        const duplicateExists = await entriesRepo.existsForEntryKey(
-          {
-            userId: context.userId,
-            date: date ?? context.date,
-            projectId: projectId ?? context.projectId,
-            task: task ?? context.task,
-            excludeId: entryId,
-          },
+        const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(
+          context.userId,
+          date as string,
           tx,
         );
-        if (duplicateExists) {
-          fail(409, 'A time entry already exists for this date, project, and task');
-        }
-
-        const hourlyCost = dateChanging
-          ? await userHourlyCostPeriodsRepo.findCostForDate(context.userId, date as string, tx)
-          : undefined;
         return applyUpdate(hourlyCost, tx);
       })
     : await applyUpdate();

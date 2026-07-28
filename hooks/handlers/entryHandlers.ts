@@ -1,13 +1,23 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { TimeEntry, User } from '../../types';
+import type { TimeEntryDuplicateDraft } from '../../utils/timeEntryDuplicate';
 import { toastError } from '../../utils/toast';
 
-type TimeEntryDraft = Omit<
-  TimeEntry,
-  'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
->;
 type TimeEntryUpdate = Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>;
+
+export type AddBulkResult = {
+  created: TimeEntry[];
+  failed: Array<{ error: unknown; entry: TimeEntryDuplicateDraft }>;
+};
+
+const upsertEntriesById = (prev: TimeEntry[], next: TimeEntry[]): TimeEntry[] => {
+  const byId = new Map(prev.map((entry) => [entry.id, entry]));
+  for (const entry of next) {
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt);
+};
 
 export type EntryHandlersDeps = {
   currentUser: User | null;
@@ -25,7 +35,7 @@ export type EntryHandlersDeps = {
 export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
   const { currentUser, viewingUserId, setEntries } = deps;
 
-  const add = async (newEntry: TimeEntryDraft) => {
+  const add = async (newEntry: TimeEntryDuplicateDraft) => {
     if (!currentUser) return;
     try {
       const targetUserId = viewingUserId || currentUser.id;
@@ -33,40 +43,46 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
         ...newEntry,
         userId: targetUserId,
       });
-      setEntries((prev) => [entry, ...prev]);
+      setEntries((prev) => upsertEntriesById(prev, [entry]));
     } catch (err) {
       console.error('Failed to add entry:', err);
       toastError('Failed to add time entry');
     }
   };
 
-  const addBulk = async (newEntries: TimeEntryDraft[]) => {
-    if (!currentUser) return;
+  const addBulk = async (
+    newEntries: TimeEntryDuplicateDraft[],
+    options?: { silent?: boolean },
+  ): Promise<AddBulkResult> => {
+    if (!currentUser) return { created: [], failed: [] };
     const targetUserId = viewingUserId || currentUser.id;
-    const results = await Promise.allSettled(
-      newEntries.map((entry) =>
-        api.entries.create({
+    const created: TimeEntry[] = [];
+    const failures: Array<{ error: unknown; entry: TimeEntryDuplicateDraft }> = [];
+
+    // Each POST locks the user row inside a SERIALIZABLE transaction; parallel
+    // creates for the same user trigger Postgres 40001 serialization failures.
+    for (const entry of newEntries) {
+      try {
+        const createdEntry = await api.entries.create({
           ...entry,
           userId: targetUserId,
-        }),
-      ),
-    );
-
-    const created: TimeEntry[] = [];
-    const failures: unknown[] = [];
-    for (const r of results) {
-      if (r.status === 'fulfilled') created.push(r.value);
-      else failures.push(r.reason);
+        });
+        created.push(createdEntry);
+      } catch (err) {
+        failures.push({ error: err, entry });
+        console.error('Failed to add bulk entry:', err);
+      }
     }
 
     if (created.length > 0) {
-      setEntries((prev) => [...created, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+      setEntries((prev) => upsertEntriesById(prev, created));
     }
 
-    if (failures.length > 0) {
-      for (const err of failures) console.error('Failed to add bulk entry:', err);
+    if (failures.length > 0 && !options?.silent) {
       toastError('Failed to add some time entries');
     }
+
+    return { created, failed: failures };
   };
 
   const remove = async (id: string) => {

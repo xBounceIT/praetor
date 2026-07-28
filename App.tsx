@@ -62,6 +62,7 @@ import SelectControl from './components/shared/SelectControl';
 import StandardTable, { type Column } from './components/shared/StandardTable';
 import StatusBadge from './components/shared/StatusBadge';
 import DailyView from './components/timesheet/DailyView';
+import EntryDuplicateDialog from './components/timesheet/EntryDuplicateDialog';
 import EntryEditDialog from './components/timesheet/EntryEditDialog';
 import RecurringManager from './components/timesheet/RecurringManager';
 import RilView from './components/timesheet/RilView';
@@ -71,7 +72,7 @@ import { Toaster } from './components/ui/sonner';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
-import { makeEntryHandlers } from './hooks/handlers/entryHandlers';
+import { type AddBulkResult, makeEntryHandlers } from './hooks/handlers/entryHandlers';
 import { makeInvoiceHandlers } from './hooks/handlers/invoiceHandlers';
 import { makeLdapHandlers } from './hooks/handlers/ldapHandlers';
 import { makeProductHandlers } from './hooks/handlers/productHandlers';
@@ -153,6 +154,7 @@ import {
   getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
+  hasScopedActionPermission,
   hasViewAccess,
   TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
@@ -170,9 +172,18 @@ import {
 } from './utils/ril';
 import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
+import {
+  buildDuplicateTimeEntryDrafts,
+  collectDuplicateConflictDates,
+  countSelectedConflictDates,
+} from './utils/timeEntryDuplicate';
 import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
-import { toastError } from './utils/toast';
-import { filterTrackerCatalogs, type TrackerCatalogState } from './utils/trackerCatalogs';
+import { toastError, toastSuccess, toastWarning } from './utils/toast';
+import {
+  canCreateTimeEntryForProject,
+  filterTrackerCatalogs,
+  type TrackerCatalogState,
+} from './utils/trackerCatalogs';
 
 type AppModuleState = {
   users: User[];
@@ -674,9 +685,20 @@ const TrackerActivityTable: React.FC<{
   entries: TimeEntry[];
   dailyTotal: number;
   dailyGoal: number;
+  canDuplicateEntry: (entry: TimeEntry) => boolean;
   onEditEntry: (entry: TimeEntry) => void;
+  onDuplicateEntry: (entry: TimeEntry) => void;
   onDeleteEntryClick: (entry: TimeEntry) => void;
-}> = ({ selectedDate, entries, dailyTotal, dailyGoal, onEditEntry, onDeleteEntryClick }) => {
+}> = ({
+  selectedDate,
+  entries,
+  dailyTotal,
+  dailyGoal,
+  canDuplicateEntry,
+  onEditEntry,
+  onDuplicateEntry,
+  onDeleteEntryClick,
+}) => {
   const { t } = useTranslation('timesheets');
   const activityHeaderExtras = useMemo(
     () =>
@@ -794,6 +816,28 @@ const TrackerActivityTable: React.FC<{
               </TooltipTrigger>
               <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
             </Tooltip>
+            {canDuplicateEntry(row) ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={t('entry.duplicate')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDuplicateEntry(row);
+                      }}
+                      className="text-muted-foreground hover:text-praetor"
+                    >
+                      <i className="fa-solid fa-copy text-xs"></i>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('entry.duplicate')}</TooltipContent>
+              </Tooltip>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex">
@@ -817,7 +861,7 @@ const TrackerActivityTable: React.FC<{
         ),
       },
     ],
-    [selectedDate, t, onEditEntry, onDeleteEntryClick],
+    [selectedDate, t, canDuplicateEntry, onEditEntry, onDuplicateEntry, onDeleteEntryClick],
   );
 
   return (
@@ -954,7 +998,10 @@ const TrackerView: React.FC<{
   availableUsers: User[];
   currentUser: User;
   dailyGoal: number;
-  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
+  onAddBulkEntries: (
+    entries: TimeEntryDraft[],
+    options?: { silent?: boolean },
+  ) => Promise<AddBulkResult>;
   onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
   defaultLocation?: TimeEntryLocation;
   onAddCustomTask: (
@@ -1012,6 +1059,70 @@ const TrackerView: React.FC<{
   }, [filteredEntries]);
   const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [duplicatingEntry, setDuplicatingEntry] = useState<TimeEntry | null>(null);
+  const { t } = useTranslation('timesheets');
+
+  const duplicateConflictDates = useMemo(() => {
+    if (!duplicatingEntry) return [];
+    return collectDuplicateConflictDates(entries, duplicatingEntry);
+  }, [duplicatingEntry, entries]);
+
+  const canCreateTrackerEntries = hasScopedActionPermission(
+    permissions,
+    'timesheets.tracker',
+    'create',
+  );
+  const projectsById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects],
+  );
+  const canDuplicateEntry = useCallback(
+    (entry: TimeEntry) =>
+      canCreateTrackerEntries &&
+      canCreateTimeEntryForProject(projectsById.get(entry.projectId), permissions),
+    [canCreateTrackerEntries, permissions, projectsById],
+  );
+
+  const handleDuplicateEntry = useCallback(
+    async (dates: string[]) => {
+      if (!duplicatingEntry) {
+        throw new Error('duplicate-entry-missing');
+      }
+      const sameTaskDayCount = countSelectedConflictDates(dates, duplicateConflictDates);
+      const drafts = buildDuplicateTimeEntryDrafts(duplicatingEntry, dates);
+      const result = await onAddBulkEntries(drafts, { silent: true });
+      const createdCount = result.created.length;
+      const failedCount = result.failed.length;
+
+      if (createdCount === 0) {
+        // Always-append creates are not idempotent: after a lost response the row may
+        // already exist, so close and ask the user to verify before trying again.
+        toastError(t('entry.duplicateFailed'));
+        return;
+      }
+      if (failedCount > 0) {
+        toastSuccess(
+          t('entry.duplicatePartial', {
+            created: createdCount,
+            total: dates.length,
+            failed: failedCount,
+          }),
+        );
+        return;
+      }
+      if (sameTaskDayCount > 0) {
+        toastWarning(
+          t('entry.duplicatedWithSameTaskNotice', {
+            count: createdCount,
+            sameTaskDays: sameTaskDayCount,
+          }),
+        );
+        return;
+      }
+      toastSuccess(t('entry.duplicated', { count: createdCount }));
+    },
+    [duplicatingEntry, duplicateConflictDates, onAddBulkEntries, t],
+  );
 
   const handleDeleteClick = useCallback(
     (entry: TimeEntry) => {
@@ -1110,7 +1221,9 @@ const TrackerView: React.FC<{
               entries={filteredEntries}
               dailyTotal={dailyTotal}
               dailyGoal={dailyGoal}
+              canDuplicateEntry={canDuplicateEntry}
               onEditEntry={setEditingEntry}
+              onDuplicateEntry={setDuplicatingEntry}
               onDeleteEntryClick={handleDeleteClick}
             />
           </div>
@@ -1127,6 +1240,15 @@ const TrackerView: React.FC<{
         permissions={permissions}
         currency={currency}
         onAddCustomTask={onAddCustomTask}
+      />
+
+      <EntryDuplicateDialog
+        entry={duplicatingEntry}
+        onClose={() => setDuplicatingEntry(null)}
+        onDuplicate={handleDuplicateEntry}
+        existingConflictDates={duplicateConflictDates}
+        startOfWeek={startOfWeek}
+        treatSaturdayAsHoliday={treatSaturdayAsHoliday}
       />
 
       {pendingDeleteEntry && (

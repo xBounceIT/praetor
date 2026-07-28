@@ -80,7 +80,7 @@ const entryCreateBodySchema = {
     projectId: { type: 'string' },
     projectName: { type: 'string' },
     task: { type: 'string' },
-    notes: { type: 'string', maxLength: MAX_NOTES_LENGTH },
+    notes: { type: ['string', 'null'], maxLength: MAX_NOTES_LENGTH },
     duration: { type: 'number', maximum: MAX_DURATION_HOURS },
     isPlaceholder: { type: 'boolean' },
     userId: { type: 'string' },
@@ -300,9 +300,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['entries'],
         summary: 'Create time entry',
         description:
-          'Creates one time entry. Returns 409 when the target user already has an entry ' +
-          'for the same date, project, and task. Returns 403 when the selected project is ' +
-          'in a status that blocks time entries, or when it is expired and the role lacks ' +
+          'Creates one time entry. Multiple entries for the same user, date, project, and ' +
+          'task are allowed. Returns 403 when the selected project is in a status that ' +
+          'blocks time entries, or when it is expired and the role lacks ' +
           'timesheets.expired_projects.create.',
         body: entryCreateBodySchema,
         response: {
@@ -334,9 +334,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['entries'],
         summary: 'Update time entry',
         description:
-          'Updates one time entry. Returns 409 when a date, project, or task change would ' +
-          'give the owner another entry with the same date, project, and task, or when the ' +
-          'optimistic-lock version is stale.',
+          'Updates one time entry. Returns 409 when the optimistic-lock version is stale.',
         params: idParamSchema,
         body: entryUpdateBodySchema,
         response: {

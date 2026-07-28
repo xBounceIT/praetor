@@ -344,37 +344,6 @@ export const findExistingRecurringKeys = async (
   return new Set(rows.map((row) => `${row.date}|${row.projectId}|${row.task}`));
 };
 
-export type EntryUniquenessKey = {
-  userId: string;
-  date: string;
-  projectId: string;
-  task: string;
-};
-
-type EntryKeyLookup = EntryUniquenessKey & {
-  excludeId?: string;
-};
-
-export const existsForEntryKey = async (
-  key: EntryKeyLookup,
-  exec: DbExecutor = db,
-): Promise<boolean> => {
-  const rows = await exec
-    .select({ id: timeEntries.id })
-    .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.userId, key.userId),
-        eq(timeEntries.date, key.date),
-        eq(timeEntries.projectId, key.projectId),
-        eq(timeEntries.task, key.task),
-        key.excludeId ? ne(timeEntries.id, key.excludeId) : undefined,
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
-};
-
 export const sumDurationForUserDate = async (
   userId: string,
   date: string,

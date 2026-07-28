@@ -148,6 +148,33 @@ describe('makeEntryHandlers', () => {
     }
   });
 
+  test('add replaces an existing local entry when create returns the same id', async () => {
+    apiMocks.entriesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({
+        id: 'e-ph',
+        createdAt: 200,
+        isPlaceholder: false,
+        ...(data as object),
+      }),
+    );
+    const entries = makeStubSetter<EntryLike>([
+      { id: 'e-ph', createdAt: 50, task: 'stub' },
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1' } as never,
+      viewingUserId: 'u1',
+      setEntries: entries.setter,
+    });
+
+    await handlers.add({ task: 'updated' } as never);
+
+    expect(entries.get()).toEqual([
+      expect.objectContaining({ id: 'e-ph', task: 'updated', createdAt: 200 }),
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+  });
+
   test('addBulk returns early when no current user', async () => {
     const entries = makeStubSetter<EntryLike>([]);
     const handlers = makeEntryHandlers({
@@ -158,6 +185,32 @@ describe('makeEntryHandlers', () => {
 
     await handlers.addBulk([{ task: 'a' } as never]);
     expect(apiMocks.entriesCreate).not.toHaveBeenCalled();
+  });
+
+  test('addBulk creates entries sequentially to avoid server serialization conflicts', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    apiMocks.entriesCreate.mockImplementation(async (data: unknown) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return { id: `e-new-${maxInFlight}`, createdAt: 1, ...(data as object) };
+    });
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1', costPerHour: 25 } as never,
+      viewingUserId: 'u2',
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    await handlers.addBulk([
+      { task: 'a' } as never,
+      { task: 'b' } as never,
+      { task: 'c' } as never,
+    ]);
+
+    expect(maxInFlight).toBe(1);
+    expect(apiMocks.entriesCreate).toHaveBeenCalledTimes(3);
   });
 
   test('addBulk creates and prepends sorted by createdAt desc', async () => {
@@ -234,6 +287,55 @@ describe('makeEntryHandlers', () => {
       expect(ids).not.toContain('e-new-2');
     } finally {
       restore();
+    }
+  });
+
+  test('addBulk replaces an existing local entry when create returns the same id', async () => {
+    apiMocks.entriesCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({
+        id: 'e-ph',
+        createdAt: 200,
+        isPlaceholder: false,
+        ...(data as object),
+      }),
+    );
+    const entries = makeStubSetter<EntryLike>([
+      { id: 'e-ph', createdAt: 50, task: 'stub' },
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u1' } as never,
+      viewingUserId: 'u1',
+      setEntries: entries.setter,
+    });
+
+    await handlers.addBulk([{ task: 'updated' } as never]);
+
+    expect(entries.get()).toEqual([
+      expect.objectContaining({ id: 'e-ph', task: 'updated', createdAt: 200 }),
+      { id: 'e-other', createdAt: 40, task: 'other' },
+    ]);
+  });
+
+  test('addBulk console.errors create failures even when silent', async () => {
+    apiMocks.entriesCreate.mockImplementation(() =>
+      Promise.reject(new ApiErrorStub('create failed', 500)),
+    );
+    const handlers = makeEntryHandlers({
+      currentUser: { id: 'u' } as never,
+      viewingUserId: '',
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy as unknown as typeof console.error;
+    try {
+      const result = await handlers.addBulk([{ task: 'a' } as never], { silent: true });
+      expect(result.failed).toHaveLength(1);
+      expect(errorSpy).toHaveBeenCalled();
+    } finally {
+      console.error = originalError;
     }
   });
 

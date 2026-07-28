@@ -39,11 +39,15 @@ export interface CalendarProps {
   treatSaturdayAsHoliday?: boolean;
   dailyGoal?: number;
 
-  // New props for range mode
-  selectionMode?: 'single' | 'range';
+  // New props for range / multiple mode
+  selectionMode?: 'single' | 'range' | 'multiple';
   startDate?: string;
   endDate?: string;
   onRangeSelect?: (start: string, end: string | null) => void;
+  selectedDates?: string[];
+  onDatesChange?: (dates: string[]) => void;
+  /** Dates that cannot be toggled (e.g. source day when duplicating). */
+  disabledDates?: string[];
 
   // Allow weekend selection (e.g., for time tracker)
   allowWeekendSelection?: boolean;
@@ -200,6 +204,8 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
   </div>
 );
 
+const EMPTY_DATES: string[] = [];
+
 const Calendar: React.FC<CalendarProps> = ({
   selectedDate,
   onDateSelect,
@@ -211,6 +217,9 @@ const Calendar: React.FC<CalendarProps> = ({
   startDate,
   endDate,
   onRangeSelect,
+  selectedDates = EMPTY_DATES,
+  onDatesChange,
+  disabledDates = EMPTY_DATES,
   allowWeekendSelection = false,
   size = 'default',
   bare = false,
@@ -219,12 +228,15 @@ const Calendar: React.FC<CalendarProps> = ({
   const isCompact = size === 'compact';
   const [viewDate, setViewDate] = useState(() => {
     if (selectedDate) return dateOnlyStringToLocalDate(selectedDate);
+    if (selectedDates[0]) return dateOnlyStringToLocalDate(selectedDates[0]);
     if (startDate) return dateOnlyStringToLocalDate(startDate);
     return new Date();
   });
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const disabledDateSet = useMemo(() => new Set(disabledDates), [disabledDates]);
+  const selectedDateSet = useMemo(() => new Set(selectedDates), [selectedDates]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -286,6 +298,17 @@ const Calendar: React.FC<CalendarProps> = ({
   };
 
   const handleDateClick = (dateStr: string) => {
+    if (disabledDateSet.has(dateStr)) return;
+
+    if (selectionMode === 'multiple' && onDatesChange) {
+      if (selectedDateSet.has(dateStr)) {
+        onDatesChange(selectedDates.filter((d) => d !== dateStr));
+      } else {
+        onDatesChange([...selectedDates, dateStr].sort());
+      }
+      return;
+    }
+
     if (selectionMode === 'range' && onRangeSelect) {
       if (!startDate || (startDate && endDate)) {
         // Start a new range
@@ -320,6 +343,8 @@ const Calendar: React.FC<CalendarProps> = ({
 
     if (selectionMode === 'single') {
       isSelected = dateStr === selectedDate;
+    } else if (selectionMode === 'multiple') {
+      isSelected = selectedDateSet.has(dateStr);
     } else {
       isRangeStart = dateStr === startDate;
       isRangeEnd = dateStr === endDate;
@@ -331,13 +356,16 @@ const Calendar: React.FC<CalendarProps> = ({
 
     const isToday = dateStr === today;
     const hasActivity = entryDates.has(dateStr);
+    const isDisabledDate = disabledDateSet.has(dateStr);
 
     const dayOfWeek = dateObj.getDay();
     const holidayName = isItalianHoliday(dateObj);
     const isSunday = dayOfWeek === 0;
     const isSaturday = dayOfWeek === 6;
     const isWeekendOrHoliday = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
-    const isForbidden = !allowWeekendSelection && selectionMode === 'single' && isWeekendOrHoliday;
+    const isForbidden =
+      isDisabledDate ||
+      (!allowWeekendSelection && selectionMode === 'single' && isWeekendOrHoliday);
     const holidayLabel =
       holidayName ||
       (isSunday
@@ -356,22 +384,25 @@ const Calendar: React.FC<CalendarProps> = ({
             <button
               type="button"
               disabled={isForbidden}
+              aria-pressed={selectionMode === 'multiple' ? isSelected : undefined}
               onClick={() => {
                 if (!isForbidden) handleDateClick(dateStr);
               }}
               className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border
               ${
-                isSelected
-                  ? 'bg-secondary text-secondary-foreground border-secondary shadow-md scale-105 z-10'
-                  : isInRange
-                    ? 'bg-muted text-foreground border-muted'
-                    : isWeekendOrHoliday
-                      ? 'bg-red-50 text-red-500 border-red-100 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
-                      : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20'
-                        : isToday
-                          ? 'bg-muted text-secondary-foreground border-border'
-                          : 'hover:bg-muted border-transparent text-foreground'
+                isForbidden && isDisabledDate
+                  ? 'opacity-40 cursor-not-allowed border-transparent text-muted-foreground'
+                  : isSelected
+                    ? 'bg-secondary text-secondary-foreground border-secondary shadow-md scale-105 z-10'
+                    : isInRange
+                      ? 'bg-muted text-foreground border-muted'
+                      : isWeekendOrHoliday
+                        ? 'bg-red-50 text-red-500 border-red-100 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
+                        : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20'
+                          : isToday
+                            ? 'bg-muted text-secondary-foreground border-border'
+                            : 'hover:bg-muted border-transparent text-foreground'
               }`}
             >
               <span
@@ -410,6 +441,13 @@ const Calendar: React.FC<CalendarProps> = ({
     const todayStr = getLocalDateString(now);
     if (selectionMode === 'single' && onDateSelect) {
       onDateSelect(todayStr);
+    } else if (
+      selectionMode === 'multiple' &&
+      onDatesChange &&
+      !disabledDateSet.has(todayStr) &&
+      !selectedDateSet.has(todayStr)
+    ) {
+      onDatesChange([...selectedDates, todayStr].sort());
     }
   };
 

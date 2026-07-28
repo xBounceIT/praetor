@@ -222,4 +222,54 @@ describe('<Calendar />', () => {
     expect(jan1Button).toBeDefined();
     expect(jan1Button).toBeDisabled();
   });
+
+  test('multiple mode toggles dates via onDatesChange', () => {
+    const onDatesChange = mock((_dates: string[]) => {});
+    const { rerender } = render(
+      <Calendar
+        selectionMode="multiple"
+        selectedDates={[]}
+        onDatesChange={onDatesChange}
+        selectedDate="2024-03-01"
+        startOfWeek="Monday"
+        allowWeekendSelection
+      />,
+    );
+
+    fireEvent.click(screen.getByText('15'));
+    expect(onDatesChange).toHaveBeenCalledWith(['2024-03-15']);
+
+    rerender(
+      <Calendar
+        selectionMode="multiple"
+        selectedDates={['2024-03-15']}
+        onDatesChange={onDatesChange}
+        selectedDate="2024-03-01"
+        startOfWeek="Monday"
+        allowWeekendSelection
+      />,
+    );
+    fireEvent.click(screen.getByText('15'));
+    expect(onDatesChange).toHaveBeenCalledWith([]);
+  });
+
+  test('multiple mode disables listed disabledDates', () => {
+    const onDatesChange = mock((_dates: string[]) => {});
+    render(
+      <Calendar
+        selectionMode="multiple"
+        selectedDates={[]}
+        onDatesChange={onDatesChange}
+        disabledDates={['2024-03-15']}
+        selectedDate="2024-03-01"
+        startOfWeek="Monday"
+        allowWeekendSelection
+      />,
+    );
+
+    const day15 = screen.getByText('15').closest('button');
+    expect(day15).toBeDisabled();
+    fireEvent.click(day15 as HTMLButtonElement);
+    expect(onDatesChange).not.toHaveBeenCalled();
+  });
 });

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import type { AddBulkResult } from '../../hooks/handlers/entryHandlers';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { downloadCsv } from '../../utils/csv';
 import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
@@ -47,7 +48,10 @@ export interface WeeklyViewProps {
       'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
     >,
   ) => Promise<ProjectTask>;
-  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
+  onAddBulkEntries: (
+    entries: TimeEntryDraft[],
+    options?: { silent?: boolean },
+  ) => Promise<AddBulkResult>;
   onUpdateEntry: (id: string, updates: TimeEntryUpdate) => void | Promise<void>;
   onDeleteEntry: (id: string) => void | Promise<void>;
   viewingUserId: string;
@@ -591,7 +595,7 @@ const useWeeklyController = ({
     }
 
     try {
-      const pending: Promise<void>[] = [];
+      const pending: Promise<unknown>[] = [];
       if (entriesToAdd.length > 0) pending.push(onAddBulkEntries(entriesToAdd));
       for (const { id, updates } of entriesToUpdate) {
         pending.push(Promise.resolve(onUpdateEntry(id, updates)));

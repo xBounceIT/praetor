@@ -65,7 +65,6 @@ const entriesBulkDeleteMock = mock();
 const entriesFindContextMock = mock();
 const entriesFindOwnerMock = mock();
 const entriesFindExistingRecurringKeysMock = mock();
-const entriesExistsForEntryKeyMock = mock();
 const entriesDecodeCursorMock = mock();
 const entriesEncodeCursorMock = mock((c: unknown) => `enc:${JSON.stringify(c)}`);
 const notifyTrackerOvertimeForDateMock = mock();
@@ -123,7 +122,6 @@ beforeAll(async () => {
     findContext: entriesFindContextMock,
     findOwner: entriesFindOwnerMock,
     findExistingRecurringKeys: entriesFindExistingRecurringKeysMock,
-    existsForEntryKey: entriesExistsForEntryKeyMock,
     decodeCursor: entriesDecodeCursorMock,
     encodeCursor: entriesEncodeCursorMock,
   }));
@@ -287,7 +285,6 @@ const allMocks = [
   entriesFindContextMock,
   entriesFindOwnerMock,
   entriesFindExistingRecurringKeysMock,
-  entriesExistsForEntryKeyMock,
   entriesDecodeCursorMock,
   notifyTrackerOvertimeForDateMock,
   projectsFindClientIdMock,
@@ -345,7 +342,6 @@ beforeEach(async () => {
     status: 'in_corso',
   });
   clientsFindNameMock.mockResolvedValue('Client');
-  entriesExistsForEntryKeyMock.mockResolvedValue(false);
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   isTaskAssignedToUserMock.mockResolvedValue(true);
@@ -712,10 +708,6 @@ describe('POST /api/entries', () => {
       isolationLevel: 'serializable',
       accessMode: 'read write',
     });
-    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
-      { userId: 'u1', date: '2025-06-02', projectId: 'p1', task: 'Dev' },
-      TX_SENTINEL,
-    );
     expect(notifyTrackerOvertimeForDateMock).toHaveBeenCalledWith('u1', '2025-06-02', 'u1');
   });
 
@@ -742,27 +734,57 @@ describe('POST /api/entries', () => {
     );
   });
 
-  test('409 duplicate date/project/task for the target user does not create entry', async () => {
-    entriesExistsForEntryKeyMock.mockResolvedValue(true);
+  test('201: notes null is accepted and stored as null', async () => {
     findCostPerHourMock.mockResolvedValue(50);
     findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
 
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/entries',
       headers: authHeader(),
-      payload: validBody,
+      payload: { ...validBody, duration: 2, notes: null },
     });
 
-    expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'A time entry already exists for this date, project, and task',
-    });
-    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
-      { userId: 'u1', date: '2025-06-02', projectId: 'p1', task: 'Dev' },
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ notes: null }),
       TX_SENTINEL,
     );
-    expect(entriesCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201: creates even when another entry already has the same date/project/task', async () => {
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, duration: 3 },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u1',
+        date: '2025-06-02',
+        projectId: 'p1',
+        task: 'Dev',
+        duration: 3,
+      }),
+      TX_SENTINEL,
+    );
+    expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
   test('400 invalid isPlaceholder value does not create entry', async () => {
@@ -955,10 +977,6 @@ describe('POST /api/entries', () => {
     expect(findCostPerHourMock).toHaveBeenCalledWith('u2');
     expect(entriesCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u2', hourlyCost: 60 }),
-      TX_SENTINEL,
-    );
-    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
-      { userId: 'u2', date: '2025-06-02', projectId: 'p1', task: 'Dev' },
       TX_SENTINEL,
     );
   });
@@ -1204,10 +1222,10 @@ describe('PUT /api/entries/:id', () => {
     );
   });
 
-  test('409 when a date change would duplicate another entry key', async () => {
+  test('200 when a date change lands on a day that already has the same project/task', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
-    entriesExistsForEntryKeyMock.mockResolvedValue(true);
-    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, date: '2025-06-03' });
+    findHourlyCostForDateMock.mockResolvedValue(55);
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, date: '2025-06-03', hourlyCost: 55 });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1216,25 +1234,16 @@ describe('PUT /api/entries/:id', () => {
       payload: versionedPatch({ date: '2025-06-03' }),
     });
 
-    expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'A time entry already exists for this date, project, and task',
-    });
+    expect(res.statusCode).toBe(200);
     expect(lockUserByIdMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
-    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
-      {
-        userId: 'u1',
-        date: '2025-06-03',
-        projectId: 'p1',
-        task: 'Dev',
-        excludeId: 'te-1',
-      },
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-1',
+      expect.objectContaining({ date: '2025-06-03', hourlyCost: 55 }),
       TX_SENTINEL,
     );
-    expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
-  test('409 when a catalog change would duplicate another entry key', async () => {
+  test('200 when a catalog change matches another entry key on the same day', async () => {
     entriesFindContextMock.mockResolvedValue(sampleContext());
     projectsFindClientIdAndNameMock.mockResolvedValue({
       clientId: 'c2',
@@ -1244,7 +1253,15 @@ describe('PUT /api/entries/:id', () => {
     });
     clientsFindNameMock.mockResolvedValue('Other');
     findIdByProjectAndNameMock.mockResolvedValue('t2');
-    entriesExistsForEntryKeyMock.mockResolvedValue(true);
+    entriesUpdateMock.mockResolvedValue({
+      ...SAMPLE_ENTRY,
+      clientId: 'c2',
+      clientName: 'Other',
+      projectId: 'p2',
+      projectName: 'Beta',
+      task: 'QA',
+      taskId: 't2',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -1253,20 +1270,17 @@ describe('PUT /api/entries/:id', () => {
       payload: versionedPatch({ clientId: 'c2', projectId: 'p2', task: 'QA' }),
     });
 
-    expect(res.statusCode).toBe(409);
-    expect(entriesExistsForEntryKeyMock).toHaveBeenCalledWith(
-      {
-        userId: 'u1',
-        date: '2025-06-02',
+    expect(res.statusCode).toBe(200);
+    expect(lockUserByIdMock).not.toHaveBeenCalled();
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-1',
+      expect.objectContaining({
+        clientId: 'c2',
         projectId: 'p2',
         task: 'QA',
-        excludeId: 'te-1',
-      },
-      TX_SENTINEL,
+        taskId: 't2',
+      }),
     );
-    expect(lockUserByIdMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
-    expect(findHourlyCostForDateMock).not.toHaveBeenCalled();
-    expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
   test('400 when update omits the optimistic-lock version', async () => {
@@ -1777,7 +1791,6 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(projectsFindTimeEntryAvailabilityByIdMock).toHaveBeenCalledWith('p1');
-    expect(entriesExistsForEntryKeyMock).not.toHaveBeenCalled();
     expect(withDbTransactionMock).not.toHaveBeenCalled();
     expect(entriesUpdateMock).toHaveBeenCalledTimes(1);
   });
