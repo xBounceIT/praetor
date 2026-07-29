@@ -12,6 +12,11 @@ export const appToasterProps = {
   position: 'top-center',
 } satisfies Pick<ToasterProps, 'richColors' | 'closeButton' | 'position'>;
 
+export const resolveOfferCreatedToastAction = <T>(
+  canViewClientOffers: boolean,
+  action: T,
+): T | undefined => (canViewClientOffers ? action : undefined);
+
 export const offerCreatedToastClassNames = {
   toast: 'rounded-lg! border-primary! bg-primary! pr-12! text-primary-foreground! shadow-lg',
   description: 'text-primary-foreground/70!',

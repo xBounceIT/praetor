@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   appToasterProps,
   offerCreatedToastClassNames,
+  resolveOfferCreatedToastAction,
   resolveSonnerTheme,
 } from '../../../components/ui/sonner-presets';
 
@@ -32,5 +33,12 @@ describe('Sonner configuration', () => {
     expect(offerCreatedToastClassNames.closeButton).toContain('text-primary-foreground!');
     expect(offerCreatedToastClassNames.closeButton).toContain('[&_svg]:size-4!');
     expect(offerCreatedToastClassNames.icon).toContain('text-primary-foreground!');
+  });
+
+  test('only exposes the offer action when the user can view client offers', () => {
+    const action = { label: 'View offer', onClick: () => {} };
+
+    expect(resolveOfferCreatedToastAction(true, action)).toBe(action);
+    expect(resolveOfferCreatedToastAction(false, action)).toBeUndefined();
   });
 });

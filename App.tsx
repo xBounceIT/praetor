@@ -69,7 +69,11 @@ import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings, { type UserSettingsTab } from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
-import { appToasterProps, offerCreatedToastClassNames } from './components/ui/sonner-presets';
+import {
+  appToasterProps,
+  offerCreatedToastClassNames,
+  resolveOfferCreatedToastAction,
+} from './components/ui/sonner-presets';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
@@ -1820,22 +1824,26 @@ const useAppContentController = () => {
     [switchRole],
   );
 
+  const canViewClientOffers = Boolean(
+    currentUser &&
+      hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']),
+  );
   const notifyClientOfferCreated = useCallback(
     (offer: Pick<ClientOffer, 'id' | 'revisionCode'>) => {
       toast.success(tApp('sales:clientQuotes.offerCreatedToast'), {
         description: formatDocumentCode(offer.id, offer.revisionCode),
         classNames: offerCreatedToastClassNames,
-        action: {
+        action: resolveOfferCreatedToastAction(canViewClientOffers, {
           label: tApp('sales:clientQuotes.viewOffer'),
           onClick: () => {
             setClientQuoteFilterId(null);
             setClientOfferFilterId(offer.id);
             setActiveView('sales/client-offers');
           },
-        },
+        }),
       });
     },
-    [setActiveView, setClientQuoteFilterId, setClientOfferFilterId, tApp],
+    [canViewClientOffers, setActiveView, setClientQuoteFilterId, setClientOfferFilterId, tApp],
   );
 
   const notifyClientOrderCreated = useCallback(
