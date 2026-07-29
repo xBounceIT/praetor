@@ -298,6 +298,8 @@ const DailyView: React.FC<DailyViewProps> = ({
   });
 
   const hasValidDuration = parseFloat(duration) > 0;
+  const trimmedNotes = notes.trim();
+  const canSubmit = hasValidDuration && trimmedNotes.length > 0;
 
   if (loadedSelectedDate !== selectedDate) {
     // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- React-supported prop snapshot adjustment; no updater callback is involved.
@@ -311,6 +313,8 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit) return;
+
     dispatchForm({ type: 'setErrors', errors: {} });
 
     const newErrors: DailyEntryErrors = {};
@@ -321,7 +325,7 @@ const DailyView: React.FC<DailyViewProps> = ({
     if (!selection.taskName) {
       newErrors.task = t('entry.taskRequired');
     }
-    if (!notes.trim()) newErrors.notes = t('entry.notesRequired');
+    if (!trimmedNotes) newErrors.notes = t('entry.notesRequired');
 
     if (makeRecurring && recurrenceEndDate && date && recurrenceEndDate < date) {
       newErrors.recurrenceEndDate = t('entry.endDateAfterStart');
@@ -342,7 +346,7 @@ const DailyView: React.FC<DailyViewProps> = ({
       projectId: selection.projectId,
       projectName: project?.name || 'General',
       task: selection.taskName,
-      notes,
+      notes: trimmedNotes,
       duration: durationVal,
       location: selection.location,
     });
@@ -474,7 +478,7 @@ const DailyView: React.FC<DailyViewProps> = ({
           </Field>
 
           <div className="min-w-0 flex items-end">
-            <Button type="submit" disabled={!hasValidDuration} className="h-10 w-full rounded-lg">
+            <Button type="submit" disabled={!canSubmit} className="h-10 w-full rounded-lg">
               <Save className="size-4" aria-hidden="true" />
               {t('entry.logTime')}
             </Button>
