@@ -192,7 +192,10 @@ export const listForProjects = async (
           COALESCE(SUM(COALESCE(t.revenue, 0) * COALESCE(t.duration, 1)), 0) AS task_revenue,
           COUNT(*) AS tasks_count,
           COUNT(*) FILTER (WHERE COALESCE(t.is_disabled, false) = false) AS enabled_tasks_count,
-          COALESCE(SUM(COALESCE(t.expected_effort, 0)), 0) AS planned_effort_hours,
+          COALESCE(
+            SUM(ROUND((COALESCE(t.monthly_effort, 0) * COALESCE(t.duration, 1))::numeric, 2)),
+            0
+          ) AS planned_effort_hours,
           COALESCE(SUM(COALESCE(t.monthly_effort, 0)), 0) AS monthly_effort_hours
         FROM tasks t
         WHERE t.project_id = ANY(${sql.param(uniqueProjectIds)}::text[])
