@@ -438,6 +438,9 @@ describe('makeQuoteHandlers', () => {
       items: [],
     });
     apiMocks.quotesList.mockImplementation(() => Promise.reject(new Error('refresh failed')));
+    apiMocks.clientOffersList
+      .mockRejectedValueOnce(new Error('offers refresh failed'))
+      .mockResolvedValueOnce([{ id: 'q1-OF' }]);
     const ctx = buildHandlers({
       quotes: [{ id: 'q1', status: 'sent', items: [] }],
     });
@@ -451,6 +454,8 @@ describe('makeQuoteHandlers', () => {
         id: 'q1-OF',
         revisionCode: 'REV2',
       });
+      expect(apiMocks.clientOffersList).toHaveBeenCalledTimes(2);
+      expect(ctx.clientOffers.get()).toEqual([{ id: 'q1-OF' }]);
     } finally {
       restore();
     }
@@ -1007,14 +1012,17 @@ describe('makeQuoteHandlers', () => {
     };
     apiMocks.quotesPromote.mockImplementation(() => Promise.resolve(result));
     apiMocks.quotesList.mockImplementation(() => Promise.reject(new Error('refresh failed')));
-    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-1' }]));
+    apiMocks.clientOffersList.mockImplementation(() =>
+      Promise.reject(new Error('offers refresh failed')),
+    );
     apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
-    const ctx = buildHandlers();
+    const ctx = buildHandlers({ clientOffers: [{ id: 'of-existing' }] });
     const restore = silenceConsole();
 
     try {
       const promotion = await ctx.handlers.promoteQuoteCandidate('q-1', 'candidate-b');
       expect(promotion.offer.id).toBe('of-1');
+      expect(ctx.clientOffers.get().map((offer) => offer.id)).toEqual(['of-1', 'of-existing']);
       expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
         id: 'of-1',
         revisionCode: 'REV1',

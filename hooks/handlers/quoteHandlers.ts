@@ -89,11 +89,16 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     setInvoices(invoicesData);
   };
 
-  const refreshBestEffort = async (refresh: () => Promise<void>, errorMessage: string) => {
+  const refreshBestEffort = async (
+    refresh: () => Promise<void>,
+    errorMessage: string,
+  ): Promise<boolean> => {
     try {
       await refresh();
+      return true;
     } catch (refreshErr) {
       console.error(errorMessage, refreshErr);
+      return false;
     }
   };
 
@@ -105,8 +110,31 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const refreshLinkedSupplierQuotes = () =>
     refreshBestEffort(refreshSupplierQuoteFlow, 'Failed to refresh supplier data:');
 
-  const refreshClientQuoteFlowBestEffort = () =>
-    refreshBestEffort(refreshClientQuoteFlow, 'Failed to refresh client quote data:');
+  const refreshClientOffersBestEffort = async () => {
+    const refreshClientOffers = async () => {
+      const offersData = await api.clientOffers.list();
+      setClientOffers(offersData);
+    };
+    const offersRefreshed = await refreshBestEffort(
+      refreshClientOffers,
+      'Failed to refresh client offers:',
+    );
+    if (!offersRefreshed) {
+      await refreshBestEffort(refreshClientOffers, 'Failed to retry client offers refresh:');
+    }
+  };
+
+  const refreshClientQuoteCachesBestEffort = async () => {
+    await Promise.all([
+      refreshBestEffort(async () => {
+        setQuotes(await api.quotes.list());
+      }, 'Failed to refresh client quotes:'),
+      refreshClientOffersBestEffort(),
+      refreshBestEffort(async () => {
+        setClientsOrders(await api.clientsOrders.list());
+      }, 'Failed to refresh client orders:'),
+    ]);
+  };
 
   const surfaceWarnings = (warnings?: string[]) => {
     for (const warning of warnings ?? []) {
@@ -164,7 +192,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         notifyClientOfferCreated?.(createdOffer);
       }
       await Promise.all([
-        createdOffer ? refreshClientQuoteFlowBestEffort() : refreshClientQuoteFlow(),
+        createdOffer ? refreshClientQuoteCachesBestEffort() : refreshClientQuoteFlow(),
         supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
     } catch (err) {
@@ -176,12 +204,16 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const promoteQuoteCandidate = async (quoteId: string, candidateId: string) => {
     try {
       const result = await api.quotes.promote(quoteId, candidateId);
+      setClientOffers((prev) => [
+        result.offer,
+        ...prev.filter((offer) => offer.id !== result.offer.id),
+      ]);
       // Confirm the completed promotion immediately; the follow-up list refreshes can be slow.
       notifyClientOfferCreated?.({
         id: result.offer.id,
         revisionCode: result.offer.revisionCode,
       });
-      await Promise.all([refreshClientQuoteFlowBestEffort(), refreshLinkedSupplierQuotes()]);
+      await Promise.all([refreshClientQuoteCachesBestEffort(), refreshLinkedSupplierQuotes()]);
       return result;
     } catch (err) {
       console.error('Failed to promote quote candidate:', err);
