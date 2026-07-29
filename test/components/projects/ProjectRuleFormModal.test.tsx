@@ -344,6 +344,67 @@ describe('<ProjectRuleFormModal />', () => {
     );
   });
 
+  test('initializes the custom dialog from the saved schedule frequency', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={{
+          ...rule,
+          evaluationMode: 'periodic',
+          schedule: { frequency: 'monthly:last:5', userIds: [], taskIds: [] },
+        }}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.everyLast',
+      }),
+    );
+
+    const occurrenceSelect = screen
+      .getByText('recurring.every')
+      .parentElement?.querySelector('[role="combobox"]');
+    const dayOfWeekSelect = screen
+      .getByText('recurring.dayOfWeek')
+      .parentElement?.querySelector('[role="combobox"]');
+    expect(occurrenceSelect).toHaveTextContent('recurring.occurrences.last');
+    expect(dayOfWeekSelect).toHaveTextContent('recurring.dayNames.friday');
+
+    fireEvent.click(screen.getByRole('button', { name: 'recurring.cancel' }));
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.everyLast',
+      }),
+    );
+    expect(await screen.findByText('recurring.customRepeatTitle')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'recurring.setPattern' }));
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schedule: {
+          frequency: 'monthly:last:5',
+          userIds: [],
+          taskIds: [],
+        },
+      }),
+    );
+  });
+
   test('clears a period-only target field when switching back to continuous evaluation', () => {
     const periodicFieldComparisonRule: ProjectRule = {
       ...rule,

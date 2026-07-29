@@ -517,6 +517,9 @@ const ProjectRuleEvaluationEditor: React.FC<{
   const { t } = useTranslation(['projects']);
   const [isCustomRepeatOpen, setIsCustomRepeatOpen] = useState(false);
   const isCustomFrequency = schedule.frequency.startsWith('monthly:');
+  const customFrequencyLabel = isCustomFrequency
+    ? formatRecurrencePattern(schedule.frequency, t)
+    : undefined;
   const frequencyOptions = useMemo(
     () => [
       ...(['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map((frequency) => ({
@@ -525,12 +528,10 @@ const ProjectRuleEvaluationEditor: React.FC<{
       })),
       {
         id: 'custom',
-        name: isCustomFrequency
-          ? formatRecurrencePattern(schedule.frequency, t)
-          : t('timesheets:entry.recurrencePatterns.custom'),
+        name: customFrequencyLabel ?? t('timesheets:entry.recurrencePatterns.custom'),
       },
     ],
-    [isCustomFrequency, schedule.frequency, t],
+    [customFrequencyLabel, t],
   );
   const unavailableLabel = t('projects:detail.rules.schedule.unavailable');
   const filterUserOptions = includeUnavailableSelections(
@@ -615,6 +616,7 @@ const ProjectRuleEvaluationEditor: React.FC<{
               label={t('projects:detail.rules.schedule.frequency')}
               options={frequencyOptions}
               value={isCustomFrequency ? 'custom' : schedule.frequency}
+              allowReselect={isCustomFrequency}
               onChange={(next) =>
                 handleFrequencyChange((Array.isArray(next) ? next[0] : next) as string)
               }
@@ -652,13 +654,16 @@ const ProjectRuleEvaluationEditor: React.FC<{
         )}
       </section>
 
-      <CustomRepeatModal
-        isOpen={isCustomRepeatOpen}
-        onClose={() => setIsCustomRepeatOpen(false)}
-        onSave={(frequency) =>
-          onScheduleChange({ frequency: frequency as ProjectRuleScheduleFrequency })
-        }
-      />
+      {isCustomRepeatOpen && (
+        <CustomRepeatModal
+          isOpen
+          initialPattern={isCustomFrequency ? schedule.frequency : undefined}
+          onClose={() => setIsCustomRepeatOpen(false)}
+          onSave={(frequency) =>
+            onScheduleChange({ frequency: frequency as ProjectRuleScheduleFrequency })
+          }
+        />
+      )}
     </>
   );
 };
