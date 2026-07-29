@@ -15,6 +15,7 @@ export const PROJECT_RULE_SCHEDULE_FREQUENCIES = [
 
 export const DEFAULT_PROJECT_RULE_SCHEDULE: ProjectRuleSchedule = {
   frequency: 'monthly',
+  monthlyDay: 1,
   userIds: [],
   taskIds: [],
 };
@@ -49,12 +50,18 @@ export const isProjectRuleScheduleFrequency = (
 export const getAppTimeZone = (): string =>
   Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
+const normalizeMonthlyDay = (value: unknown): number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 31
+    ? value
+    : DEFAULT_PROJECT_RULE_SCHEDULE.monthlyDay;
+
 export const normalizeProjectRuleSchedule = (value: unknown): ProjectRuleSchedule => {
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   return {
     frequency: isProjectRuleScheduleFrequency(raw.frequency)
       ? raw.frequency
       : DEFAULT_PROJECT_RULE_SCHEDULE.frequency,
+    monthlyDay: normalizeMonthlyDay(raw.monthlyDay),
     userIds: uniqueStrings(raw.userIds),
     taskIds: uniqueStrings(raw.taskIds),
   };
@@ -75,6 +82,8 @@ const datePartsInTimeZone = (now: Date, timeZone: string) => {
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const utcDate = (year: number, monthIndex: number, day: number) =>
   new Date(Date.UTC(year, monthIndex, day));
+const daysInMonth = (year: number, monthIndex: number) =>
+  utcDate(year, monthIndex + 1, 0).getUTCDate();
 const isIsoDate = (value: string) => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && isoDate(parsed) === value;
@@ -193,10 +202,14 @@ export const getPreviousProjectRulePeriod = (
       end = utcDate(year, 0, 1);
       start = utcDate(year - 1, 0, 1);
       break;
-    default:
-      end = utcDate(year, month - 1, 1);
-      start = utcDate(year, month - 2, 1);
+    default: {
+      const currentMonthIndex = month - 1;
+      const dueDay = Math.min(schedule.monthlyDay, daysInMonth(year, currentMonthIndex));
+      const endMonthIndex = day >= dueDay ? currentMonthIndex : currentMonthIndex - 1;
+      end = utcDate(year, endMonthIndex, 1);
+      start = utcDate(year, endMonthIndex - 1, 1);
       break;
+    }
   }
 
   const startDate = isoDate(start);

@@ -139,6 +139,7 @@ const firstValueForField = (field: string) => {
 
 const defaultSchedule = (): ProjectRuleSchedule => ({
   frequency: 'monthly',
+  monthlyDay: 1,
   userIds: [],
   taskIds: [],
 });
@@ -320,7 +321,7 @@ const createProjectRuleFormState = (
 ): ProjectRuleFormState => ({
   name: rule?.name ?? '',
   evaluationMode: rule?.evaluationMode ?? 'continuous',
-  schedule: rule?.schedule ?? defaultSchedule(),
+  schedule: { ...defaultSchedule(), ...rule?.schedule },
   conditionLogic: rule?.conditionLogic ?? 'and',
   conditions: conditionsForRule(rule, initialField),
   actions: actionRowsForRule(rule, hasHiddenWebhookAction),
@@ -513,11 +514,27 @@ const ProjectRuleEvaluationEditor: React.FC<{
   onScheduleChange: (patch: Partial<ProjectRuleSchedule>) => void;
 }> = ({ evaluationMode, schedule, recipients, submitting, onModeChange, onScheduleChange }) => {
   const { t } = useTranslation(['projects']);
-  const frequencyOptions = (['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map(
-    (frequency) => ({
-      id: frequency,
-      name: t(`projects:detail.rules.schedule.frequencies.${frequency}`),
-    }),
+  const frequencyOptions = useMemo(
+    () =>
+      (['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map((frequency) => ({
+        id: frequency,
+        name: t(`projects:detail.rules.schedule.frequencies.${frequency}`),
+      })),
+    [t],
+  );
+  const monthlyDayOptions = useMemo(
+    () =>
+      Array.from({ length: 31 }, (_, index) => {
+        const day = index + 1;
+        return {
+          id: String(day),
+          name:
+            day === 1
+              ? t('projects:detail.rules.schedule.firstDayOfMonth')
+              : t('projects:detail.rules.schedule.dayOfMonthOption', { day }),
+        };
+      }),
+    [t],
   );
   const unavailableLabel = t('projects:detail.rules.schedule.unavailable');
   const filterUserOptions = includeUnavailableSelections(
@@ -585,7 +602,11 @@ const ProjectRuleEvaluationEditor: React.FC<{
       </RadioGroup>
 
       {evaluationMode === 'periodic' && (
-        <div className="grid gap-4 rounded-lg border border-primary/20 bg-muted/25 p-4 md:grid-cols-3">
+        <div
+          className={`grid gap-4 rounded-lg border border-primary/20 bg-muted/25 p-4 md:grid-cols-2 ${
+            schedule.frequency === 'monthly' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+          }`}
+        >
           <SelectControl
             id="project-rule-schedule-frequency"
             searchable={false}
@@ -599,6 +620,21 @@ const ProjectRuleEvaluationEditor: React.FC<{
               })
             }
           />
+          {schedule.frequency === 'monthly' && (
+            <SelectControl
+              id="project-rule-schedule-monthly-day"
+              searchable={false}
+              disabled={submitting}
+              label={t('projects:detail.rules.schedule.monthlyDay')}
+              options={monthlyDayOptions}
+              value={String(schedule.monthlyDay)}
+              onChange={(next) =>
+                onScheduleChange({
+                  monthlyDay: Number(Array.isArray(next) ? next[0] : next),
+                })
+              }
+            />
+          )}
           <SelectControl
             id="project-rule-schedule-users"
             searchable
@@ -621,8 +657,12 @@ const ProjectRuleEvaluationEditor: React.FC<{
             value={schedule.taskIds}
             onChange={(next) => onScheduleChange({ taskIds: Array.isArray(next) ? next : [] })}
           />
-          <p className="text-sm text-muted-foreground md:col-span-3">
-            {t('projects:detail.rules.schedule.previousPeriodHint')}
+          <p className="text-sm text-muted-foreground md:col-span-2 lg:col-span-full">
+            {t(
+              schedule.frequency === 'monthly'
+                ? 'projects:detail.rules.schedule.monthlyPeriodHint'
+                : 'projects:detail.rules.schedule.previousPeriodHint',
+            )}
           </p>
         </div>
       )}

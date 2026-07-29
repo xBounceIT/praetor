@@ -50,6 +50,7 @@ describe.skipIf(SHOULD_SKIP)(
           evaluationMode: string;
           schedule: {
             frequency: string;
+            monthlyDay: number;
             userIds: string[];
             taskIds: string[];
           };
@@ -74,6 +75,7 @@ describe.skipIf(SHOULD_SKIP)(
           evaluationMode: 'continuous',
           schedule: {
             frequency: 'monthly',
+            monthlyDay: 1,
             userIds: [],
             taskIds: [],
           },

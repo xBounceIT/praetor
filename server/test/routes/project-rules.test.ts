@@ -81,7 +81,7 @@ const SAMPLE_RULE = {
     ],
   },
   evaluationMode: 'continuous' as const,
-  schedule: { frequency: 'monthly' as const, userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly' as const, monthlyDay: 1, userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -647,6 +647,7 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
+        monthlyDay: 15,
         userIds: ['u2'],
         taskIds: ['t1'],
       },
@@ -680,6 +681,31 @@ describe('project rule routes', () => {
       }),
       TX_SENTINEL,
     );
+  });
+
+  test('POST rejects an invalid custom monthly day', async () => {
+    currentPermissions = ['projects.rules.create'];
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Invalid monthly day',
+        conditions: [{ field: 'period_hours', operator: 'eq', value: '0', valueType: 'literal' }],
+        evaluationMode: 'periodic',
+        schedule: {
+          frequency: 'monthly',
+          monthlyDay: 32,
+          userIds: [],
+          taskIds: [],
+        },
+        actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: [] },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createRuleMock).not.toHaveBeenCalled();
   });
 
   test('POST accepts text conditions longer than the legacy varchar limit', async () => {
@@ -1107,13 +1133,14 @@ describe('project rule routes', () => {
     expect(JSON.parse(res.body).actionType).toBe('webhook');
   });
 
-  test('PUT does not reset evaluation state for an unchanged full form payload', async () => {
+  test('PUT preserves a custom monthly day omitted by an older full-form client', async () => {
     currentPermissions = ['projects.rules.update', 'reports.cost.view'];
     const existingRule = {
       ...SAMPLE_RULE,
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
+        monthlyDay: 15,
         userIds: ['u1', 'u2'],
         taskIds: ['t1', 't2'],
       },
@@ -1141,7 +1168,7 @@ describe('project rule routes', () => {
         actionConfig: existingRule.actionConfig,
         evaluationMode: existingRule.evaluationMode,
         schedule: {
-          ...existingRule.schedule,
+          frequency: 'monthly',
           userIds: ['u2', 'u1'],
           taskIds: ['t2', 't1'],
         },
@@ -1445,6 +1472,7 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
+        monthlyDay: 1,
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },
@@ -1496,6 +1524,7 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
+        monthlyDay: 1,
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

@@ -55,6 +55,7 @@ export type ProjectRuleEvaluationMode = 'continuous' | 'periodic';
 export type ProjectRuleScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type ProjectRuleSchedule = {
   frequency: ProjectRuleScheduleFrequency;
+  monthlyDay: number;
   userIds: string[];
   taskIds: string[];
 };
@@ -87,7 +88,7 @@ export const projectRules = pgTable(
     schedule: jsonb('schedule_config')
       .$type<ProjectRuleSchedule>()
       .notNull()
-      .default(sql`'{"frequency":"monthly","userIds":[],"taskIds":[]}'::jsonb`),
+      .default(sql`'{"frequency":"monthly","monthlyDay":1,"userIds":[],"taskIds":[]}'::jsonb`),
     isEnabled: boolean('is_enabled').notNull().default(true),
     conditionMet: boolean('condition_met').notNull().default(false),
     lastTriggeredAt: timestamp('last_triggered_at'),

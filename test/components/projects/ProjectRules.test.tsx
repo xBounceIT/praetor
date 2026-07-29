@@ -93,7 +93,7 @@ const RULE: ProjectRule = {
     actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
   },
   evaluationMode: 'continuous',
-  schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly', monthlyDay: 1, userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,

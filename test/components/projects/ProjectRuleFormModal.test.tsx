@@ -54,7 +54,7 @@ const rule: ProjectRule = {
     actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
   },
   evaluationMode: 'continuous',
-  schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly', monthlyDay: 1, userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -244,7 +244,7 @@ describe('<ProjectRuleFormModal />', () => {
     );
   });
 
-  test('submits a monthly periodic check with user and task filters', async () => {
+  test('submits a monthly periodic check with a custom day and user and task filters', async () => {
     const onSubmit = mock(() => Promise.resolve());
     render(
       <ProjectRuleFormModal
@@ -259,6 +259,13 @@ describe('<ProjectRuleFormModal />', () => {
 
     fireEvent.click(screen.getByText('projects:detail.rules.evaluationModes.periodic.title'));
     expect(document.getElementById('project-rule-schedule-time-zone')).not.toBeInTheDocument();
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-monthly-day') as HTMLButtonElement,
+    );
+    const customDayOptions = await screen.findAllByRole('option', {
+      name: 'projects:detail.rules.schedule.dayOfMonthOption',
+    });
+    fireEvent.click(customDayOptions[13] as HTMLElement);
     fireEvent.click(document.getElementById('project-rule-schedule-users') as HTMLButtonElement);
     fireEvent.click(await screen.findByRole('option', { name: 'Alice (alice)' }));
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -273,6 +280,7 @@ describe('<ProjectRuleFormModal />', () => {
         evaluationMode: 'periodic',
         schedule: {
           frequency: 'monthly',
+          monthlyDay: 15,
           userIds: ['u1'],
           taskIds: ['task-1'],
         },
@@ -318,6 +326,7 @@ describe('<ProjectRuleFormModal />', () => {
       evaluationMode: 'periodic',
       schedule: {
         frequency: 'monthly',
+        monthlyDay: 1,
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

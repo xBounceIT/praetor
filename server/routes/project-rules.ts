@@ -106,6 +106,13 @@ const projectRuleScheduleSchema = {
       type: 'string',
       enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
     },
+    monthlyDay: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 31,
+      description:
+        'Day when a monthly check becomes due. Omitted values use the first; days missing from shorter months use the final day.',
+    },
     userIds: {
       type: 'array',
       maxItems: PROJECT_RULE_MAX_SCHEDULE_FILTER_IDS,
@@ -474,10 +481,23 @@ const parseSchedule = (
   if (!userIds.ok) return userIds;
   const taskIds = ensureArrayOfStrings(raw.taskIds ?? [], 'schedule.taskIds');
   if (!taskIds.ok) return taskIds;
+  const monthlyDay =
+    raw.monthlyDay === undefined
+      ? normalizeProjectRuleSchedule(fallback).monthlyDay
+      : raw.monthlyDay;
+  if (
+    typeof monthlyDay !== 'number' ||
+    !Number.isInteger(monthlyDay) ||
+    monthlyDay < 1 ||
+    monthlyDay > 31
+  ) {
+    return { ok: false, message: 'schedule.monthlyDay must be an integer between 1 and 31' };
+  }
   return {
     ok: true,
     value: normalizeProjectRuleSchedule({
       frequency: raw.frequency,
+      monthlyDay,
       userIds: userIds.value,
       taskIds: taskIds.value,
     }),
@@ -828,6 +848,7 @@ const areRuleSchedulesEqual = (
   right: projectRulesRepo.ProjectRuleSchedule,
 ): boolean =>
   left.frequency === right.frequency &&
+  left.monthlyDay === right.monthlyDay &&
   left.userIds.length === right.userIds.length &&
   left.userIds.every((id, index) => id === right.userIds[index]) &&
   left.taskIds.length === right.taskIds.length &&
@@ -1025,7 +1046,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ) {
         return;
       }
-      const parsed = parseUpdateBody(request.body as ProjectRuleBody);
+      const requestBody = request.body as ProjectRuleBody;
+      const parsed = parseUpdateBody(requestBody);
       if (!parsed.ok) return badRequest(reply, parsed.message);
       const permissions = request.user?.permissions ?? [];
       const mayUseRuleWebhooks = canUseRuleWebhooks(permissions);
@@ -1062,6 +1084,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     existingActionConfig.webhookIds,
                   );
           const updatePatch = { ...parsed.value };
+          const rawSchedule =
+            requestBody.schedule && typeof requestBody.schedule === 'object'
+              ? (requestBody.schedule as Record<string, unknown>)
+              : null;
+          if (
+            parsed.value.schedule !== undefined &&
+            rawSchedule !== null &&
+            !Object.hasOwn(rawSchedule, 'monthlyDay')
+          ) {
+            updatePatch.schedule = {
+              ...parsed.value.schedule,
+              monthlyDay: existing.schedule.monthlyDay,
+            };
+          }
           if (parsed.value.actionConfig !== undefined) updatePatch.actionConfig = actionConfig;
           if (
             !mayUseRuleWebhooks &&

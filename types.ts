@@ -515,6 +515,7 @@ export interface ProjectRuleCondition {
 
 export interface ProjectRuleSchedule {
   frequency: ProjectRuleScheduleFrequency;
+  monthlyDay: number;
   userIds: string[];
   taskIds: string[];
 }
