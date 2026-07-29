@@ -35,8 +35,8 @@ describe('Sonner configuration', () => {
   });
 
   test('defines matching error and warning variants', () => {
-    expect(appErrorToastClassNames.toast).toContain('bg-destructive!');
-    expect(appErrorToastClassNames.icon).toContain('text-destructive-foreground!');
+    expect(appErrorToastClassNames.toast).toContain('bg-toast-destructive!');
+    expect(appErrorToastClassNames.icon).toContain('text-toast-destructive-foreground!');
     expect(appWarningToastClassNames.toast).toContain('bg-warning!');
     expect(appWarningToastClassNames.closeButton).toContain('text-warning-foreground!');
   });

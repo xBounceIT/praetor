@@ -53,13 +53,13 @@ export const appSuccessToastClassNames = buildVariantClassNames({
 });
 
 export const appErrorToastClassNames = buildVariantClassNames({
-  surface: 'border-destructive! bg-destructive! text-destructive-foreground!',
-  description: 'text-destructive-foreground/70!',
-  icon: 'text-destructive-foreground!',
+  surface: 'border-toast-destructive! bg-toast-destructive! text-toast-destructive-foreground!',
+  description: 'text-toast-destructive-foreground/70!',
+  icon: 'text-toast-destructive-foreground!',
   actionButton:
-    'rounded-md! bg-destructive-foreground! text-destructive! hover:bg-destructive-foreground/90! focus-visible:ring-[3px] focus-visible:ring-destructive-foreground/50',
+    'rounded-md! bg-toast-destructive-foreground! text-toast-destructive! hover:bg-toast-destructive-foreground/90! focus-visible:ring-[3px] focus-visible:ring-toast-destructive-foreground/50',
   closeTone:
-    'text-destructive-foreground! hover:bg-destructive-foreground/10! focus-visible:ring-destructive-foreground/50',
+    'text-toast-destructive-foreground! hover:bg-toast-destructive-foreground/10! focus-visible:ring-toast-destructive-foreground/50',
 });
 
 export const appWarningToastClassNames = buildVariantClassNames({
