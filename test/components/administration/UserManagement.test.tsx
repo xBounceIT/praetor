@@ -136,6 +136,7 @@ describe('<UserManagement />', () => {
     renderUserManagement();
 
     expect(screen.getByText('Alice Admin')).toBeInTheDocument();
+    expect(screen.getByText('AA')).toHaveClass('size-6');
     expect(screen.getByText('alice.admin')).toBeInTheDocument();
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
     expect(screen.getByText('manager')).toBeInTheDocument();

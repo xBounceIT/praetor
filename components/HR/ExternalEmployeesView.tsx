@@ -27,6 +27,7 @@ import {
 } from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
+import { TABLE_ROW_AVATAR_CLASSNAME } from '../shared/tableControlStyles';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
 import EmployeeHrFields from './EmployeeHrFields';
 import {
@@ -156,7 +157,7 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
         accessorKey: 'name',
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <div className="size-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
+            <div className={`${TABLE_ROW_AVATAR_CLASSNAME} bg-amber-100 text-amber-700`}>
               {row.avatarInitials}
             </div>
             <span className="font-semibold text-foreground">{row.name}</span>
@@ -198,15 +199,15 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
         id: 'roleTitle',
         accessorFn: (row) => row.jobTitle || '',
         cell: ({ row }) => (
-          <div className="flex min-w-36 flex-col gap-0.5 text-sm">
+          <div className="flex min-w-36 items-center gap-1.5 text-sm">
             <OptionalText
               value={row.jobTitle}
               fallback={notSetLabel}
               className="font-medium text-foreground"
             />
             {row.contractType && (
-              <span className="text-xs text-muted-foreground">
-                {t(`employeeProfile.contractTypes.${row.contractType}`)}
+              <span className="truncate text-xs text-muted-foreground">
+                · {t(`employeeProfile.contractTypes.${row.contractType}`)}
               </span>
             )}
           </div>

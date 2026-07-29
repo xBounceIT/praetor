@@ -49,6 +49,7 @@ import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import { TABLE_ROW_AVATAR_CLASSNAME } from '../shared/tableControlStyles';
 
 const isSsoAuthMethod = (authMethod: UserAuthMethod): authMethod is 'oidc' | 'saml' =>
   authMethod === 'oidc' || authMethod === 'saml';
@@ -1040,7 +1041,7 @@ const useUserManagementController = ({
       accessorKey: 'name',
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded-full bg-zinc-100 text-praetor flex items-center justify-center text-xs font-bold">
+          <div className={`${TABLE_ROW_AVATAR_CLASSNAME} bg-zinc-100 text-praetor`}>
             {row.avatarInitials}
           </div>
           <span className="font-bold text-zinc-800">{row.name}</span>
