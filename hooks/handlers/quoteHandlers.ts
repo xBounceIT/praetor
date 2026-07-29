@@ -204,6 +204,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const promoteQuoteCandidate = async (quoteId: string, candidateId: string) => {
     try {
       const result = await api.quotes.promote(quoteId, candidateId);
+      setQuotes((prev) => [result.quote, ...prev.filter((quote) => quote.id !== result.quote.id)]);
       setClientOffers((prev) => [
         result.offer,
         ...prev.filter((offer) => offer.id !== result.offer.id),
