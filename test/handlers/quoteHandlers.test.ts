@@ -94,6 +94,7 @@ type QuoteLike = {
   isExpired?: boolean;
   expirationDate?: string;
   linkedOfferId?: string;
+  linkedOfferRevisionCode?: string | null;
   linkedSupplierQuoteId?: string | null;
   candidates?: Array<{
     id: string;
@@ -393,7 +394,10 @@ describe('makeQuoteHandlers', () => {
       items: [],
     });
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+      quotes: [
+        { id: 'q1', status: 'sent', items: [] },
+        { id: 'q-existing', status: 'draft' },
+      ],
     });
 
     await ctx.handlers.updateQuote('q1', { status: 'offer' } as never);
@@ -442,7 +446,10 @@ describe('makeQuoteHandlers', () => {
       .mockRejectedValueOnce(new Error('offers refresh failed'))
       .mockResolvedValueOnce([{ id: 'q1-OF' }]);
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+      quotes: [
+        { id: 'q1', status: 'sent', items: [] },
+        { id: 'q-existing', status: 'draft' },
+      ],
     });
     const restore = silenceConsole();
 
@@ -455,6 +462,16 @@ describe('makeQuoteHandlers', () => {
         revisionCode: 'REV2',
       });
       expect(apiMocks.clientOffersList).toHaveBeenCalledTimes(2);
+      expect(ctx.quotes.get()).toEqual([
+        {
+          id: 'q1',
+          status: 'offer',
+          linkedOfferId: 'q1-OF',
+          linkedOfferRevisionCode: 'REV2',
+          items: [],
+        },
+        { id: 'q-existing', status: 'draft' },
+      ]);
       expect(ctx.clientOffers.get()).toEqual([{ id: 'q1-OF' }]);
     } finally {
       restore();

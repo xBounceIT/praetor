@@ -13,6 +13,11 @@ import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '
 import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
 
+const prependById = <T extends { id: string }>(items: T[], item: T): T[] => [
+  item,
+  ...items.filter((current) => current.id !== item.id),
+];
+
 /**
  * Quote handlers read two pieces of shared state — `clientQuoteFilterId` and
  * `clientOfferFilterId` — both before and AFTER awaited network calls.
@@ -188,7 +193,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
             }
           : undefined;
       if (createdOffer) {
-        // Confirm the completed mutation immediately; the follow-up list refreshes can be slow.
+        // Reconcile the completed mutation immediately; the follow-up list refreshes can be slow
+        // or fail independently after the server has already created the offer.
+        setQuotes((prev) => prependById(prev, updated));
         notifyClientOfferCreated?.(createdOffer);
       }
       await Promise.all([
@@ -204,11 +211,8 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const promoteQuoteCandidate = async (quoteId: string, candidateId: string) => {
     try {
       const result = await api.quotes.promote(quoteId, candidateId);
-      setQuotes((prev) => [result.quote, ...prev.filter((quote) => quote.id !== result.quote.id)]);
-      setClientOffers((prev) => [
-        result.offer,
-        ...prev.filter((offer) => offer.id !== result.offer.id),
-      ]);
+      setQuotes((prev) => prependById(prev, result.quote));
+      setClientOffers((prev) => prependById(prev, result.offer));
       // Confirm the completed promotion immediately; the follow-up list refreshes can be slow.
       notifyClientOfferCreated?.({
         id: result.offer.id,
