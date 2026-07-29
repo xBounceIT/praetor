@@ -237,7 +237,7 @@ describe('<DailyView /> RBAC catalog sync', () => {
     });
   });
 
-  test('keeps note validation reachable once positive hours are entered', async () => {
+  test('disables submit until hours and notes are both filled', async () => {
     const onAdd = mock(() => {});
     const props = {
       onAdd,
@@ -254,26 +254,68 @@ describe('<DailyView /> RBAC catalog sync', () => {
     expect(submitButton).toBeDisabled();
 
     const hoursInput = screen.getByPlaceholderText('0,0');
+    const notesInput = screen.getByPlaceholderText('entry.notesPlaceholder');
+
     fireEvent.change(hoursInput, { target: { value: '1,5' } });
-    expect(submitButton).not.toBeDisabled();
+    expect(submitButton).toBeDisabled();
 
-    fireEvent.click(submitButton);
-    await waitFor(() => {
-      expect(document.body).toHaveTextContent('entry.notesRequired');
-    });
+    fireEvent.change(notesInput, { target: { value: '   ' } });
+    expect(submitButton).toBeDisabled();
+
+    fireEvent.submit(document.querySelector('form')!);
     expect(onAdd).not.toHaveBeenCalled();
-
-    fireEvent.change(screen.getByPlaceholderText('entry.notesPlaceholder'), {
-      target: { value: 'Implemented validation' },
-    });
     expect(document.body).not.toHaveTextContent('entry.notesRequired');
+
+    fireEvent.change(notesInput, { target: { value: 'Implemented validation' } });
     expect(submitButton).not.toBeDisabled();
 
+    fireEvent.change(notesInput, { target: { value: '' } });
+    expect(submitButton).toBeDisabled();
+
+    fireEvent.change(notesInput, { target: { value: 'Implemented validation' } });
     fireEvent.change(hoursInput, { target: { value: '0' } });
     expect(submitButton).toBeDisabled();
 
     fireEvent.change(hoursInput, { target: { value: '' } });
     expect(submitButton).toBeDisabled();
+  });
+
+  test('submits trimmed notes when hours and notes are valid', async () => {
+    const onAdd = mock(() => {});
+
+    render(
+      <DailyView
+        onAdd={onAdd}
+        selectedDate="2026-05-11"
+        permissions={[]}
+        dailyGoal={8}
+        currentDayTotal={0}
+        {...defaultModalProps}
+        {...alphaCatalog}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.body).toHaveTextContent('Alpha Task');
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('0,0'), { target: { value: '2' } });
+    fireEvent.change(screen.getByPlaceholderText('entry.notesPlaceholder'), {
+      target: { value: '  API work  ' },
+    });
+    fireEvent.click(screen.getByText('entry.logTime'));
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledTimes(1);
+    });
+    const payload = (onAdd as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0] as {
+      notes: string;
+      duration: number;
+      task: string;
+    };
+    expect(payload.notes).toBe('API work');
+    expect(payload.duration).toBe(2);
+    expect(payload.task).toBe('Alpha Task');
   });
 
   test('hides expired projects without the expired-project override permission', async () => {
