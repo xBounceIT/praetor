@@ -262,6 +262,7 @@ export const evaluateProjectRulesOnce = async ({
     continuousRules.map((rule) => rule.projectId),
     now,
     exec,
+    { timeZone: appTimeZone },
   );
   const periodicMetricsByScope = new Map<
     string,
@@ -283,11 +284,13 @@ export const evaluateProjectRulesOnce = async ({
         let metricsPromise = periodicMetricsByScope.get(scopeKey);
         if (!metricsPromise) {
           metricsPromise = projectMetricsRepo.listForProjects([rule.projectId], now, exec, {
-            startDate: period.startDate,
-            endDate: period.endDate,
             timeZone: appTimeZone,
-            userIds: rule.schedule.userIds,
-            taskIds: rule.schedule.taskIds,
+            periodScope: {
+              startDate: period.startDate,
+              endDate: period.endDate,
+              userIds: rule.schedule.userIds,
+              taskIds: rule.schedule.taskIds,
+            },
           });
           periodicMetricsByScope.set(scopeKey, metricsPromise);
         }

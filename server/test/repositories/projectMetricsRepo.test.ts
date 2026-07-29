@@ -117,11 +117,13 @@ describe('projectMetricsRepo.listForProjects', () => {
     exec.enqueue({ rows: [] });
 
     await projectMetricsRepo.listForProjects(['p1'], NOW, testDb, {
-      startDate: '2026-05-01',
-      endDate: '2026-06-01',
       timeZone: 'UTC',
-      userIds: ['u1'],
-      taskIds: ['t1'],
+      periodScope: {
+        startDate: '2026-05-01',
+        endDate: '2026-06-01',
+        userIds: ['u1'],
+        taskIds: ['t1'],
+      },
     });
 
     const call = exec.calls[0];
@@ -166,11 +168,13 @@ describe('projectMetricsRepo.listForProjects', () => {
       new Date('2026-06-01T00:30:00Z'),
       testDb,
       {
-        startDate: '2026-05-01',
-        endDate: '2026-06-01',
         timeZone: 'America/Los_Angeles',
-        userIds: [],
-        taskIds: [],
+        periodScope: {
+          startDate: '2026-05-01',
+          endDate: '2026-06-01',
+          userIds: [],
+          taskIds: [],
+        },
       },
     );
 

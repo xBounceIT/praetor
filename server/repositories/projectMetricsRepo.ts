@@ -17,9 +17,13 @@ export type ProjectRuleMetricValue = string | number | boolean | null;
 export type ProjectRuleMetricPeriodScope = {
   startDate: string;
   endDate: string;
-  timeZone: string;
   userIds: string[];
   taskIds: string[];
+};
+
+export type ProjectRuleMetricOptions = {
+  timeZone?: string;
+  periodScope?: ProjectRuleMetricPeriodScope;
 };
 
 export type ProjectRuleMetrics = {
@@ -171,10 +175,11 @@ export const listForProjects = async (
   projectIds: string[],
   now: Date,
   exec: DbExecutor = db,
-  periodScope?: ProjectRuleMetricPeriodScope,
+  options?: ProjectRuleMetricOptions,
 ): Promise<Map<string, ProjectRuleMetrics>> => {
   const uniqueProjectIds = Array.from(new Set(projectIds));
   if (uniqueProjectIds.length === 0) return new Map();
+  const periodScope = options?.periodScope;
   const periodUserIds = Array.from(new Set(periodScope?.userIds ?? []));
   const periodTaskIds = Array.from(new Set(periodScope?.taskIds ?? []));
 
@@ -337,7 +342,7 @@ export const listForProjects = async (
     `,
   );
 
-  return new Map(rows.map((row) => [row.projectId, mapRow(row, now, periodScope?.timeZone)]));
+  return new Map(rows.map((row) => [row.projectId, mapRow(row, now, options?.timeZone)]));
 };
 
 export const metricValueForField = (

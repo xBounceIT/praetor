@@ -149,6 +149,16 @@ beforeEach(() => {
 });
 
 describe('evaluateProjectRulesOnce', () => {
+  test('uses the application time zone for continuous project date metrics', async () => {
+    const now = new Date('2026-06-01T00:30:00Z');
+
+    await evaluateProjectRulesOnce({ now, exec: TX_SENTINEL as never });
+
+    expect(listMetricsMock).toHaveBeenCalledWith(['p1'], now, TX_SENTINEL, {
+      timeZone: APP_TIME_ZONE,
+    });
+  });
+
   test('creates notifications only on the rising edge', async () => {
     const now = new Date('2026-05-31T12:00:00');
 
@@ -277,11 +287,13 @@ describe('evaluateProjectRulesOnce', () => {
 
     expect(result).toEqual({ evaluated: 1, triggered: 1, reset: 0, notified: 2 });
     expect(listMetricsMock).toHaveBeenCalledWith(['p1'], now, TX_SENTINEL, {
-      startDate: '2026-05-01',
-      endDate: '2026-06-01',
       timeZone: APP_TIME_ZONE,
-      userIds: ['u1'],
-      taskIds: ['t1'],
+      periodScope: {
+        startDate: '2026-05-01',
+        endDate: '2026-06-01',
+        userIds: ['u1'],
+        taskIds: ['t1'],
+      },
     });
     expect(markPeriodicEvaluationMock).toHaveBeenCalledWith(
       'pr-1',
@@ -331,11 +343,13 @@ describe('evaluateProjectRulesOnce', () => {
     await evaluateProjectRulesOnce({ now, exec: TX_SENTINEL as never });
 
     expect(listMetricsMock).toHaveBeenCalledWith(['p1'], now, TX_SENTINEL, {
-      startDate: '2026-03-01',
-      endDate: '2026-04-01',
       timeZone: APP_TIME_ZONE,
-      userIds: [],
-      taskIds: [],
+      periodScope: {
+        startDate: '2026-03-01',
+        endDate: '2026-04-01',
+        userIds: [],
+        taskIds: [],
+      },
     });
     expect(markPeriodicEvaluationMock).toHaveBeenCalledWith(
       'pr-1',
