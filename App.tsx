@@ -134,6 +134,7 @@ import type {
   WorkUnit,
 } from './types';
 import { clearAuthScopedState } from './utils/authScopedState';
+import { ensureClientOfferAvailable } from './utils/clientOfferNavigation';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { formatDocumentCode } from './utils/document-code';
@@ -1835,15 +1836,35 @@ const useAppContentController = () => {
         classNames: offerCreatedToastClassNames,
         action: resolveOfferCreatedToastAction(canViewClientOffers, {
           label: tApp('sales:clientQuotes.viewOffer'),
-          onClick: () => {
-            setClientQuoteFilterId(null);
-            setClientOfferFilterId(offer.id);
-            setActiveView('sales/client-offers');
+          onClick: async () => {
+            try {
+              setClientOffers(
+                await ensureClientOfferAvailable(
+                  offer.id,
+                  clientOffersRef.current,
+                  api.clientOffers.list,
+                ),
+              );
+              setClientQuoteFilterId(null);
+              setClientOfferFilterId(offer.id);
+              setActiveView('sales/client-offers');
+            } catch (err) {
+              console.error('Failed to load created client offer:', err);
+              toastError(tApp('sales:clientOffers.failedToLoad'));
+            }
           },
         }),
       });
     },
-    [canViewClientOffers, setActiveView, setClientQuoteFilterId, setClientOfferFilterId, tApp],
+    [
+      canViewClientOffers,
+      clientOffersRef,
+      setActiveView,
+      setClientOffers,
+      setClientQuoteFilterId,
+      setClientOfferFilterId,
+      tApp,
+    ],
   );
 
   const notifyClientOrderCreated = useCallback(

@@ -291,6 +291,7 @@
     "addOffer": "Add offer",
     "failedToSave": "Failed to save the offer. Please retry.",
     "failedToDelete": "Failed to delete the offer. Please retry.",
+    "failedToLoad": "Failed to load the created offer. Please retry.",
     "failedToUpdateStatus": "Failed to update the offer status. Please retry.",
     "sourceQuote": "Source quote",
     "viewQuote": "View quote",
