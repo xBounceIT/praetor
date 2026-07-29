@@ -12,8 +12,10 @@ const t = (key: string) => key;
 const toastSuccess = mock(() => undefined);
 const toastError = mock(() => undefined);
 
-mock.module('sonner', () => ({
-  toast: { success: toastSuccess, error: toastError },
+mock.module('../../../utils/toast', () => ({
+  toastSuccess,
+  toastError,
+  toastWarning: () => undefined,
 }));
 
 mock.module('react-i18next', () => ({

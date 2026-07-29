@@ -9,7 +9,6 @@ import {
 import { memo, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BarShapeProps } from 'recharts';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,6 +50,7 @@ import {
 } from '@/components/ui/table';
 import { CopyElementAsPngError, copyElementAsPng } from '@/utils/copyElementAsPng';
 import { formatNumber } from '@/utils/numbers';
+import { toastError, toastSuccess } from '@/utils/toast';
 import {
   CHART_COLORS,
   getBarPointColor,
@@ -373,7 +373,7 @@ const AiReportingVisualizationContent = ({ visualization }: AiReportingVisualiza
     setIsCopyingPng(true);
     try {
       await copyElementAsPng(chartExportRef.current);
-      toast.success(
+      toastSuccess(
         t('aiReporting.visualizationCopiedPng', { defaultValue: 'Chart copied as PNG.' }),
       );
     } catch (error) {
@@ -391,7 +391,7 @@ const AiReportingVisualizationContent = ({ visualization }: AiReportingVisualiza
             'PNG clipboard copy is unavailable in this browser or page context. Use HTTPS and an up-to-date browser.',
         });
       }
-      toast.error(errorMessage);
+      toastError(errorMessage);
     } finally {
       setIsCopyingPng(false);
     }

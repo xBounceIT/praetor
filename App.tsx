@@ -11,7 +11,6 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/components/ui/field';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -69,11 +68,7 @@ import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings, { type UserSettingsTab } from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
-import {
-  appToasterProps,
-  offerCreatedToastClassNames,
-  resolveOfferCreatedToastAction,
-} from './components/ui/sonner-presets';
+import { appToasterProps, resolveOfferCreatedToastAction } from './components/ui/sonner-presets';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
@@ -1828,9 +1823,8 @@ const useAppContentController = () => {
   );
   const notifyClientOfferCreated = useCallback(
     (offer: Pick<ClientOffer, 'id' | 'revisionCode'>) => {
-      toast.success(tApp('sales:clientQuotes.offerCreatedToast'), {
+      toastSuccess(tApp('sales:clientQuotes.offerCreatedToast'), {
         description: formatDocumentCode(offer.id, offer.revisionCode),
-        classNames: offerCreatedToastClassNames,
         action: resolveOfferCreatedToastAction(canViewClientOffers, {
           label: tApp('sales:clientQuotes.viewOffer'),
           onClick: async () => {
@@ -1866,7 +1860,7 @@ const useAppContentController = () => {
 
   const notifyClientOrderCreated = useCallback(
     (orderId: string) => {
-      toast.success(tApp('accounting:clientsOrders.orderCreatedToast'), {
+      toastSuccess(tApp('accounting:clientsOrders.orderCreatedToast'), {
         description: orderId,
         action: {
           label: tApp('accounting:clientsOrders.viewOrder'),
@@ -1882,7 +1876,7 @@ const useAppContentController = () => {
 
   const notifySupplierOrderCreated = useCallback(
     (order: { id: string; supplierName: string }) => {
-      toast.success(tApp('accounting:supplierOrders.orderCreatedToast'), {
+      toastSuccess(tApp('accounting:supplierOrders.orderCreatedToast'), {
         description: `${order.id} - ${order.supplierName}`,
         action: {
           label: tApp('accounting:supplierOrders.viewOrder'),
