@@ -205,6 +205,10 @@ describe('<ExternalEmployeesView /> row click', () => {
       within(row).queryByText('employeeProfile.employmentStatuses.active'),
     ).not.toBeInTheDocument();
     expect(within(row).getAllByText('employeeProfile.notSet').length).toBeGreaterThanOrEqual(4);
+    const contractType = within(row).getByText(/employeeProfile\.contractTypes\.contractor/);
+    expect(contractType).toHaveTextContent('·');
+    expect(contractType.parentElement).toHaveClass('items-center');
+    expect(contractType.parentElement).not.toHaveClass('flex-col');
 
     fireEvent.click(row);
 

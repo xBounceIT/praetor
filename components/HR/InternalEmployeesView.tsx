@@ -27,6 +27,7 @@ import {
 } from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
+import { TABLE_ROW_AVATAR_CLASSNAME } from '../shared/tableControlStyles';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
 import EmployeeHrFields from './EmployeeHrFields';
 import {
@@ -156,7 +157,7 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         accessorKey: 'name',
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <div className="size-6 rounded-full bg-praetor/10 text-praetor flex items-center justify-center font-bold text-xs">
+            <div className={`${TABLE_ROW_AVATAR_CLASSNAME} bg-praetor/10 text-praetor`}>
               {row.avatarInitials}
             </div>
             <span className="font-semibold text-foreground">{row.name}</span>
