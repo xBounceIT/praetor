@@ -442,7 +442,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
             ? ''
             : condition.valueType === 'field'
               ? t(`projects:detail.rules.fields.${condition.value}`)
-              : definition?.kind === 'enum'
+              : definition?.kind === 'enum' || definition?.kind === 'boolean'
                 ? t(getProjectRuleValueLabelKey(condition.field, condition.value))
                 : condition.value;
           return `${field} ${operator}${value ? ` ${value}` : ''}`;

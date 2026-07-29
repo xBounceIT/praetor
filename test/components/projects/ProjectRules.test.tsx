@@ -174,6 +174,26 @@ describe('<ProjectRules />', () => {
     ).toBeInTheDocument();
   });
 
+  test('localizes boolean literal values in rule summaries', async () => {
+    listMock.mockResolvedValue([
+      {
+        ...RULE,
+        field: 'is_disabled',
+        operator: 'eq',
+        value: 'true',
+        conditions: [{ field: 'is_disabled', operator: 'eq', value: 'true', valueType: 'literal' }],
+      },
+    ]);
+
+    renderProjectRules(['projects.rules.view']);
+
+    expect(
+      await screen.findByText((content) =>
+        content.includes('projects:detail.rules.values.boolean.true'),
+      ),
+    ).toBeInTheDocument();
+  });
+
   test('shows loading state while rules and recipients are pending', async () => {
     const pendingRules = deferValue<ProjectRule[]>();
     const pendingRecipients = deferValue<ProjectRuleRecipientOptions>();

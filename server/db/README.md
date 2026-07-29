@@ -194,6 +194,65 @@ redeploying the previous image. Once duplicate keys have been written, rollback 
 restoring that backup; do not attempt to reimpose uniqueness on a database that already
 contains colliding rows.
 
+## Project-rule periodic evaluation rollout (migrations 0131 and 0132)
+
+Apply `0131_extend_project_rules_periodic.sql` and then
+`0132_project_rules_config_version_trigger.sql` with `migrationsRunner.ts` before enabling the
+new application image. Take and verify a database backup first. During a rolling deployment,
+leave creation and activation of periodic rules disabled until every scheduler instance runs the
+new image; migrated rules remain continuous, so old and new instances can otherwise overlap
+safely. After both migrations are recorded, roll out the application and only then enable
+periodic schedules.
+
+Migration 0131 widens `project_rules.value` to `text` without truncating existing values. Existing
+rows receive deterministic defaults: `evaluation_mode = 'continuous'`,
+`schedule_config = {"frequency":"monthly","userIds":[],"taskIds":[]}`, and
+`config_version = 0`; `last_evaluated_period` remains null. Conditions, actions, enabled state,
+and prior trigger history are preserved. Migration 0132 adds a compatibility trigger so writes
+from a previous image increment `config_version` and reset stale evaluation state when rule
+conditions or scheduling change. Previous images ignore the additive columns and remain usable
+during the compatibility window, but they must not evaluate newly enabled periodic rules.
+
+Run these checks after the migration and before enabling periodic rules:
+
+```bash
+cd server
+bun run db:migrate
+bun run db:ready
+bun run db:check
+```
+
+Confirm that no rule has null rollout state and that the compatibility trigger is installed:
+
+```sql
+SELECT count(*)
+FROM project_rules
+WHERE evaluation_mode IS NULL
+   OR schedule_config IS NULL
+   OR config_version IS NULL;
+
+SELECT tgname
+FROM pg_trigger
+WHERE tgrelid = 'project_rules'::regclass
+  AND tgname = 'project_rules_config_version_trigger'
+  AND NOT tgisinternal;
+```
+
+The first query must return `0`; the second must return exactly the trigger named above. In
+staging, also replay
+`server/test/db/migration0131ExtendProjectRulesPeriodic.postgres.test.ts` with
+`RUN_PROJECT_RULE_PERIODIC_MIGRATION_TEST=1` against a migrated PostgreSQL database. Once
+periodic rules are enabled, scheduler catch-up can deliver notifications and webhooks for missed
+completed periods; enable rules deliberately and monitor scheduler logs and outbound delivery
+volume.
+
+Prefer roll-forward if the new application needs correction. Rolling back the application image
+while leaving both migrations installed is safe only while periodic rules have not been enabled;
+otherwise disable periodic rules with the new image before starting an old scheduler. Leave the
+additive columns, index, function, and trigger in place during an image rollback. Reversing the
+schema would discard schedules and evaluation state, so restore the verified pre-migration backup
+instead of dropping 0131/0132 objects in place.
+
 ## Internal category name uniqueness rollout (migration 0123)
 
 Deploy migration `0123_enforce_internal_category_name_uniqueness.sql` with the application image.
