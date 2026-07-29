@@ -14101,19 +14101,8 @@
                         "properties": {
                           "frequency": {
                             "type": "string",
-                            "enum": [
-                              "daily",
-                              "weekly",
-                              "monthly",
-                              "quarterly",
-                              "yearly"
-                            ]
-                          },
-                          "monthlyDay": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 31,
-                            "description": "Day when a monthly check becomes due. Omitted values use the first; days missing from shorter months use the final day."
+                            "description": "Periodic cadence or a custom monthly pattern such as monthly:first:1 for the first Monday.",
+                            "pattern": "^(daily|weekly|monthly|quarterly|yearly|monthly:(first|second|third|fourth|last):[0-6])$"
                           },
                           "userIds": {
                             "type": "array",
@@ -14471,19 +14460,8 @@
                     "properties": {
                       "frequency": {
                         "type": "string",
-                        "enum": [
-                          "daily",
-                          "weekly",
-                          "monthly",
-                          "quarterly",
-                          "yearly"
-                        ]
-                      },
-                      "monthlyDay": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 31,
-                        "description": "Day when a monthly check becomes due. Omitted values use the first; days missing from shorter months use the final day."
+                        "description": "Periodic cadence or a custom monthly pattern such as monthly:first:1 for the first Monday.",
+                        "pattern": "^(daily|weekly|monthly|quarterly|yearly|monthly:(first|second|third|fourth|last):[0-6])$"
                       },
                       "userIds": {
                         "type": "array",
@@ -14687,19 +14665,8 @@
                       "properties": {
                         "frequency": {
                           "type": "string",
-                          "enum": [
-                            "daily",
-                            "weekly",
-                            "monthly",
-                            "quarterly",
-                            "yearly"
-                          ]
-                        },
-                        "monthlyDay": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "maximum": 31,
-                          "description": "Day when a monthly check becomes due. Omitted values use the first; days missing from shorter months use the final day."
+                          "description": "Periodic cadence or a custom monthly pattern such as monthly:first:1 for the first Monday.",
+                          "pattern": "^(daily|weekly|monthly|quarterly|yearly|monthly:(first|second|third|fourth|last):[0-6])$"
                         },
                         "userIds": {
                           "type": "array",
@@ -15058,19 +15025,8 @@
                     "properties": {
                       "frequency": {
                         "type": "string",
-                        "enum": [
-                          "daily",
-                          "weekly",
-                          "monthly",
-                          "quarterly",
-                          "yearly"
-                        ]
-                      },
-                      "monthlyDay": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 31,
-                        "description": "Day when a monthly check becomes due. Omitted values use the first; days missing from shorter months use the final day."
+                        "description": "Periodic cadence or a custom monthly pattern such as monthly:first:1 for the first Monday.",
+                        "pattern": "^(daily|weekly|monthly|quarterly|yearly|monthly:(first|second|third|fourth|last):[0-6])$"
                       },
                       "userIds": {
                         "type": "array",
@@ -15278,19 +15234,8 @@
                       "properties": {
                         "frequency": {
                           "type": "string",
-                          "enum": [
-                            "daily",
-                            "weekly",
-                            "monthly",
-                            "quarterly",
-                            "yearly"
-                          ]
-                        },
-                        "monthlyDay": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "maximum": 31,
-                          "description": "Day when a monthly check becomes due. Omitted values use the first; days missing from shorter months use the final day."
+                          "description": "Periodic cadence or a custom monthly pattern such as monthly:first:1 for the first Monday.",
+                          "pattern": "^(daily|weekly|monthly|quarterly|yearly|monthly:(first|second|third|fourth|last):[0-6])$"
                         },
                         "userIds": {
                           "type": "array",

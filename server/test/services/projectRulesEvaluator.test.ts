@@ -52,7 +52,7 @@ const RULE = {
     ],
   },
   evaluationMode: 'continuous' as const,
-  schedule: { frequency: 'monthly' as const, monthlyDay: 1, userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly' as const, userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -250,7 +250,7 @@ describe('evaluateProjectRulesOnce', () => {
     expect(markTriggeredMock).toHaveBeenCalledWith('pr-1', expect.any(Date), 7, TX_SENTINEL);
   });
 
-  test('runs a periodic rule on its custom monthly day with user and task filters', async () => {
+  test('runs a periodic rule on its custom monthly occurrence with user and task filters', async () => {
     const now = new Date('2026-06-15T08:00:00Z');
     const periodicRule = {
       ...RULE,
@@ -262,8 +262,7 @@ describe('evaluateProjectRulesOnce', () => {
       ],
       evaluationMode: 'periodic' as const,
       schedule: {
-        frequency: 'monthly' as const,
-        monthlyDay: 15,
+        frequency: 'monthly:third:1' as const,
         userIds: ['u1'],
         taskIds: ['t1'],
       },
@@ -418,7 +417,6 @@ describe('evaluateProjectRulesOnce', () => {
       evaluationMode: 'periodic',
       schedule: {
         frequency: 'monthly',
-        monthlyDay: 1,
         userIds: ['u2', 'u1'],
         taskIds: ['t2', 't1'],
       },
@@ -503,7 +501,6 @@ describe('evaluateProjectRulesOnce', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        monthlyDay: 1,
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

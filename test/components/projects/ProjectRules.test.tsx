@@ -93,7 +93,7 @@ const RULE: ProjectRule = {
     actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
   },
   evaluationMode: 'continuous',
-  schedule: { frequency: 'monthly', monthlyDay: 1, userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -156,6 +156,22 @@ describe('<ProjectRules />', () => {
     expect(
       screen.queryByRole('button', { name: 'projects:detail.rules.actions.add' }),
     ).not.toBeInTheDocument();
+  });
+
+  test('renders a custom monthly pattern with the recurring-task label', async () => {
+    listMock.mockResolvedValue([
+      {
+        ...RULE,
+        evaluationMode: 'periodic',
+        schedule: { frequency: 'monthly:first:1', userIds: [], taskIds: [] },
+      },
+    ]);
+
+    renderProjectRules(['projects.rules.view']);
+
+    expect(
+      await screen.findByText(/timesheets:entry\.recurrencePatterns\.everyFirst/),
+    ).toBeInTheDocument();
   });
 
   test('shows loading state while rules and recipients are pending', async () => {

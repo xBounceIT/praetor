@@ -52,10 +52,17 @@ export type ProjectRuleCondition = {
 export type ProjectRuleConditionLogic = 'and' | 'or';
 export type ProjectRuleConditionValueType = 'literal' | 'field';
 export type ProjectRuleEvaluationMode = 'continuous' | 'periodic';
-export type ProjectRuleScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+export type ProjectRuleScheduleOccurrence = 'first' | 'second' | 'third' | 'fourth' | 'last';
+export type ProjectRuleScheduleWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type ProjectRuleScheduleFrequency =
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'quarterly'
+  | 'yearly'
+  | `monthly:${ProjectRuleScheduleOccurrence}:${ProjectRuleScheduleWeekday}`;
 export type ProjectRuleSchedule = {
   frequency: ProjectRuleScheduleFrequency;
-  monthlyDay: number;
   userIds: string[];
   taskIds: string[];
 };
@@ -88,7 +95,7 @@ export const projectRules = pgTable(
     schedule: jsonb('schedule_config')
       .$type<ProjectRuleSchedule>()
       .notNull()
-      .default(sql`'{"frequency":"monthly","monthlyDay":1,"userIds":[],"taskIds":[]}'::jsonb`),
+      .default(sql`'{"frequency":"monthly","userIds":[],"taskIds":[]}'::jsonb`),
     isEnabled: boolean('is_enabled').notNull().default(true),
     conditionMet: boolean('condition_met').notNull().default(false),
     lastTriggeredAt: timestamp('last_triggered_at'),

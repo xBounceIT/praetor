@@ -12,7 +12,6 @@ describe('migration 0131: extend project rules with periodic evaluation', () => 
     expect(migration).toContain(`"last_evaluated_period" varchar(160)`);
     expect(migration).toContain(`"config_version" integer DEFAULT 0 NOT NULL`);
     expect(migration).toContain(`"frequency":"monthly"`);
-    expect(migration).toContain(`"monthlyDay":1`);
     expect(migration).not.toContain(`"timeZone"`);
   });
 });

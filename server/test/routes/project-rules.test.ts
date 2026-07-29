@@ -81,7 +81,7 @@ const SAMPLE_RULE = {
     ],
   },
   evaluationMode: 'continuous' as const,
-  schedule: { frequency: 'monthly' as const, monthlyDay: 1, userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly' as const, userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -646,8 +646,7 @@ describe('project rule routes', () => {
       ],
       evaluationMode: 'periodic' as const,
       schedule: {
-        frequency: 'monthly' as const,
-        monthlyDay: 15,
+        frequency: 'monthly:third:1' as const,
         userIds: ['u2'],
         taskIds: ['t1'],
       },
@@ -683,7 +682,7 @@ describe('project rule routes', () => {
     );
   });
 
-  test('POST rejects an invalid custom monthly day', async () => {
+  test('POST rejects an invalid custom monthly pattern', async () => {
     currentPermissions = ['projects.rules.create'];
 
     const res = await app.inject({
@@ -691,12 +690,11 @@ describe('project rule routes', () => {
       url: '/api/projects/p1/rules',
       headers: authHeaders(),
       payload: {
-        name: 'Invalid monthly day',
+        name: 'Invalid monthly pattern',
         conditions: [{ field: 'period_hours', operator: 'eq', value: '0', valueType: 'literal' }],
         evaluationMode: 'periodic',
         schedule: {
-          frequency: 'monthly',
-          monthlyDay: 32,
+          frequency: 'monthly:fifth:1',
           userIds: [],
           taskIds: [],
         },
@@ -1133,14 +1131,13 @@ describe('project rule routes', () => {
     expect(JSON.parse(res.body).actionType).toBe('webhook');
   });
 
-  test('PUT preserves a custom monthly day omitted by an older full-form client', async () => {
+  test('PUT preserves evaluation state when a custom monthly pattern is unchanged', async () => {
     currentPermissions = ['projects.rules.update', 'reports.cost.view'];
     const existingRule = {
       ...SAMPLE_RULE,
       evaluationMode: 'periodic' as const,
       schedule: {
-        frequency: 'monthly' as const,
-        monthlyDay: 15,
+        frequency: 'monthly:third:1' as const,
         userIds: ['u1', 'u2'],
         taskIds: ['t1', 't2'],
       },
@@ -1168,7 +1165,7 @@ describe('project rule routes', () => {
         actionConfig: existingRule.actionConfig,
         evaluationMode: existingRule.evaluationMode,
         schedule: {
-          frequency: 'monthly',
+          frequency: 'monthly:third:1',
           userIds: ['u2', 'u1'],
           taskIds: ['t2', 't1'],
         },
@@ -1472,7 +1469,6 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        monthlyDay: 1,
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },
@@ -1524,7 +1520,6 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        monthlyDay: 1,
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

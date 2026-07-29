@@ -1,6 +1,6 @@
 import { CalendarClockIcon, PlusIcon, RadarIcon, Trash2Icon } from 'lucide-react';
 import type React from 'react';
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,6 +39,8 @@ import type {
   ProjectRuleScheduleFrequency,
 } from '../../types';
 import { hasPermission } from '../../utils/permissions';
+import { formatRecurrencePattern } from '../../utils/recurrence';
+import CustomRepeatModal from '../shared/CustomRepeatModal';
 import SelectControl from '../shared/SelectControl';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import {
@@ -139,7 +141,6 @@ const firstValueForField = (field: string) => {
 
 const defaultSchedule = (): ProjectRuleSchedule => ({
   frequency: 'monthly',
-  monthlyDay: 1,
   userIds: [],
   taskIds: [],
 });
@@ -514,27 +515,22 @@ const ProjectRuleEvaluationEditor: React.FC<{
   onScheduleChange: (patch: Partial<ProjectRuleSchedule>) => void;
 }> = ({ evaluationMode, schedule, recipients, submitting, onModeChange, onScheduleChange }) => {
   const { t } = useTranslation(['projects']);
+  const [isCustomRepeatOpen, setIsCustomRepeatOpen] = useState(false);
+  const isCustomFrequency = schedule.frequency.startsWith('monthly:');
   const frequencyOptions = useMemo(
-    () =>
-      (['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map((frequency) => ({
+    () => [
+      ...(['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map((frequency) => ({
         id: frequency,
         name: t(`projects:detail.rules.schedule.frequencies.${frequency}`),
       })),
-    [t],
-  );
-  const monthlyDayOptions = useMemo(
-    () =>
-      Array.from({ length: 31 }, (_, index) => {
-        const day = index + 1;
-        return {
-          id: String(day),
-          name:
-            day === 1
-              ? t('projects:detail.rules.schedule.firstDayOfMonth')
-              : t('projects:detail.rules.schedule.dayOfMonthOption', { day }),
-        };
-      }),
-    [t],
+      {
+        id: 'custom',
+        name: isCustomFrequency
+          ? formatRecurrencePattern(schedule.frequency, t)
+          : t('timesheets:entry.recurrencePatterns.custom'),
+      },
+    ],
+    [isCustomFrequency, schedule.frequency, t],
   );
   const unavailableLabel = t('projects:detail.rules.schedule.unavailable');
   const filterUserOptions = includeUnavailableSelections(
@@ -558,115 +554,112 @@ const ProjectRuleEvaluationEditor: React.FC<{
     unavailableLabel,
   );
 
-  return (
-    <section className="space-y-3" aria-labelledby="project-rule-evaluation-heading">
-      <div>
-        <FieldLabel id="project-rule-evaluation-heading">
-          {t('projects:detail.rules.form.evaluationMode')}
-        </FieldLabel>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('projects:detail.rules.form.evaluationModeDescription')}
-        </p>
-      </div>
-      <RadioGroup
-        value={evaluationMode}
-        onValueChange={(value) => onModeChange(value as ProjectRuleEvaluationMode)}
-        className="grid gap-3 sm:grid-cols-2"
-        disabled={submitting}
-      >
-        {(['continuous', 'periodic'] as const).map((mode) => {
-          const Icon = mode === 'continuous' ? RadarIcon : CalendarClockIcon;
-          const selected = evaluationMode === mode;
-          return (
-            <label
-              key={mode}
-              className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors ${
-                selected
-                  ? 'border-primary/50 bg-primary/[0.06]'
-                  : 'border-border bg-background hover:bg-muted/40'
-              }`}
-            >
-              <RadioGroupItem value={mode} className="mt-0.5" />
-              <Icon className={`mt-0.5 size-4 shrink-0 ${selected ? 'text-primary' : ''}`} />
-              <span className="space-y-1">
-                <span className="block text-sm font-medium">
-                  {t(`projects:detail.rules.evaluationModes.${mode}.title`)}
-                </span>
-                <span className="block text-sm text-muted-foreground">
-                  {t(`projects:detail.rules.evaluationModes.${mode}.description`)}
-                </span>
-              </span>
-            </label>
-          );
-        })}
-      </RadioGroup>
+  const handleFrequencyChange = (value: string) => {
+    if (value === 'custom') {
+      setIsCustomRepeatOpen(true);
+      return;
+    }
+    onScheduleChange({ frequency: value as ProjectRuleScheduleFrequency });
+  };
 
-      {evaluationMode === 'periodic' && (
-        <div
-          className={`grid gap-4 rounded-lg border border-primary/20 bg-muted/25 p-4 md:grid-cols-2 ${
-            schedule.frequency === 'monthly' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
-          }`}
-        >
-          <SelectControl
-            id="project-rule-schedule-frequency"
-            searchable={false}
-            disabled={submitting}
-            label={t('projects:detail.rules.schedule.frequency')}
-            options={frequencyOptions}
-            value={schedule.frequency}
-            onChange={(next) =>
-              onScheduleChange({
-                frequency: (Array.isArray(next) ? next[0] : next) as ProjectRuleScheduleFrequency,
-              })
-            }
-          />
-          {schedule.frequency === 'monthly' && (
-            <SelectControl
-              id="project-rule-schedule-monthly-day"
-              searchable={false}
-              disabled={submitting}
-              label={t('projects:detail.rules.schedule.monthlyDay')}
-              options={monthlyDayOptions}
-              value={String(schedule.monthlyDay)}
-              onChange={(next) =>
-                onScheduleChange({
-                  monthlyDay: Number(Array.isArray(next) ? next[0] : next),
-                })
-              }
-            />
-          )}
-          <SelectControl
-            id="project-rule-schedule-users"
-            searchable
-            isMulti
-            disabled={submitting}
-            label={t('projects:detail.rules.schedule.users')}
-            placeholder={t('projects:detail.rules.schedule.allUsers')}
-            options={filterUserOptions}
-            value={schedule.userIds}
-            onChange={(next) => onScheduleChange({ userIds: Array.isArray(next) ? next : [] })}
-          />
-          <SelectControl
-            id="project-rule-schedule-tasks"
-            searchable
-            isMulti
-            disabled={submitting}
-            label={t('projects:detail.rules.schedule.tasks')}
-            placeholder={t('projects:detail.rules.schedule.allTasks')}
-            options={filterTaskOptions}
-            value={schedule.taskIds}
-            onChange={(next) => onScheduleChange({ taskIds: Array.isArray(next) ? next : [] })}
-          />
-          <p className="text-sm text-muted-foreground md:col-span-2 lg:col-span-full">
-            {t(
-              schedule.frequency === 'monthly'
-                ? 'projects:detail.rules.schedule.monthlyPeriodHint'
-                : 'projects:detail.rules.schedule.previousPeriodHint',
-            )}
+  return (
+    <>
+      <section className="space-y-3" aria-labelledby="project-rule-evaluation-heading">
+        <div>
+          <FieldLabel id="project-rule-evaluation-heading">
+            {t('projects:detail.rules.form.evaluationMode')}
+          </FieldLabel>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t('projects:detail.rules.form.evaluationModeDescription')}
           </p>
         </div>
-      )}
-    </section>
+        <RadioGroup
+          value={evaluationMode}
+          onValueChange={(value) => onModeChange(value as ProjectRuleEvaluationMode)}
+          className="grid gap-3 sm:grid-cols-2"
+          disabled={submitting}
+        >
+          {(['continuous', 'periodic'] as const).map((mode) => {
+            const Icon = mode === 'continuous' ? RadarIcon : CalendarClockIcon;
+            const selected = evaluationMode === mode;
+            return (
+              <label
+                key={mode}
+                className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors ${
+                  selected
+                    ? 'border-primary/50 bg-primary/[0.06]'
+                    : 'border-border bg-background hover:bg-muted/40'
+                }`}
+              >
+                <RadioGroupItem value={mode} className="mt-0.5" />
+                <Icon className={`mt-0.5 size-4 shrink-0 ${selected ? 'text-primary' : ''}`} />
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">
+                    {t(`projects:detail.rules.evaluationModes.${mode}.title`)}
+                  </span>
+                  <span className="block text-sm text-muted-foreground">
+                    {t(`projects:detail.rules.evaluationModes.${mode}.description`)}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+        </RadioGroup>
+
+        {evaluationMode === 'periodic' && (
+          <div className="grid gap-4 rounded-lg border border-primary/20 bg-muted/25 p-4 md:grid-cols-2 lg:grid-cols-3">
+            <SelectControl
+              id="project-rule-schedule-frequency"
+              searchable={false}
+              disabled={submitting}
+              label={t('projects:detail.rules.schedule.frequency')}
+              options={frequencyOptions}
+              value={isCustomFrequency ? 'custom' : schedule.frequency}
+              onChange={(next) =>
+                handleFrequencyChange((Array.isArray(next) ? next[0] : next) as string)
+              }
+            />
+            <SelectControl
+              id="project-rule-schedule-users"
+              searchable
+              isMulti
+              disabled={submitting}
+              label={t('projects:detail.rules.schedule.users')}
+              placeholder={t('projects:detail.rules.schedule.allUsers')}
+              options={filterUserOptions}
+              value={schedule.userIds}
+              onChange={(next) => onScheduleChange({ userIds: Array.isArray(next) ? next : [] })}
+            />
+            <SelectControl
+              id="project-rule-schedule-tasks"
+              searchable
+              isMulti
+              disabled={submitting}
+              label={t('projects:detail.rules.schedule.tasks')}
+              placeholder={t('projects:detail.rules.schedule.allTasks')}
+              options={filterTaskOptions}
+              value={schedule.taskIds}
+              onChange={(next) => onScheduleChange({ taskIds: Array.isArray(next) ? next : [] })}
+            />
+            <p className="text-sm text-muted-foreground md:col-span-2 lg:col-span-full">
+              {t(
+                schedule.frequency === 'monthly' || isCustomFrequency
+                  ? 'projects:detail.rules.schedule.monthlyPeriodHint'
+                  : 'projects:detail.rules.schedule.previousPeriodHint',
+              )}
+            </p>
+          </div>
+        )}
+      </section>
+
+      <CustomRepeatModal
+        isOpen={isCustomRepeatOpen}
+        onClose={() => setIsCustomRepeatOpen(false)}
+        onSave={(frequency) =>
+          onScheduleChange({ frequency: frequency as ProjectRuleScheduleFrequency })
+        }
+      />
+    </>
   );
 };
 

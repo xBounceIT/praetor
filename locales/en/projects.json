@@ -306,9 +306,6 @@
       },
       "schedule": {
         "frequency": "Frequency",
-        "monthlyDay": "Day of month",
-        "firstDayOfMonth": "The first day of the month",
-        "dayOfMonthOption": "Day {{day}} of the month",
         "users": "Filter by users",
         "tasks": "Filter by tasks",
         "allUsers": "All job users",
@@ -316,7 +313,7 @@
         "disabled": "disabled",
         "unavailable": "no longer available",
         "previousPeriodHint": "Hours, entries, users, and tasks are calculated over the latest completed period. User and task filters are combined.",
-        "monthlyPeriodHint": "The check runs on the selected day and analyzes the previous calendar month. If that day does not exist, it runs on the month's final day. User and task filters are combined.",
+        "monthlyPeriodHint": "Every month runs on the first day; Custom runs on the selected occurrence and weekday. It always analyzes the previous calendar month. User and task filters are combined.",
         "frequencies": {
           "daily": "Every day",
           "weekly": "Every week",

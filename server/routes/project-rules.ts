@@ -24,6 +24,7 @@ import {
   isProjectRuleEvaluationMode,
   isProjectRuleScheduleFrequency,
   normalizeProjectRuleSchedule,
+  PROJECT_RULE_SCHEDULE_FREQUENCY_PATTERN,
 } from '../utils/projectRuleSchedule.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -104,14 +105,9 @@ const projectRuleScheduleSchema = {
   properties: {
     frequency: {
       type: 'string',
-      enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
-    },
-    monthlyDay: {
-      type: 'integer',
-      minimum: 1,
-      maximum: 31,
       description:
-        'Day when a monthly check becomes due. Omitted values use the first; days missing from shorter months use the final day.',
+        'Periodic cadence or a custom monthly pattern such as monthly:first:1 for the first Monday.',
+      pattern: PROJECT_RULE_SCHEDULE_FREQUENCY_PATTERN.source,
     },
     userIds: {
       type: 'array',
@@ -474,30 +470,18 @@ const parseSchedule = (
   if (!isProjectRuleScheduleFrequency(raw.frequency)) {
     return {
       ok: false,
-      message: 'schedule.frequency must be daily, weekly, monthly, quarterly, or yearly',
+      message:
+        'schedule.frequency must be daily, weekly, monthly, quarterly, yearly, or a valid custom monthly pattern',
     };
   }
   const userIds = ensureArrayOfStrings(raw.userIds ?? [], 'schedule.userIds');
   if (!userIds.ok) return userIds;
   const taskIds = ensureArrayOfStrings(raw.taskIds ?? [], 'schedule.taskIds');
   if (!taskIds.ok) return taskIds;
-  const monthlyDay =
-    raw.monthlyDay === undefined
-      ? normalizeProjectRuleSchedule(fallback).monthlyDay
-      : raw.monthlyDay;
-  if (
-    typeof monthlyDay !== 'number' ||
-    !Number.isInteger(monthlyDay) ||
-    monthlyDay < 1 ||
-    monthlyDay > 31
-  ) {
-    return { ok: false, message: 'schedule.monthlyDay must be an integer between 1 and 31' };
-  }
   return {
     ok: true,
     value: normalizeProjectRuleSchedule({
       frequency: raw.frequency,
-      monthlyDay,
       userIds: userIds.value,
       taskIds: taskIds.value,
     }),
@@ -848,7 +832,6 @@ const areRuleSchedulesEqual = (
   right: projectRulesRepo.ProjectRuleSchedule,
 ): boolean =>
   left.frequency === right.frequency &&
-  left.monthlyDay === right.monthlyDay &&
   left.userIds.length === right.userIds.length &&
   left.userIds.every((id, index) => id === right.userIds[index]) &&
   left.taskIds.length === right.taskIds.length &&
@@ -1084,20 +1067,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     existingActionConfig.webhookIds,
                   );
           const updatePatch = { ...parsed.value };
-          const rawSchedule =
-            requestBody.schedule && typeof requestBody.schedule === 'object'
-              ? (requestBody.schedule as Record<string, unknown>)
-              : null;
-          if (
-            parsed.value.schedule !== undefined &&
-            rawSchedule !== null &&
-            !Object.hasOwn(rawSchedule, 'monthlyDay')
-          ) {
-            updatePatch.schedule = {
-              ...parsed.value.schedule,
-              monthlyDay: existing.schedule.monthlyDay,
-            };
-          }
           if (parsed.value.actionConfig !== undefined) updatePatch.actionConfig = actionConfig;
           if (
             !mayUseRuleWebhooks &&

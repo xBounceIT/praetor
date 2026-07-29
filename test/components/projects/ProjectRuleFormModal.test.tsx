@@ -54,7 +54,7 @@ const rule: ProjectRule = {
     actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
   },
   evaluationMode: 'continuous',
-  schedule: { frequency: 'monthly', monthlyDay: 1, userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -244,7 +244,7 @@ describe('<ProjectRuleFormModal />', () => {
     );
   });
 
-  test('submits a monthly periodic check with a custom day and user and task filters', async () => {
+  test('opens the recurring-task custom dialog and submits its monthly pattern with filters', async () => {
     const onSubmit = mock(() => Promise.resolve());
     render(
       <ProjectRuleFormModal
@@ -259,13 +259,34 @@ describe('<ProjectRuleFormModal />', () => {
 
     fireEvent.click(screen.getByText('projects:detail.rules.evaluationModes.periodic.title'));
     expect(document.getElementById('project-rule-schedule-time-zone')).not.toBeInTheDocument();
+    expect(document.getElementById('project-rule-schedule-monthly-day')).not.toBeInTheDocument();
     fireEvent.click(
-      document.getElementById('project-rule-schedule-monthly-day') as HTMLButtonElement,
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
     );
-    const customDayOptions = await screen.findAllByRole('option', {
-      name: 'projects:detail.rules.schedule.dayOfMonthOption',
-    });
-    fireEvent.click(customDayOptions[13] as HTMLElement);
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.custom',
+      }),
+    );
+    expect(await screen.findByText('recurring.customRepeatTitle')).toBeInTheDocument();
+    const dayOfWeekSelect = screen
+      .getByText('recurring.dayOfWeek')
+      .parentElement?.querySelector('[role="combobox"]');
+    expect(dayOfWeekSelect).not.toBeNull();
+    fireEvent.click(dayOfWeekSelect as HTMLButtonElement);
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'recurring.dayNames.monday',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'recurring.setPattern',
+      }),
+    );
+    expect(document.getElementById('project-rule-schedule-frequency')).toHaveTextContent(
+      'timesheets:entry.recurrencePatterns.everyFirst',
+    );
     fireEvent.click(document.getElementById('project-rule-schedule-users') as HTMLButtonElement);
     fireEvent.click(await screen.findByRole('option', { name: 'Alice (alice)' }));
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -279,11 +300,46 @@ describe('<ProjectRuleFormModal />', () => {
       expect.objectContaining({
         evaluationMode: 'periodic',
         schedule: {
-          frequency: 'monthly',
-          monthlyDay: 15,
+          frequency: 'monthly:first:1',
           userIds: ['u1'],
           taskIds: ['task-1'],
         },
+      }),
+    );
+  });
+
+  test('keeps the current frequency unchanged when the custom dialog is cancelled', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={{ ...rule, evaluationMode: 'periodic' }}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.custom',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'recurring.cancel',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schedule: expect.objectContaining({ frequency: 'monthly' }),
       }),
     );
   });
@@ -326,7 +382,6 @@ describe('<ProjectRuleFormModal />', () => {
       evaluationMode: 'periodic',
       schedule: {
         frequency: 'monthly',
-        monthlyDay: 1,
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

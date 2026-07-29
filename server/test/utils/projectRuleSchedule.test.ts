@@ -10,12 +10,8 @@ import {
   normalizeProjectRuleSchedule,
 } from '../../utils/projectRuleSchedule.ts';
 
-const schedule = (
-  frequency: ProjectRuleScheduleFrequency,
-  monthlyDay = 1,
-): ProjectRuleSchedule => ({
+const schedule = (frequency: ProjectRuleScheduleFrequency): ProjectRuleSchedule => ({
   frequency,
-  monthlyDay,
   userIds: [],
   taskIds: [],
 });
@@ -39,11 +35,11 @@ describe('projectRuleSchedule', () => {
     });
   });
 
-  test('waits for a custom monthly day before exposing the next calendar month', () => {
+  test('waits for a custom monthly occurrence before exposing the next calendar month', () => {
     expect(
       getPreviousProjectRulePeriod(
         new Date('2026-06-14T12:00:00Z'),
-        schedule('monthly', 15),
+        schedule('monthly:third:1'),
         'UTC',
       ),
     ).toEqual({
@@ -54,7 +50,7 @@ describe('projectRuleSchedule', () => {
     expect(
       getPreviousProjectRulePeriod(
         new Date('2026-06-15T00:00:00Z'),
-        schedule('monthly', 15),
+        schedule('monthly:third:1'),
         'UTC',
       ),
     ).toEqual({
@@ -64,11 +60,11 @@ describe('projectRuleSchedule', () => {
     });
   });
 
-  test('uses the application time zone to decide when a custom monthly day starts', () => {
+  test('uses the application time zone to decide when a custom monthly occurrence starts', () => {
     expect(
       getPreviousProjectRulePeriod(
         new Date('2026-06-14T22:30:00Z'),
-        schedule('monthly', 15),
+        schedule('monthly:third:1'),
         'Europe/Rome',
       ),
     ).toMatchObject({
@@ -77,11 +73,11 @@ describe('projectRuleSchedule', () => {
     });
   });
 
-  test('clamps custom monthly days to the end of shorter months', () => {
+  test('supports the last selected weekday of the month', () => {
     expect(
       getPreviousProjectRulePeriod(
-        new Date('2026-02-27T12:00:00Z'),
-        schedule('monthly', 31),
+        new Date('2026-02-21T12:00:00Z'),
+        schedule('monthly:last:0'),
         'UTC',
       ),
     ).toMatchObject({
@@ -90,8 +86,8 @@ describe('projectRuleSchedule', () => {
     });
     expect(
       getPreviousProjectRulePeriod(
-        new Date('2026-02-28T00:00:00Z'),
-        schedule('monthly', 31),
+        new Date('2026-02-22T00:00:00Z'),
+        schedule('monthly:last:0'),
         'UTC',
       ),
     ).toMatchObject({
@@ -120,21 +116,35 @@ describe('projectRuleSchedule', () => {
       }),
     ).toEqual({
       frequency: 'daily',
-      monthlyDay: 1,
       userIds: ['u1', 'u2'],
       taskIds: ['t1', 't2'],
     });
   });
 
-  test('normalizes valid monthly days and defaults invalid persisted values to the first', () => {
-    expect(normalizeProjectRuleSchedule({ frequency: 'monthly', monthlyDay: 20 })).toMatchObject({
-      monthlyDay: 20,
+  test('normalizes valid custom monthly patterns and rejects malformed persisted values', () => {
+    expect(normalizeProjectRuleSchedule({ frequency: 'monthly:fourth:6' })).toMatchObject({
+      frequency: 'monthly:fourth:6',
     });
-    expect(normalizeProjectRuleSchedule({ frequency: 'monthly', monthlyDay: 0 })).toMatchObject({
-      monthlyDay: 1,
+    expect(normalizeProjectRuleSchedule({ frequency: 'monthly:fifth:1' })).toMatchObject({
+      frequency: 'monthly',
     });
-    expect(normalizeProjectRuleSchedule({ frequency: 'monthly', monthlyDay: 12.5 })).toMatchObject({
-      monthlyDay: 1,
+    expect(normalizeProjectRuleSchedule({ frequency: 'monthly:first:7' })).toMatchObject({
+      frequency: 'monthly',
+    });
+  });
+
+  test('uses monthly period keys for custom patterns so catch-up remains compatible', () => {
+    expect(
+      getProjectRulePeriodForEvaluation(
+        new Date('2026-06-15T12:00:00Z'),
+        schedule('monthly:third:1'),
+        'monthly:UTC:2026-02-01:2026-03-01',
+        'UTC',
+      ),
+    ).toEqual({
+      key: 'monthly:UTC:2026-03-01:2026-04-01',
+      startDate: '2026-03-01',
+      endDate: '2026-04-01',
     });
   });
 

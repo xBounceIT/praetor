@@ -12,10 +12,12 @@ export const PROJECT_RULE_SCHEDULE_FREQUENCIES = [
   'quarterly',
   'yearly',
 ] as const;
+export const PROJECT_RULE_SCHEDULE_FREQUENCY_PATTERN =
+  /^(daily|weekly|monthly|quarterly|yearly|monthly:(first|second|third|fourth|last):[0-6])$/;
+const CUSTOM_MONTHLY_FREQUENCY_PATTERN = /^monthly:(first|second|third|fourth|last):([0-6])$/;
 
 export const DEFAULT_PROJECT_RULE_SCHEDULE: ProjectRuleSchedule = {
   frequency: 'monthly',
-  monthlyDay: 1,
   userIds: [],
   taskIds: [],
 };
@@ -45,15 +47,10 @@ export const isProjectRuleEvaluationMode = (value: unknown): value is ProjectRul
 export const isProjectRuleScheduleFrequency = (
   value: unknown,
 ): value is ProjectRuleScheduleFrequency =>
-  PROJECT_RULE_SCHEDULE_FREQUENCIES.includes(value as ProjectRuleScheduleFrequency);
+  typeof value === 'string' && PROJECT_RULE_SCHEDULE_FREQUENCY_PATTERN.test(value);
 
 export const getAppTimeZone = (): string =>
   Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
-const normalizeMonthlyDay = (value: unknown): number =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 31
-    ? value
-    : DEFAULT_PROJECT_RULE_SCHEDULE.monthlyDay;
 
 export const normalizeProjectRuleSchedule = (value: unknown): ProjectRuleSchedule => {
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -61,7 +58,6 @@ export const normalizeProjectRuleSchedule = (value: unknown): ProjectRuleSchedul
     frequency: isProjectRuleScheduleFrequency(raw.frequency)
       ? raw.frequency
       : DEFAULT_PROJECT_RULE_SCHEDULE.frequency,
-    monthlyDay: normalizeMonthlyDay(raw.monthlyDay),
     userIds: uniqueStrings(raw.userIds),
     taskIds: uniqueStrings(raw.taskIds),
   };
@@ -82,8 +78,6 @@ const datePartsInTimeZone = (now: Date, timeZone: string) => {
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 const utcDate = (year: number, monthIndex: number, day: number) =>
   new Date(Date.UTC(year, monthIndex, day));
-const daysInMonth = (year: number, monthIndex: number) =>
-  utcDate(year, monthIndex + 1, 0).getUTCDate();
 const isIsoDate = (value: string) => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && isoDate(parsed) === value;
@@ -94,10 +88,35 @@ const periodWindow = (
   startDate: string,
   endDate: string,
 ): ProjectRulePeriodWindow => ({
-  key: `${schedule.frequency}:${timeZone}:${startDate}:${endDate}`,
+  key: `${getScheduleCadence(schedule.frequency)}:${timeZone}:${startDate}:${endDate}`,
   startDate,
   endDate,
 });
+
+type ProjectRuleScheduleCadence = (typeof PROJECT_RULE_SCHEDULE_FREQUENCIES)[number];
+
+const getScheduleCadence = (frequency: ProjectRuleScheduleFrequency): ProjectRuleScheduleCadence =>
+  frequency.startsWith('monthly:') ? 'monthly' : (frequency as ProjectRuleScheduleCadence);
+
+const getCustomMonthlyDueDay = (
+  frequency: ProjectRuleScheduleFrequency,
+  year: number,
+  monthIndex: number,
+): number => {
+  const match = CUSTOM_MONTHLY_FREQUENCY_PATTERN.exec(frequency);
+  if (!match) return 1;
+
+  const occurrence = match[1];
+  const weekday = Number(match[2]);
+  if (occurrence === 'last') {
+    const lastDate = utcDate(year, monthIndex + 1, 0);
+    return lastDate.getUTCDate() - ((lastDate.getUTCDay() - weekday + 7) % 7);
+  }
+
+  const occurrenceIndex = ['first', 'second', 'third', 'fourth'].indexOf(occurrence ?? '');
+  const firstWeekday = utcDate(year, monthIndex, 1).getUTCDay();
+  return 1 + ((weekday - firstWeekday + 7) % 7) + occurrenceIndex * 7;
+};
 
 const parsePeriodKey = (
   value: string,
@@ -125,7 +144,7 @@ const parsePeriodKey = (
   };
 };
 
-const addSchedulePeriod = (date: string, frequency: ProjectRuleScheduleFrequency): string => {
+const addSchedulePeriod = (date: string, frequency: ProjectRuleScheduleCadence): string => {
   const parsed = utcDate(
     Number(date.slice(0, 4)),
     Number(date.slice(5, 7)) - 1,
@@ -151,7 +170,7 @@ const addSchedulePeriod = (date: string, frequency: ProjectRuleScheduleFrequency
   return isoDate(parsed);
 };
 
-const isScheduleBoundary = (date: string, frequency: ProjectRuleScheduleFrequency): boolean => {
+const isScheduleBoundary = (date: string, frequency: ProjectRuleScheduleCadence): boolean => {
   const parsed = utcDate(
     Number(date.slice(0, 4)),
     Number(date.slice(5, 7)) - 1,
@@ -178,10 +197,11 @@ export const getPreviousProjectRulePeriod = (
 ): ProjectRulePeriodWindow => {
   const { year, month, day } = datePartsInTimeZone(now, timeZone);
   const today = utcDate(year, month - 1, day);
+  const cadence = getScheduleCadence(schedule.frequency);
   let start: Date;
   let end: Date;
 
-  switch (schedule.frequency) {
+  switch (cadence) {
     case 'daily':
       end = today;
       start = utcDate(year, month - 1, day - 1);
@@ -204,7 +224,7 @@ export const getPreviousProjectRulePeriod = (
       break;
     default: {
       const currentMonthIndex = month - 1;
-      const dueDay = Math.min(schedule.monthlyDay, daysInMonth(year, currentMonthIndex));
+      const dueDay = getCustomMonthlyDueDay(schedule.frequency, year, currentMonthIndex);
       const endMonthIndex = day >= dueDay ? currentMonthIndex : currentMonthIndex - 1;
       end = utcDate(year, endMonthIndex, 1);
       start = utcDate(year, endMonthIndex - 1, 1);
@@ -227,19 +247,20 @@ export const getProjectRulePeriodForEvaluation = (
   if (!lastEvaluatedPeriod) return latestCompleted;
 
   const previous = parsePeriodKey(lastEvaluatedPeriod);
+  const cadence = getScheduleCadence(schedule.frequency);
   if (
     !previous ||
-    previous.frequency !== schedule.frequency ||
+    previous.frequency !== cadence ||
     previous.timeZone !== timeZone ||
-    !isScheduleBoundary(previous.startDate, schedule.frequency) ||
-    !isScheduleBoundary(previous.endDate, schedule.frequency) ||
-    addSchedulePeriod(previous.startDate, schedule.frequency) !== previous.endDate ||
+    !isScheduleBoundary(previous.startDate, cadence) ||
+    !isScheduleBoundary(previous.endDate, cadence) ||
+    addSchedulePeriod(previous.startDate, cadence) !== previous.endDate ||
     previous.endDate >= latestCompleted.endDate
   ) {
     return latestCompleted;
   }
 
-  const nextEndDate = addSchedulePeriod(previous.endDate, schedule.frequency);
+  const nextEndDate = addSchedulePeriod(previous.endDate, cadence);
   if (nextEndDate > latestCompleted.endDate) return latestCompleted;
   return periodWindow(schedule, timeZone, previous.endDate, nextEndDate);
 };

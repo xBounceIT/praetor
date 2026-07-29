@@ -306,9 +306,6 @@
       },
       "schedule": {
         "frequency": "Frequenza",
-        "monthlyDay": "Giorno del mese",
-        "firstDayOfMonth": "Il primo giorno del mese",
-        "dayOfMonthOption": "Il giorno {{day}} del mese",
         "users": "Filtra per utenti",
         "tasks": "Filtra per attività",
         "allUsers": "Tutti gli utenti della commessa",
@@ -316,7 +313,7 @@
         "disabled": "disabilitato",
         "unavailable": "non più disponibile",
         "previousPeriodHint": "Ore, registrazioni, utenti e attività vengono calcolati sul periodo completo appena concluso. I filtri utenti e attività si combinano tra loro.",
-        "monthlyPeriodHint": "La verifica parte nel giorno scelto e analizza il mese solare precedente. Se il giorno non esiste, parte nell'ultimo giorno del mese. I filtri utenti e attività si combinano tra loro.",
+        "monthlyPeriodHint": "Ogni mese la verifica parte il primo giorno; con Personalizzato parte nell'occorrenza e nel giorno della settimana scelti. Analizza sempre il mese solare precedente. I filtri utenti e attività si combinano tra loro.",
         "frequencies": {
           "daily": "Ogni giorno",
           "weekly": "Ogni settimana",

@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { projectRulesApi } from '../../services/api/projectRules';
 import type { ProjectRule, ProjectRuleRecipientOptions } from '../../types';
 import { hasPermission } from '../../utils/permissions';
+import { formatRecurrencePattern } from '../../utils/recurrence';
 import { toastError, toastSuccess } from '../../utils/toast';
 import ProjectRuleFormModal, { type ProjectRuleFormPayload } from './ProjectRuleFormModal';
 import {
@@ -448,7 +449,11 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
         })
         .join(joiner);
       return rule.evaluationMode === 'periodic'
-        ? `${t(`projects:detail.rules.schedule.frequencies.${rule.schedule.frequency}`)} · ${conditionSummary}`
+        ? `${
+            rule.schedule.frequency.startsWith('monthly:')
+              ? formatRecurrencePattern(rule.schedule.frequency, t)
+              : t(`projects:detail.rules.schedule.frequencies.${rule.schedule.frequency}`)
+          } · ${conditionSummary}`
         : conditionSummary;
     },
     [t],
