@@ -37,8 +37,8 @@ describe('Sonner configuration', () => {
   test('defines matching error and warning variants', () => {
     expect(appErrorToastClassNames.toast).toContain('bg-destructive!');
     expect(appErrorToastClassNames.icon).toContain('text-destructive-foreground!');
-    expect(appWarningToastClassNames.toast).toContain('bg-amber-600!');
-    expect(appWarningToastClassNames.closeButton).toContain('text-white!');
+    expect(appWarningToastClassNames.toast).toContain('bg-warning!');
+    expect(appWarningToastClassNames.closeButton).toContain('text-warning-foreground!');
   });
 
   test('merges className overrides without dropping the shared base style', () => {

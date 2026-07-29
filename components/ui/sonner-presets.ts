@@ -63,12 +63,13 @@ export const appErrorToastClassNames = buildVariantClassNames({
 });
 
 export const appWarningToastClassNames = buildVariantClassNames({
-  surface: 'border-amber-600! bg-amber-600! text-white! dark:border-amber-500! dark:bg-amber-500!',
-  description: 'text-white/70!',
-  icon: 'text-white!',
+  surface: 'border-warning! bg-warning! text-warning-foreground!',
+  description: 'text-warning-foreground/70!',
+  icon: 'text-warning-foreground!',
   actionButton:
-    'rounded-md! bg-white! text-amber-700! hover:bg-white/90! focus-visible:ring-[3px] focus-visible:ring-white/50',
-  closeTone: 'text-white! hover:bg-white/10! focus-visible:ring-white/50',
+    'rounded-md! bg-warning-foreground! text-warning! hover:bg-warning-foreground/90! focus-visible:ring-[3px] focus-visible:ring-warning-foreground/50',
+  closeTone:
+    'text-warning-foreground! hover:bg-warning-foreground/10! focus-visible:ring-warning-foreground/50',
 });
 
 /** Alias kept for offer-created call sites; identical to `appSuccessToastClassNames`. */
