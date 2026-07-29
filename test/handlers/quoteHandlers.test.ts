@@ -94,6 +94,7 @@ type QuoteLike = {
   isExpired?: boolean;
   expirationDate?: string;
   linkedOfferId?: string;
+  linkedOfferRevisionCode?: string | null;
   linkedSupplierQuoteId?: string | null;
   candidates?: Array<{
     id: string;
@@ -131,6 +132,14 @@ const makeStubScalar = <T>(initial: T) => {
     value = typeof updater === 'function' ? (updater as (prev: T) => T)(value) : updater;
   }) as AnyFn;
   return { setter, get: () => value };
+};
+
+const deferValue = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
 };
 
 const buildHandlers = (overrides: Record<string, unknown> = {}) => {
@@ -385,7 +394,10 @@ describe('makeQuoteHandlers', () => {
       items: [],
     });
     const ctx = buildHandlers({
-      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+      quotes: [
+        { id: 'q1', status: 'sent', items: [] },
+        { id: 'q-existing', status: 'draft' },
+      ],
     });
 
     await ctx.handlers.updateQuote('q1', { status: 'offer' } as never);
@@ -394,6 +406,76 @@ describe('makeQuoteHandlers', () => {
       id: 'q1-OF',
       revisionCode: 'REV2',
     });
+  });
+
+  test('updateQuote notifies before the client flow refetch completes', async () => {
+    const quotesRefetch = deferValue<unknown[]>();
+    stubQuoteUpdateFlow({
+      status: 'offer',
+      linkedOfferId: 'q1-OF',
+      linkedOfferRevisionCode: 'REV2',
+      items: [],
+    });
+    apiMocks.quotesList.mockImplementation(() => quotesRefetch.promise);
+    const ctx = buildHandlers({
+      quotes: [{ id: 'q1', status: 'sent', items: [] }],
+    });
+
+    const pendingUpdate = ctx.handlers.updateQuote('q1', { status: 'offer' } as never);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+      id: 'q1-OF',
+      revisionCode: 'REV2',
+    });
+
+    quotesRefetch.resolve([]);
+    await pendingUpdate;
+  });
+
+  test('updateQuote keeps a created offer successful when the client refetch fails', async () => {
+    stubQuoteUpdateFlow({
+      status: 'offer',
+      linkedOfferId: 'q1-OF',
+      linkedOfferRevisionCode: 'REV2',
+      items: [],
+    });
+    apiMocks.quotesList.mockImplementation(() => Promise.reject(new Error('refresh failed')));
+    apiMocks.clientOffersList
+      .mockRejectedValueOnce(new Error('offers refresh failed'))
+      .mockResolvedValueOnce([{ id: 'q1-OF' }]);
+    const ctx = buildHandlers({
+      quotes: [
+        { id: 'q1', status: 'sent', items: [] },
+        { id: 'q-existing', status: 'draft' },
+      ],
+    });
+    const restore = silenceConsole();
+
+    try {
+      await expect(
+        ctx.handlers.updateQuote('q1', { status: 'offer' } as never),
+      ).resolves.toBeUndefined();
+      expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+        id: 'q1-OF',
+        revisionCode: 'REV2',
+      });
+      expect(apiMocks.clientOffersList).toHaveBeenCalledTimes(2);
+      expect(ctx.quotes.get()).toEqual([
+        {
+          id: 'q1',
+          status: 'offer',
+          linkedOfferId: 'q1-OF',
+          linkedOfferRevisionCode: 'REV2',
+          items: [],
+        },
+        { id: 'q-existing', status: 'draft' },
+      ]);
+      expect(ctx.clientOffers.get()).toEqual([{ id: 'q1-OF' }]);
+    } finally {
+      restore();
+    }
   });
 
   test('deleteQuote refreshes supplier quotes when the deleted quote sourced one', async () => {
@@ -915,6 +997,71 @@ describe('makeQuoteHandlers', () => {
     expect(apiMocks.quotesPromote).toHaveBeenCalledWith('q-1', 'candidate-b');
     expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({ id: 'of-1', revisionCode: 'REV1' });
     expect(ctx.refreshSupplierQuoteFlow).toHaveBeenCalled();
+  });
+
+  test('promoteQuoteCandidate notifies before flow refetches complete', async () => {
+    const quotesRefetch = deferValue<unknown[]>();
+    apiMocks.quotesPromote.mockImplementation(() =>
+      Promise.resolve({ quote: { id: 'q-1' }, offer: { id: 'of-1', revisionCode: 'REV1' } }),
+    );
+    apiMocks.quotesList.mockImplementation(() => quotesRefetch.promise);
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-1' }]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers();
+
+    const pendingPromotion = ctx.handlers.promoteQuoteCandidate('q-1', 'candidate-b');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+      id: 'of-1',
+      revisionCode: 'REV1',
+    });
+
+    quotesRefetch.resolve([]);
+    await pendingPromotion;
+  });
+
+  test('promoteQuoteCandidate stays successful when the client refetch fails', async () => {
+    const result = {
+      quote: {
+        id: 'q-1',
+        status: 'offer',
+        candidates: [{ id: 'candidate-b', state: 'promoted' }],
+      },
+      offer: { id: 'of-1', revisionCode: 'REV1' },
+    };
+    apiMocks.quotesPromote.mockImplementation(() => Promise.resolve(result));
+    apiMocks.quotesList.mockImplementation(() => Promise.reject(new Error('refresh failed')));
+    apiMocks.clientOffersList.mockImplementation(() =>
+      Promise.reject(new Error('offers refresh failed')),
+    );
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers({
+      quotes: [
+        {
+          id: 'q-1',
+          status: 'sent',
+          candidates: [{ id: 'candidate-b', state: 'pending' }],
+        },
+        { id: 'q-existing', status: 'draft' },
+      ],
+      clientOffers: [{ id: 'of-existing' }],
+    });
+    const restore = silenceConsole();
+
+    try {
+      const promotion = await ctx.handlers.promoteQuoteCandidate('q-1', 'candidate-b');
+      expect(promotion.offer.id).toBe('of-1');
+      expect(ctx.quotes.get()).toEqual([result.quote, { id: 'q-existing', status: 'draft' }]);
+      expect(ctx.clientOffers.get().map((offer) => offer.id)).toEqual(['of-1', 'of-existing']);
+      expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith({
+        id: 'of-1',
+        revisionCode: 'REV1',
+      });
+    } finally {
+      restore();
+    }
   });
 
   test('createClientOfferFromLegacyQuote creates and links the missing first offer', async () => {

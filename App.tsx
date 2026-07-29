@@ -69,6 +69,11 @@ import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
 import UserSettings, { type UserSettingsTab } from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
+import {
+  appToasterProps,
+  offerCreatedToastClassNames,
+  resolveOfferCreatedToastAction,
+} from './components/ui/sonner-presets';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
 import { makeClientHandlers } from './hooks/handlers/clientHandlers';
@@ -130,6 +135,7 @@ import type {
   WorkUnit,
 } from './types';
 import { clearAuthScopedState } from './utils/authScopedState';
+import { ensureClientOfferAvailable } from './utils/clientOfferNavigation';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
 import { formatDocumentCode } from './utils/document-code';
@@ -1816,21 +1822,46 @@ const useAppContentController = () => {
     [switchRole],
   );
 
+  const canViewClientOffers = Boolean(
+    currentUser &&
+      hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']),
+  );
   const notifyClientOfferCreated = useCallback(
     (offer: Pick<ClientOffer, 'id' | 'revisionCode'>) => {
       toast.success(tApp('sales:clientQuotes.offerCreatedToast'), {
         description: formatDocumentCode(offer.id, offer.revisionCode),
-        action: {
+        classNames: offerCreatedToastClassNames,
+        action: resolveOfferCreatedToastAction(canViewClientOffers, {
           label: tApp('sales:clientQuotes.viewOffer'),
-          onClick: () => {
-            setClientQuoteFilterId(null);
-            setClientOfferFilterId(offer.id);
-            setActiveView('sales/client-offers');
+          onClick: async () => {
+            try {
+              setClientOffers(
+                await ensureClientOfferAvailable(
+                  offer.id,
+                  clientOffersRef.current,
+                  api.clientOffers.list,
+                ),
+              );
+              setClientQuoteFilterId(null);
+              setClientOfferFilterId(offer.id);
+              setActiveView('sales/client-offers');
+            } catch (err) {
+              console.error('Failed to load created client offer:', err);
+              toastError(tApp('sales:clientOffers.failedToLoad'));
+            }
           },
-        },
+        }),
       });
     },
-    [setActiveView, setClientQuoteFilterId, setClientOfferFilterId, tApp],
+    [
+      canViewClientOffers,
+      clientOffersRef,
+      setActiveView,
+      setClientOffers,
+      setClientQuoteFilterId,
+      setClientOfferFilterId,
+      tApp,
+    ],
   );
 
   const notifyClientOrderCreated = useCallback(
@@ -4904,7 +4935,7 @@ const App: React.FC = () => (
       <AppContent />
     </ErrorBoundary>
     {/* Outside the boundary so toasts keep rendering if the boundary trips. */}
-    <Toaster richColors closeButton position="top-right" />
+    <Toaster {...appToasterProps} />
   </>
 );
 

@@ -293,6 +293,7 @@
     "addOffer": "Aggiungi offerta",
     "failedToSave": "Impossibile salvare l'offerta. Riprova.",
     "failedToDelete": "Impossibile eliminare l'offerta. Riprova.",
+    "failedToLoad": "Impossibile caricare l'offerta creata. Riprova.",
     "failedToUpdateStatus": "Impossibile aggiornare lo stato dell'offerta. Riprova.",
     "sourceQuote": "Preventivo di origine",
     "viewQuote": "Vedi preventivo",

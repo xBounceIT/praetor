@@ -13,6 +13,11 @@ import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '
 import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
 
+const prependById = <T extends { id: string }>(items: T[], item: T): T[] => [
+  item,
+  ...items.filter((current) => current.id !== item.id),
+];
+
 /**
  * Quote handlers read two pieces of shared state — `clientQuoteFilterId` and
  * `clientOfferFilterId` — both before and AFTER awaited network calls.
@@ -89,17 +94,51 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     setInvoices(invoicesData);
   };
 
+  const refreshBestEffort = async (
+    refresh: () => Promise<void>,
+    errorMessage: string,
+  ): Promise<boolean> => {
+    try {
+      await refresh();
+      return true;
+    } catch (refreshErr) {
+      console.error(errorMessage, refreshErr);
+      return false;
+    }
+  };
+
   // A linked supplier quote derives its visible status / isStatusSynced from its client quote at
   // read time (#779), so creating, changing, or severing that link — or changing the client
   // quote's status — can leave the separately-cached supplier quotes table showing stale
   // unsynced/draft state until a full module reload. Refresh it too, best-effort: a refresh
   // failure must not fail the primary write.
-  const refreshLinkedSupplierQuotes = async () => {
-    try {
-      await refreshSupplierQuoteFlow();
-    } catch (refreshErr) {
-      console.error('Failed to refresh supplier data:', refreshErr);
+  const refreshLinkedSupplierQuotes = () =>
+    refreshBestEffort(refreshSupplierQuoteFlow, 'Failed to refresh supplier data:');
+
+  const refreshClientOffersBestEffort = async () => {
+    const refreshClientOffers = async () => {
+      const offersData = await api.clientOffers.list();
+      setClientOffers(offersData);
+    };
+    const offersRefreshed = await refreshBestEffort(
+      refreshClientOffers,
+      'Failed to refresh client offers:',
+    );
+    if (!offersRefreshed) {
+      await refreshBestEffort(refreshClientOffers, 'Failed to retry client offers refresh:');
     }
+  };
+
+  const refreshClientQuoteCachesBestEffort = async () => {
+    await Promise.all([
+      refreshBestEffort(async () => {
+        setQuotes(await api.quotes.list());
+      }, 'Failed to refresh client quotes:'),
+      refreshClientOffersBestEffort(),
+      refreshBestEffort(async () => {
+        setClientsOrders(await api.clientsOrders.list());
+      }, 'Failed to refresh client orders:'),
+    ]);
   };
 
   const surfaceWarnings = (warnings?: string[]) => {
@@ -146,20 +185,23 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       // so a plain edit of an unsourced quote would otherwise refetch needlessly. The two flows
       // set disjoint state, so they run in parallel.
       const supplierRefreshNeeded = wasSourcing || sourcesSupplierQuote(updated);
+      const createdOffer =
+        updated.status === 'offer' && previousQuote?.status !== 'offer' && updated.linkedOfferId
+          ? {
+              id: updated.linkedOfferId,
+              revisionCode: updated.linkedOfferRevisionCode,
+            }
+          : undefined;
+      if (createdOffer) {
+        // Reconcile the completed mutation immediately; the follow-up list refreshes can be slow
+        // or fail independently after the server has already created the offer.
+        setQuotes((prev) => prependById(prev, updated));
+        notifyClientOfferCreated?.(createdOffer);
+      }
       await Promise.all([
-        refreshClientQuoteFlow(),
+        createdOffer ? refreshClientQuoteCachesBestEffort() : refreshClientQuoteFlow(),
         supplierRefreshNeeded ? refreshLinkedSupplierQuotes() : Promise.resolve(),
       ]);
-      if (
-        updated.status === 'offer' &&
-        previousQuote?.status !== 'offer' &&
-        updated.linkedOfferId
-      ) {
-        notifyClientOfferCreated?.({
-          id: updated.linkedOfferId,
-          revisionCode: updated.linkedOfferRevisionCode,
-        });
-      }
     } catch (err) {
       console.error('Failed to update quote:', err);
       throw err;
@@ -169,11 +211,14 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
   const promoteQuoteCandidate = async (quoteId: string, candidateId: string) => {
     try {
       const result = await api.quotes.promote(quoteId, candidateId);
-      await Promise.all([refreshClientQuoteFlow(), refreshLinkedSupplierQuotes()]);
+      setQuotes((prev) => prependById(prev, result.quote));
+      setClientOffers((prev) => prependById(prev, result.offer));
+      // Confirm the completed promotion immediately; the follow-up list refreshes can be slow.
       notifyClientOfferCreated?.({
         id: result.offer.id,
         revisionCode: result.offer.revisionCode,
       });
+      await Promise.all([refreshClientQuoteCachesBestEffort(), refreshLinkedSupplierQuotes()]);
       return result;
     } catch (err) {
       console.error('Failed to promote quote candidate:', err);
