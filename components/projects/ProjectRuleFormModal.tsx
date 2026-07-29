@@ -1,4 +1,4 @@
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { CalendarClockIcon, PlusIcon, RadarIcon, Trash2Icon } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,11 +13,13 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select,
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -29,8 +31,11 @@ import type {
   ProjectRuleCondition,
   ProjectRuleConditionLogic,
   ProjectRuleConditionValueType,
+  ProjectRuleEvaluationMode,
   ProjectRuleNotifyRecipientType,
   ProjectRuleRecipientOptions,
+  ProjectRuleSchedule,
+  ProjectRuleScheduleFrequency,
 } from '../../types';
 import { hasPermission } from '../../utils/permissions';
 import SelectControl from '../shared/SelectControl';
@@ -39,7 +44,10 @@ import {
   getAvailableProjectRuleFields,
   getAvailableProjectRuleValueFields,
   getProjectRuleFieldDefinition,
+  getProjectRuleValueLabelKey,
+  isProjectRuleUnaryOperator,
   isValidProjectRuleConditionValue,
+  type ProjectRuleFieldGroup,
 } from './projectRuleRegistry';
 
 export type ProjectRuleFormPayload = {
@@ -51,6 +59,8 @@ export type ProjectRuleFormPayload = {
   conditions: ProjectRuleCondition[];
   actionType: ProjectRuleActionType;
   actionConfig: ProjectRuleActionConfig;
+  evaluationMode: ProjectRuleEvaluationMode;
+  schedule: ProjectRuleSchedule;
   isEnabled: boolean;
 };
 
@@ -65,6 +75,8 @@ export interface ProjectRuleFormModalProps {
 
 type ProjectRuleFormState = {
   name: string;
+  evaluationMode: ProjectRuleEvaluationMode;
+  schedule: ProjectRuleSchedule;
   conditionLogic: ProjectRuleConditionLogic;
   conditions: ProjectRuleFormConditionRow[];
   actions: ProjectRuleFormActionRow[];
@@ -86,6 +98,12 @@ type ProjectRuleFormConditionRow = ProjectRuleCondition & { uid: string };
 
 type ProjectRuleFormAction =
   | { type: 'setName'; name: string }
+  | {
+      type: 'setEvaluationMode';
+      evaluationMode: ProjectRuleEvaluationMode;
+      fallbackField: string;
+    }
+  | { type: 'setSchedule'; patch: Partial<ProjectRuleSchedule> }
   | { type: 'setConditionLogic'; conditionLogic: ProjectRuleConditionLogic }
   | { type: 'updateCondition'; index: number; patch: Partial<ProjectRuleCondition> }
   | { type: 'addCondition'; field: string }
@@ -109,27 +127,49 @@ const CONDITION_GRID_CLASSNAME =
   'grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_minmax(10rem,14rem)_2.25rem]';
 const ACTION_GRID_CLASSNAME =
   'grid gap-3 md:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_minmax(12rem,1fr)_2.25rem]';
+const PROJECT_RULE_NAME_MAX_LENGTH = 255;
+const PROJECT_RULE_TIME_ZONE_MAX_LENGTH = 100;
 
 const firstValueForField = (field: string) => {
   const definition = getProjectRuleFieldDefinition(field);
   if (definition?.kind === 'enum') return definition.enumValues?.[0] ?? '';
+  if (definition?.kind === 'boolean') return 'true';
   return '';
+};
+
+const defaultTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+const defaultSchedule = (): ProjectRuleSchedule => ({
+  frequency: 'monthly',
+  timeZone: defaultTimeZone(),
+  userIds: [],
+  taskIds: [],
+});
+
+const isValidTimeZone = (value: string) => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const defaultConditionForField = (field: string): ProjectRuleCondition => {
   const definition = getProjectRuleFieldDefinition(field);
+  const operator = definition?.operators[0] ?? '';
   return {
     field,
-    operator: definition?.operators[0] ?? '',
-    value: firstValueForField(field),
+    operator,
+    value: isProjectRuleUnaryOperator(operator) ? '' : firstValueForField(field),
     valueType: 'literal',
   };
 };
 
-const normalizeConditionForForm = (condition: ProjectRuleCondition): ProjectRuleCondition => ({
-  ...condition,
-  valueType: condition.valueType ?? 'literal',
-});
+const normalizeConditionForForm = (condition: ProjectRuleCondition): ProjectRuleCondition =>
+  isProjectRuleUnaryOperator(condition.operator)
+    ? { ...condition, value: '', valueType: 'literal' }
+    : { ...condition, valueType: condition.valueType ?? 'literal' };
 
 const uniqueStrings = (values: readonly string[]) => Array.from(new Set(values));
 
@@ -285,20 +325,14 @@ const conditionsForRule = (
   return fallbackField ? [createConditionRow(defaultConditionForField(fallbackField))] : [];
 };
 
-const enumValueLabelKey = (field: string, value: string) => {
-  if (field === 'billing_type') {
-    if (value === 'time_and_materials') return 'projects:projects.billingTypes.timeAndMaterials';
-    if (value === 'retainer') return 'projects:projects.billingTypes.retainer';
-  }
-  return `projects:detail.rules.values.${field}.${value}`;
-};
-
 const createProjectRuleFormState = (
   rule: ProjectRule | null | undefined,
   initialField: string,
   hasHiddenWebhookAction: boolean,
 ): ProjectRuleFormState => ({
   name: rule?.name ?? '',
+  evaluationMode: rule?.evaluationMode ?? 'continuous',
+  schedule: rule?.schedule ?? defaultSchedule(),
   conditionLogic: rule?.conditionLogic ?? 'and',
   conditions: conditionsForRule(rule, initialField),
   actions: actionRowsForRule(rule, hasHiddenWebhookAction),
@@ -314,6 +348,35 @@ const projectRuleFormReducer = (
   switch (action.type) {
     case 'setName':
       return { ...state, name: action.name };
+    case 'setEvaluationMode':
+      return {
+        ...state,
+        evaluationMode: action.evaluationMode,
+        conditions:
+          action.evaluationMode === 'periodic'
+            ? state.conditions
+            : state.conditions.map((condition) => {
+                if (getProjectRuleFieldDefinition(condition.field)?.periodOnly) {
+                  return {
+                    ...createConditionRow(defaultConditionForField(action.fallbackField)),
+                    uid: condition.uid,
+                  };
+                }
+                if (
+                  condition.valueType === 'field' &&
+                  getProjectRuleFieldDefinition(condition.value)?.periodOnly
+                ) {
+                  return {
+                    ...condition,
+                    valueType: 'literal',
+                    value: firstValueForField(condition.field),
+                  };
+                }
+                return condition;
+              }),
+      };
+    case 'setSchedule':
+      return { ...state, schedule: { ...state.schedule, ...action.patch } };
     case 'setConditionLogic':
       return { ...state, conditionLogic: action.conditionLogic };
     case 'updateCondition':
@@ -391,7 +454,202 @@ const projectRuleFormReducer = (
   }
 };
 
-type ProjectRuleOption = { id: string; name: string };
+type ProjectRuleOption = { id: string; name: string; disabled?: boolean };
+type ProjectRuleFieldOption = ProjectRuleOption & { group: ProjectRuleFieldGroup };
+
+const PROJECT_RULE_FIELD_GROUPS: readonly ProjectRuleFieldGroup[] = [
+  'project',
+  'computed',
+  'period',
+];
+
+const ProjectRuleFieldOptionGroups: React.FC<{ options: ProjectRuleFieldOption[] }> = ({
+  options,
+}) => {
+  const { t } = useTranslation(['projects']);
+  return PROJECT_RULE_FIELD_GROUPS.map((group) => {
+    const groupOptions = options.filter((option) => option.group === group);
+    if (groupOptions.length === 0) return null;
+    return (
+      <SelectGroup key={group}>
+        <SelectLabel>{t(`projects:detail.rules.fieldGroups.${group}`)}</SelectLabel>
+        {groupOptions.map((option) => (
+          <SelectItem key={option.id} value={option.id}>
+            {option.name}
+          </SelectItem>
+        ))}
+      </SelectGroup>
+    );
+  });
+};
+
+const includeUnavailableSelections = (
+  options: ProjectRuleOption[],
+  selectedIds: readonly string[],
+  unavailableLabel: string,
+): ProjectRuleOption[] => {
+  const availableIds = new Set(options.map((option) => option.id));
+  return [
+    ...options,
+    ...selectedIds
+      .filter((id) => !availableIds.has(id))
+      .map((id) => ({
+        id,
+        name: `${id} · ${unavailableLabel}`,
+        disabled: true,
+      })),
+  ];
+};
+
+const ProjectRuleEvaluationEditor: React.FC<{
+  evaluationMode: ProjectRuleEvaluationMode;
+  schedule: ProjectRuleSchedule;
+  recipients: ProjectRuleRecipientOptions;
+  errors: Record<string, string>;
+  submitting: boolean;
+  onModeChange: (mode: ProjectRuleEvaluationMode) => void;
+  onScheduleChange: (patch: Partial<ProjectRuleSchedule>) => void;
+}> = ({
+  evaluationMode,
+  schedule,
+  recipients,
+  errors,
+  submitting,
+  onModeChange,
+  onScheduleChange,
+}) => {
+  const { t } = useTranslation(['projects']);
+  const frequencyOptions = (['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map(
+    (frequency) => ({
+      id: frequency,
+      name: t(`projects:detail.rules.schedule.frequencies.${frequency}`),
+    }),
+  );
+  const unavailableLabel = t('projects:detail.rules.schedule.unavailable');
+  const filterUserOptions = includeUnavailableSelections(
+    (recipients.filters?.users ?? []).map((user) => ({
+      id: user.id,
+      name: `${user.name} (${user.username})${
+        user.isDisabled ? ` · ${t('projects:detail.rules.schedule.disabled')}` : ''
+      }`,
+    })),
+    schedule.userIds,
+    unavailableLabel,
+  );
+  const filterTaskOptions = includeUnavailableSelections(
+    (recipients.filters?.tasks ?? []).map((task) => ({
+      id: task.id,
+      name: `${task.name}${
+        task.isDisabled ? ` · ${t('projects:detail.rules.schedule.disabled')}` : ''
+      }`,
+    })),
+    schedule.taskIds,
+    unavailableLabel,
+  );
+
+  return (
+    <section className="space-y-3" aria-labelledby="project-rule-evaluation-heading">
+      <div>
+        <FieldLabel id="project-rule-evaluation-heading">
+          {t('projects:detail.rules.form.evaluationMode')}
+        </FieldLabel>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t('projects:detail.rules.form.evaluationModeDescription')}
+        </p>
+      </div>
+      <RadioGroup
+        value={evaluationMode}
+        onValueChange={(value) => onModeChange(value as ProjectRuleEvaluationMode)}
+        className="grid gap-3 sm:grid-cols-2"
+        disabled={submitting}
+      >
+        {(['continuous', 'periodic'] as const).map((mode) => {
+          const Icon = mode === 'continuous' ? RadarIcon : CalendarClockIcon;
+          const selected = evaluationMode === mode;
+          return (
+            <label
+              key={mode}
+              className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition-colors ${
+                selected
+                  ? 'border-primary/50 bg-primary/[0.06]'
+                  : 'border-border bg-background hover:bg-muted/40'
+              }`}
+            >
+              <RadioGroupItem value={mode} className="mt-0.5" />
+              <Icon className={`mt-0.5 size-4 shrink-0 ${selected ? 'text-primary' : ''}`} />
+              <span className="space-y-1">
+                <span className="block text-sm font-medium">
+                  {t(`projects:detail.rules.evaluationModes.${mode}.title`)}
+                </span>
+                <span className="block text-sm text-muted-foreground">
+                  {t(`projects:detail.rules.evaluationModes.${mode}.description`)}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </RadioGroup>
+
+      {evaluationMode === 'periodic' && (
+        <div className="grid gap-4 rounded-lg border border-primary/20 bg-muted/25 p-4 md:grid-cols-2">
+          <SelectControl
+            id="project-rule-schedule-frequency"
+            searchable={false}
+            disabled={submitting}
+            label={t('projects:detail.rules.schedule.frequency')}
+            options={frequencyOptions}
+            value={schedule.frequency}
+            onChange={(next) =>
+              onScheduleChange({
+                frequency: (Array.isArray(next) ? next[0] : next) as ProjectRuleScheduleFrequency,
+              })
+            }
+          />
+          <Field data-invalid={!!errors.scheduleTimeZone}>
+            <FieldLabel htmlFor="project-rule-schedule-time-zone">
+              {t('projects:detail.rules.schedule.timeZone')}
+            </FieldLabel>
+            <Input
+              id="project-rule-schedule-time-zone"
+              value={schedule.timeZone}
+              maxLength={PROJECT_RULE_TIME_ZONE_MAX_LENGTH}
+              onChange={(event) => onScheduleChange({ timeZone: event.target.value })}
+              disabled={submitting}
+              aria-invalid={!!errors.scheduleTimeZone}
+              placeholder="Europe/Rome"
+            />
+            <FieldError>{errors.scheduleTimeZone}</FieldError>
+          </Field>
+          <SelectControl
+            id="project-rule-schedule-users"
+            searchable
+            isMulti
+            disabled={submitting}
+            label={t('projects:detail.rules.schedule.users')}
+            placeholder={t('projects:detail.rules.schedule.allUsers')}
+            options={filterUserOptions}
+            value={schedule.userIds}
+            onChange={(next) => onScheduleChange({ userIds: Array.isArray(next) ? next : [] })}
+          />
+          <SelectControl
+            id="project-rule-schedule-tasks"
+            searchable
+            isMulti
+            disabled={submitting}
+            label={t('projects:detail.rules.schedule.tasks')}
+            placeholder={t('projects:detail.rules.schedule.allTasks')}
+            options={filterTaskOptions}
+            value={schedule.taskIds}
+            onChange={(next) => onScheduleChange({ taskIds: Array.isArray(next) ? next : [] })}
+          />
+          <p className="text-sm text-muted-foreground md:col-span-2">
+            {t('projects:detail.rules.schedule.previousPeriodHint')}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+};
 
 const ProjectRuleConditionsEditor: React.FC<{
   conditionLogic: ProjectRuleConditionLogic;
@@ -399,13 +657,15 @@ const ProjectRuleConditionsEditor: React.FC<{
   errors: Record<string, string>;
   submitting: boolean;
   availableFields: ReturnType<typeof getAvailableProjectRuleFields>;
-  fieldOptions: ProjectRuleOption[];
+  fieldOptions: ProjectRuleFieldOption[];
   permissions: string[];
+  evaluationMode: ProjectRuleEvaluationMode;
   dispatch: React.Dispatch<ProjectRuleFormAction>;
   onAddCondition: () => void;
   onRemoveCondition: (index: number) => void;
   onUpdateCondition: (index: number, patch: Partial<ProjectRuleCondition>) => void;
   onFieldChange: (index: number, nextField: string) => void;
+  onOperatorChange: (index: number, nextOperator: string) => void;
   onValueTypeChange: (index: number, nextValueType: ProjectRuleConditionValueType) => void;
 }> = ({
   conditionLogic,
@@ -415,11 +675,13 @@ const ProjectRuleConditionsEditor: React.FC<{
   availableFields,
   fieldOptions,
   permissions,
+  evaluationMode,
   dispatch,
   onAddCondition,
   onRemoveCondition,
   onUpdateCondition,
   onFieldChange,
+  onOperatorChange,
   onValueTypeChange,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
@@ -491,18 +753,28 @@ const ProjectRuleConditionsEditor: React.FC<{
             const enumValueOptions =
               fieldDefinition?.enumValues?.map((id) => ({
                 id,
-                name: t(enumValueLabelKey(condition.field, id)),
+                name: t(getProjectRuleValueLabelKey(condition.field, id)),
               })) ?? [];
+            const booleanValueOptions =
+              fieldDefinition?.kind === 'boolean'
+                ? ['true', 'false'].map((id) => ({
+                    id,
+                    name: t(getProjectRuleValueLabelKey(condition.field, id)),
+                  }))
+                : [];
             const valueType = condition.valueType ?? 'literal';
             const valueFieldOptions = getAvailableProjectRuleValueFields(
               condition.field,
               permissions,
+              evaluationMode,
             ).map((definition) => ({
               id: definition.id,
               name: t(`projects:detail.rules.fields.${definition.id}`),
+              group: definition.group,
             }));
+            const unaryOperator = isProjectRuleUnaryOperator(condition.operator);
             const valueTypeChoices: readonly ProjectRuleConditionValueType[] =
-              valueFieldOptions.length > 0
+              !unaryOperator && valueFieldOptions.length > 0
                 ? (['literal', 'field'] as const)
                 : (['literal'] as const);
             const fieldError = errors[`field-${index}`];
@@ -531,13 +803,7 @@ const ProjectRuleConditionsEditor: React.FC<{
                       <SelectValue placeholder={t('projects:detail.rules.form.field')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectGroup>
-                        {fieldOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
+                      <ProjectRuleFieldOptionGroups options={fieldOptions} />
                     </SelectContent>
                   </Select>
                   <FieldError>{fieldError}</FieldError>
@@ -553,7 +819,7 @@ const ProjectRuleConditionsEditor: React.FC<{
                   </FieldLabel>
                   <Select
                     value={condition.operator}
-                    onValueChange={(operator) => onUpdateCondition(index, { operator })}
+                    onValueChange={(operator) => onOperatorChange(index, operator)}
                     disabled={submitting}
                   >
                     <SelectTrigger
@@ -585,7 +851,7 @@ const ProjectRuleConditionsEditor: React.FC<{
                     onValueChange={(next) =>
                       onValueTypeChange(index, next as ProjectRuleConditionValueType)
                     }
-                    disabled={submitting}
+                    disabled={submitting || unaryOperator}
                   >
                     <SelectTrigger id={`project-rule-value-type-${index}`} className="w-full">
                       <SelectValue />
@@ -606,7 +872,7 @@ const ProjectRuleConditionsEditor: React.FC<{
                   <FieldLabel
                     className="md:sr-only"
                     htmlFor={`project-rule-value-${index}`}
-                    required
+                    required={!unaryOperator}
                   >
                     {t(
                       valueType === 'field'
@@ -614,7 +880,14 @@ const ProjectRuleConditionsEditor: React.FC<{
                         : 'projects:detail.rules.form.value',
                     )}
                   </FieldLabel>
-                  {valueType === 'field' ? (
+                  {unaryOperator ? (
+                    <div
+                      id={`project-rule-value-${index}`}
+                      className="flex h-9 items-center rounded-md border border-dashed border-border px-3 text-sm text-muted-foreground"
+                    >
+                      {t('projects:detail.rules.form.noValueRequired')}
+                    </div>
+                  ) : valueType === 'field' ? (
                     <Select
                       value={condition.value}
                       onValueChange={(value) => onUpdateCondition(index, { value })}
@@ -628,16 +901,10 @@ const ProjectRuleConditionsEditor: React.FC<{
                         <SelectValue placeholder={t('projects:detail.rules.form.targetField')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectGroup>
-                          {valueFieldOptions.map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
+                        <ProjectRuleFieldOptionGroups options={valueFieldOptions} />
                       </SelectContent>
                     </Select>
-                  ) : fieldDefinition?.kind === 'enum' ? (
+                  ) : fieldDefinition?.kind === 'enum' || fieldDefinition?.kind === 'boolean' ? (
                     <Select
                       value={condition.value}
                       onValueChange={(value) => onUpdateCondition(index, { value })}
@@ -652,7 +919,10 @@ const ProjectRuleConditionsEditor: React.FC<{
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          {enumValueOptions.map((option) => (
+                          {(fieldDefinition.kind === 'boolean'
+                            ? booleanValueOptions
+                            : enumValueOptions
+                          ).map((option) => (
                             <SelectItem key={option.id} value={option.id}>
                               {option.name}
                             </SelectItem>
@@ -660,12 +930,22 @@ const ProjectRuleConditionsEditor: React.FC<{
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                  ) : (
+                  ) : fieldDefinition?.kind === 'number' ? (
                     <ValidatedNumberInput
                       id={`project-rule-value-${index}`}
                       value={condition.value}
                       onValueChange={(value) => onUpdateCondition(index, { value })}
                       allowNegative
+                      disabled={submitting}
+                      aria-invalid={!!valueError}
+                      placeholder={t('projects:detail.rules.form.valuePlaceholder')}
+                    />
+                  ) : (
+                    <Input
+                      id={`project-rule-value-${index}`}
+                      type={fieldDefinition?.kind === 'date' ? 'date' : 'text'}
+                      value={condition.value}
+                      onChange={(event) => onUpdateCondition(index, { value: event.target.value })}
                       disabled={submitting}
                       aria-invalid={!!valueError}
                       placeholder={t('projects:detail.rules.form.valuePlaceholder')}
@@ -887,15 +1167,29 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
 }) => {
   const { t } = useTranslation(['projects', 'common']);
   const hasHiddenWebhookAction = hasRedactedWebhookAction(rule, permissions);
-  const availableFields = useMemo(() => getAvailableProjectRuleFields(permissions), [permissions]);
   const [formState, dispatch] = useReducer(projectRuleFormReducer, undefined, () =>
     createProjectRuleFormState(rule, initialField, hasHiddenWebhookAction),
   );
-  const { name, conditionLogic, conditions, actions, isEnabled, errors, submitting } = formState;
+  const {
+    name,
+    evaluationMode,
+    schedule,
+    conditionLogic,
+    conditions,
+    actions,
+    isEnabled,
+    errors,
+    submitting,
+  } = formState;
+  const availableFields = useMemo(
+    () => getAvailableProjectRuleFields(permissions, evaluationMode),
+    [permissions, evaluationMode],
+  );
 
   const fieldOptions = availableFields.map((definition) => ({
     id: definition.id,
     name: t(`projects:detail.rules.fields.${definition.id}`),
+    group: definition.group,
   }));
   const userOptions = recipients.users.map((user) => ({
     id: user.id,
@@ -922,7 +1216,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
   };
 
   const firstValueFieldForField = (field: string) =>
-    getAvailableProjectRuleValueFields(field, permissions)[0]?.id ?? '';
+    getAvailableProjectRuleValueFields(field, permissions, evaluationMode)[0]?.id ?? '';
 
   const handleFieldChange = (index: number, nextField: string) => {
     const currentValueType = conditions[index]?.valueType ?? 'literal';
@@ -930,11 +1224,17 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
     const nextValueType: ProjectRuleConditionValueType =
       currentValueType === 'field' && nextValueField ? 'field' : 'literal';
     const nextDefinition = getProjectRuleFieldDefinition(nextField);
+    const nextOperator = nextDefinition?.operators[0] ?? '';
     updateCondition(index, {
       field: nextField,
-      operator: nextDefinition?.operators[0] ?? '',
+      operator: nextOperator,
       valueType: nextValueType,
-      value: nextValueType === 'field' ? nextValueField : firstValueForField(nextField),
+      value:
+        nextValueType === 'field'
+          ? nextValueField
+          : isProjectRuleUnaryOperator(nextOperator)
+            ? ''
+            : firstValueForField(nextField),
     });
   };
 
@@ -946,8 +1246,32 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
     });
   };
 
+  const handleOperatorChange = (index: number, nextOperator: string) => {
+    const condition = conditions[index];
+    if (!condition) return;
+    const wasUnary = isProjectRuleUnaryOperator(condition.operator);
+    const isUnary = isProjectRuleUnaryOperator(nextOperator);
+    updateCondition(index, {
+      operator: nextOperator,
+      valueType: isUnary ? 'literal' : condition.valueType,
+      value: isUnary ? '' : wasUnary ? firstValueForField(condition.field) : condition.value,
+    });
+  };
+
+  const handleEvaluationModeChange = (nextMode: ProjectRuleEvaluationMode) => {
+    const continuousFields = getAvailableProjectRuleFields(permissions, 'continuous');
+    const fallbackField =
+      continuousFields.find((definition) => definition.id === 'revenue')?.id ??
+      continuousFields[0]?.id ??
+      '';
+    dispatch({ type: 'setEvaluationMode', evaluationMode: nextMode, fallbackField });
+  };
+
   const addCondition = () => {
-    const field = availableFields[0]?.id ?? '';
+    const field =
+      availableFields.find((definition) => definition.id === 'revenue')?.id ??
+      availableFields[0]?.id ??
+      '';
     if (!field) return;
     dispatch({ type: 'addCondition', field });
   };
@@ -961,6 +1285,9 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
     const nextErrors: Record<string, string> = {};
     const primary = conditions[0];
     if (!name.trim()) nextErrors.name = t('projects:detail.rules.errors.nameRequired');
+    if (evaluationMode === 'periodic' && !isValidTimeZone(schedule.timeZone.trim())) {
+      nextErrors.scheduleTimeZone = t('projects:detail.rules.errors.timeZoneInvalid');
+    }
     if (conditions.length === 0) {
       nextErrors.conditions = t('projects:detail.rules.errors.conditionsRequired');
     }
@@ -973,9 +1300,11 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
       if (
         !isValidProjectRuleConditionValue({
           field: condition.field,
+          operator: condition.operator,
           value: condition.value,
           valueType: condition.valueType ?? 'literal',
           permissions,
+          evaluationMode,
         })
       ) {
         nextErrors[`value-${index}`] = t('projects:detail.rules.errors.valueInvalid');
@@ -1029,6 +1358,11 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
         conditions: normalizedConditions,
         actionType,
         actionConfig,
+        evaluationMode,
+        schedule: {
+          ...schedule,
+          timeZone: schedule.timeZone.trim() || 'UTC',
+        },
         isEnabled,
       });
       onOpenChange(false);
@@ -1057,6 +1391,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
             <Input
               id="project-rule-name"
               value={name}
+              maxLength={PROJECT_RULE_NAME_MAX_LENGTH}
               onChange={(event) => dispatch({ type: 'setName', name: event.target.value })}
               disabled={submitting}
               aria-invalid={!!errors.name}
@@ -1064,6 +1399,16 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
             />
             <FieldError>{errors.name}</FieldError>
           </Field>
+
+          <ProjectRuleEvaluationEditor
+            evaluationMode={evaluationMode}
+            schedule={schedule}
+            recipients={recipients}
+            errors={errors}
+            submitting={submitting}
+            onModeChange={handleEvaluationModeChange}
+            onScheduleChange={(patch) => dispatch({ type: 'setSchedule', patch })}
+          />
 
           <ProjectRuleConditionsEditor
             conditionLogic={conditionLogic}
@@ -1073,11 +1418,13 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
             availableFields={availableFields}
             fieldOptions={fieldOptions}
             permissions={permissions}
+            evaluationMode={evaluationMode}
             dispatch={dispatch}
             onAddCondition={addCondition}
             onRemoveCondition={removeCondition}
             onUpdateCondition={updateCondition}
             onFieldChange={handleFieldChange}
+            onOperatorChange={handleOperatorChange}
             onValueTypeChange={handleValueTypeChange}
           />
 
@@ -1131,8 +1478,12 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
 };
 
 const ProjectRuleFormModal: React.FC<ProjectRuleFormModalProps> = (props) => {
+  const availableFields = getAvailableProjectRuleFields(props.permissions);
   const initialField =
-    props.rule?.field ?? getAvailableProjectRuleFields(props.permissions)[0]?.id ?? '';
+    props.rule?.field ??
+    availableFields.find((definition) => definition.id === 'revenue')?.id ??
+    availableFields[0]?.id ??
+    '';
   const sessionKey = props.open ? `${props.rule?.id ?? 'new'}|${initialField}` : 'closed';
 
   return <ProjectRuleFormModalSession key={sessionKey} {...props} initialField={initialField} />;

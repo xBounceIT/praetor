@@ -38,6 +38,7 @@ const findRuleMock = mock();
 const deleteRuleMock = mock();
 const listRecipientOptionsMock = mock();
 const findInvalidRecipientIdsMock = mock();
+const findInvalidScheduleFilterIdsMock = mock();
 const findProjectNameMock = mock();
 const isProjectAssignedToUserMock = mock();
 const logAuditMock = mock(async () => undefined);
@@ -79,9 +80,12 @@ const SAMPLE_RULE = {
       { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
     ],
   },
+  evaluationMode: 'continuous' as const,
+  schedule: { frequency: 'monthly' as const, timeZone: 'UTC', userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
+  lastEvaluatedPeriod: null,
   createdBy: 'u1',
   createdAt: 1700000000000,
   updatedAt: 1700000000000,
@@ -115,6 +119,7 @@ beforeAll(async () => {
     ...recipientsRepoSnap,
     listRecipientOptions: listRecipientOptionsMock,
     findInvalidRecipientIds: findInvalidRecipientIdsMock,
+    findInvalidScheduleFilterIds: findInvalidScheduleFilterIdsMock,
   }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
@@ -161,6 +166,7 @@ beforeEach(async () => {
     deleteRuleMock,
     listRecipientOptionsMock,
     findInvalidRecipientIdsMock,
+    findInvalidScheduleFilterIdsMock,
     findProjectNameMock,
     isProjectAssignedToUserMock,
     logAuditMock,
@@ -175,6 +181,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockImplementation(async () => currentPermissions);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   findInvalidRecipientIdsMock.mockResolvedValue({ userIds: [], roleIds: [], webhookIds: [] });
+  findInvalidScheduleFilterIdsMock.mockResolvedValue({ userIds: [], taskIds: [] });
   findProjectNameMock.mockResolvedValue({ clientId: 'c1', name: 'Project' });
   app = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -361,6 +368,18 @@ describe('project rule routes', () => {
       users: [{ id: 'u2', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
       roles: [{ id: 'manager', name: 'Manager' }],
       webhooks: [{ id: 'webhook-1', name: 'Slack' }],
+      filters: {
+        users: [
+          {
+            id: 'u2',
+            name: 'Alice',
+            username: 'alice',
+            avatarInitials: 'AL',
+            isDisabled: false,
+          },
+        ],
+        tasks: [{ id: 't1', name: 'Analysis', isDisabled: false }],
+      },
     });
 
     const res = await app.inject({
@@ -381,6 +400,7 @@ describe('project rule routes', () => {
       users: [{ id: 'u2', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
       roles: [{ id: 'manager', name: 'Manager' }],
       webhooks: [{ id: 'webhook-1', name: 'Slack' }],
+      filters: { users: [], tasks: [] },
     });
 
     const res = await app.inject({
@@ -433,6 +453,74 @@ describe('project rule routes', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toContain('cost_to_date requires reports.cost.view');
     expect(createRuleMock).not.toHaveBeenCalled();
+  });
+
+  test('POST rejects field targets on unary conditions', async () => {
+    currentPermissions = [
+      'projects.rules.create',
+      'reports.cost.view',
+      'administration.webhooks.view',
+    ];
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Malformed boolean webhook',
+        conditions: [
+          {
+            field: 'is_disabled',
+            operator: 'is_false',
+            value: 'cost_to_date',
+            valueType: 'field',
+          },
+        ],
+        actionConfig: { actions: [{ type: 'webhook', webhookId: 'webhook-1' }] },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('unary operator cannot compare another field');
+    expect(createRuleMock).not.toHaveBeenCalled();
+  });
+
+  test('POST accepts an empty legacy value for a unary condition', async () => {
+    currentPermissions = ['projects.rules.create'];
+    const createdRule = {
+      ...SAMPLE_RULE,
+      field: 'description',
+      operator: 'is_empty',
+      value: '',
+      conditions: [{ field: 'description', operator: 'is_empty', value: '', valueType: 'literal' }],
+    };
+    createRuleMock.mockResolvedValue(createdRule);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Missing description',
+        field: 'description',
+        operator: 'is_empty',
+        value: '',
+        actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: [] },
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createRuleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        field: 'description',
+        operator: 'is_empty',
+        value: '',
+        conditions: [
+          { field: 'description', operator: 'is_empty', value: '', valueType: 'literal' },
+        ],
+      }),
+      TX_SENTINEL,
+    );
   });
 
   test('POST creates a rule and writes an audit log', async () => {
@@ -543,6 +631,126 @@ describe('project rule routes', () => {
       }),
       TX_SENTINEL,
     );
+  });
+
+  test('POST creates a monthly time-entry check scoped to one user and task', async () => {
+    currentPermissions = ['projects.rules.create'];
+    const periodicRule = {
+      ...SAMPLE_RULE,
+      name: 'Monthly activity check',
+      field: 'period_hours',
+      operator: 'eq',
+      value: '0',
+      conditions: [
+        { field: 'period_hours', operator: 'eq', value: '0', valueType: 'literal' as const },
+      ],
+      evaluationMode: 'periodic' as const,
+      schedule: {
+        frequency: 'monthly' as const,
+        timeZone: 'Europe/Rome',
+        userIds: ['u2'],
+        taskIds: ['t1'],
+      },
+    };
+    createRuleMock.mockResolvedValue(periodicRule);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: periodicRule.name,
+        conditions: periodicRule.conditions,
+        evaluationMode: 'periodic',
+        schedule: periodicRule.schedule,
+        actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: [] },
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(findInvalidScheduleFilterIdsMock).toHaveBeenCalledWith(
+      'p1',
+      periodicRule.schedule,
+      TX_SENTINEL,
+      { userIds: undefined, taskIds: undefined },
+    );
+    expect(createRuleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationMode: 'periodic',
+        schedule: periodicRule.schedule,
+      }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('POST accepts text conditions longer than the legacy varchar limit', async () => {
+    currentPermissions = ['projects.rules.create'];
+    const longValue = 'x'.repeat(1_000);
+    createRuleMock.mockResolvedValue({
+      ...SAMPLE_RULE,
+      field: 'description',
+      operator: 'contains',
+      value: longValue,
+      conditions: [
+        { field: 'description', operator: 'contains', value: longValue, valueType: 'literal' },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Long description fragment',
+        conditions: [
+          { field: 'description', operator: 'contains', value: longValue, valueType: 'literal' },
+        ],
+        actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: [] },
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createRuleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: longValue,
+        conditions: [
+          { field: 'description', operator: 'contains', value: longValue, valueType: 'literal' },
+        ],
+      }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('POST rejects oversized schedule filters before repository work', async () => {
+    currentPermissions = ['projects.rules.create'];
+    const actionConfig = { recipientUserIds: ['u2'], recipientRoleIds: [] };
+    const condition = {
+      field: 'description',
+      operator: 'contains',
+      value: 'delivery',
+      valueType: 'literal',
+    };
+
+    const tooManyUserFilters = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Oversized filters',
+        conditions: [condition],
+        evaluationMode: 'periodic',
+        schedule: {
+          frequency: 'monthly',
+          timeZone: 'UTC',
+          userIds: Array.from({ length: 2_001 }, (_, index) => `u${index}`),
+          taskIds: [],
+        },
+        actionConfig,
+      },
+    });
+
+    expect(tooManyUserFilters.statusCode).toBe(400);
+    expect(createRuleMock).not.toHaveBeenCalled();
   });
 
   test('POST rejects webhook actions without administration.webhooks.view', async () => {
@@ -693,6 +901,21 @@ describe('project rule routes', () => {
     const res = await app.inject({
       method: 'PUT',
       url: '/api/projects/p1/rules/pr-missing',
+      headers: authHeaders(),
+      payload: { isEnabled: false },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT conceals cost-derived rules without reports.cost.view', async () => {
+    currentPermissions = ['projects.rules.update'];
+    findRuleMock.mockResolvedValue(SAMPLE_RULE);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
       headers: authHeaders(),
       payload: { isEnabled: false },
     });
@@ -884,6 +1107,110 @@ describe('project rule routes', () => {
       TX_SENTINEL,
     );
     expect(JSON.parse(res.body).actionType).toBe('webhook');
+  });
+
+  test('PUT does not reset evaluation state for an unchanged full form payload', async () => {
+    currentPermissions = ['projects.rules.update', 'reports.cost.view'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      evaluationMode: 'periodic' as const,
+      schedule: {
+        frequency: 'monthly' as const,
+        timeZone: 'UTC',
+        userIds: ['u1', 'u2'],
+        taskIds: ['t1', 't2'],
+      },
+      conditionMet: true,
+      lastEvaluatedPeriod: 'monthly:UTC:2026-05-01:2026-06-01',
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockImplementation(async (_projectId, _ruleId, patch) => ({
+      ...existingRule,
+      ...patch,
+    }));
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        name: 'Renamed without resetting',
+        field: existingRule.field,
+        operator: existingRule.operator,
+        value: existingRule.value,
+        conditionLogic: existingRule.conditionLogic,
+        conditions: existingRule.conditions,
+        actionType: existingRule.actionType,
+        actionConfig: existingRule.actionConfig,
+        evaluationMode: existingRule.evaluationMode,
+        schedule: {
+          ...existingRule.schedule,
+          userIds: ['u2', 'u1'],
+          taskIds: ['t2', 't1'],
+        },
+        isEnabled: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({
+        name: 'Renamed without resetting',
+        schedule: existingRule.schedule,
+        resetCondition: false,
+      }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('PUT accepts an unchanged unary condition from the full form payload', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'description',
+      operator: 'is_empty',
+      value: '',
+      conditions: [{ field: 'description', operator: 'is_empty', value: '', valueType: 'literal' }],
+      conditionMet: true,
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockImplementation(async (_projectId, _ruleId, patch) => ({
+      ...existingRule,
+      ...patch,
+    }));
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        name: existingRule.name,
+        field: existingRule.field,
+        operator: existingRule.operator,
+        value: '',
+        conditionLogic: existingRule.conditionLogic,
+        conditions: existingRule.conditions,
+        actionType: existingRule.actionType,
+        actionConfig: existingRule.actionConfig,
+        evaluationMode: existingRule.evaluationMode,
+        schedule: existingRule.schedule,
+        isEnabled: existingRule.isEnabled,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({
+        value: '',
+        conditions: existingRule.conditions,
+        resetCondition: false,
+      }),
+      TX_SENTINEL,
+    );
   });
 
   test('PUT resets condition state when condition fields change', async () => {
@@ -1108,6 +1435,100 @@ describe('project rule routes', () => {
     );
   });
 
+  test('PUT can disable a periodic rule whose schedule filters were deleted', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'period_hours',
+      operator: 'eq',
+      value: '0',
+      conditions: [
+        { field: 'period_hours', operator: 'eq', value: '0', valueType: 'literal' as const },
+      ],
+      evaluationMode: 'periodic' as const,
+      schedule: {
+        frequency: 'monthly' as const,
+        timeZone: 'UTC',
+        userIds: ['deleted-user'],
+        taskIds: ['deleted-task'],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockResolvedValue({ ...existingRule, isEnabled: false });
+    findInvalidScheduleFilterIdsMock.mockImplementation(async (...args: unknown[]) => {
+      const allowed = args[3] as { userIds?: string[]; taskIds?: string[] } | undefined;
+      return allowed?.userIds?.includes('deleted-user') && allowed.taskIds?.includes('deleted-task')
+        ? { userIds: [], taskIds: [] }
+        : { userIds: ['deleted-user'], taskIds: ['deleted-task'] };
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: { isEnabled: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findInvalidScheduleFilterIdsMock).toHaveBeenCalledWith(
+      'p1',
+      existingRule.schedule,
+      TX_SENTINEL,
+      {
+        userIds: ['deleted-user'],
+        taskIds: ['deleted-task'],
+      },
+    );
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({ isEnabled: false, resetCondition: false }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('PUT rejects re-enabling a periodic rule whose schedule filters were deleted', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'period_hours',
+      operator: 'eq',
+      value: '0',
+      conditions: [
+        { field: 'period_hours', operator: 'eq', value: '0', valueType: 'literal' as const },
+      ],
+      evaluationMode: 'periodic' as const,
+      schedule: {
+        frequency: 'monthly' as const,
+        timeZone: 'UTC',
+        userIds: ['deleted-user'],
+        taskIds: ['deleted-task'],
+      },
+      isEnabled: false,
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    findInvalidScheduleFilterIdsMock.mockResolvedValue({
+      userIds: ['deleted-user'],
+      taskIds: ['deleted-task'],
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: { isEnabled: true },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(findInvalidScheduleFilterIdsMock).toHaveBeenCalledWith(
+      'p1',
+      existingRule.schedule,
+      TX_SENTINEL,
+      { userIds: [], taskIds: [] },
+    );
+    expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+
   test('PUT rejects re-enabling a rule whose role has no eligible project assignees', async () => {
     currentPermissions = ['projects.rules.update', 'reports.cost.view'];
     const existingRule = { ...SAMPLE_RULE, isEnabled: false };
@@ -1186,7 +1607,7 @@ describe('project rule routes', () => {
   });
 
   test('DELETE checks ownership and writes an audit log', async () => {
-    currentPermissions = ['projects.rules.delete'];
+    currentPermissions = ['projects.rules.delete', 'reports.cost.view'];
     findRuleMock.mockResolvedValue(SAMPLE_RULE);
     deleteRuleMock.mockResolvedValue(true);
 
@@ -1200,6 +1621,23 @@ describe('project rule routes', () => {
     expect(deleteRuleMock).toHaveBeenCalledWith('p1', 'pr-1', TX_SENTINEL);
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project_rule.deleted', entityType: 'project_rule' }),
+    );
+  });
+
+  test('DELETE conceals cost-derived rules without reports.cost.view', async () => {
+    currentPermissions = ['projects.rules.delete'];
+    findRuleMock.mockResolvedValue(SAMPLE_RULE);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(deleteRuleMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'project_rule.deleted' }),
     );
   });
 });

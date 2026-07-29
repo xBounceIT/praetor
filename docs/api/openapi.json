@@ -13725,12 +13725,74 @@
                           "name"
                         ]
                       }
+                    },
+                    "filters": {
+                      "type": "object",
+                      "properties": {
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "username": {
+                                "type": "string"
+                              },
+                              "avatarInitials": {
+                                "type": "string"
+                              },
+                              "isDisabled": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "username",
+                              "avatarInitials",
+                              "isDisabled"
+                            ]
+                          }
+                        },
+                        "tasks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "isDisabled": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "isDisabled"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "users",
+                        "tasks"
+                      ]
                     }
                   },
                   "required": [
                     "users",
                     "roles",
-                    "webhooks"
+                    "webhooks",
+                    "filters"
                   ]
                 }
               }
@@ -13899,7 +13961,8 @@
                         "type": "string"
                       },
                       "name": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 255
                       },
                       "field": {
                         "type": "string"
@@ -13923,10 +13986,12 @@
                           "type": "object",
                           "properties": {
                             "field": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 50
                             },
                             "operator": {
-                              "type": "string"
+                              "type": "string",
+                              "maxLength": 30
                             },
                             "value": {
                               "type": "string"
@@ -14024,6 +14089,55 @@
                         "additionalProperties": false,
                         "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                       },
+                      "evaluationMode": {
+                        "type": "string",
+                        "enum": [
+                          "continuous",
+                          "periodic"
+                        ]
+                      },
+                      "schedule": {
+                        "type": "object",
+                        "properties": {
+                          "frequency": {
+                            "type": "string",
+                            "enum": [
+                              "daily",
+                              "weekly",
+                              "monthly",
+                              "quarterly",
+                              "yearly"
+                            ]
+                          },
+                          "timeZone": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "userIds": {
+                            "type": "array",
+                            "maxItems": 2000,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 50
+                            }
+                          },
+                          "taskIds": {
+                            "type": "array",
+                            "maxItems": 2000,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 50
+                            }
+                          }
+                        },
+                        "required": [
+                          "frequency",
+                          "timeZone",
+                          "userIds",
+                          "taskIds"
+                        ],
+                        "additionalProperties": false
+                      },
                       "isEnabled": {
                         "type": "boolean"
                       },
@@ -14034,6 +14148,12 @@
                         "type": [
                           "null",
                           "number"
+                        ]
+                      },
+                      "lastEvaluatedPeriod": {
+                        "type": [
+                          "null",
+                          "string"
                         ]
                       },
                       "createdBy": {
@@ -14060,9 +14180,12 @@
                       "conditions",
                       "actionType",
                       "actionConfig",
+                      "evaluationMode",
+                      "schedule",
                       "isEnabled",
                       "conditionMet",
                       "lastTriggeredAt",
+                      "lastEvaluatedPeriod",
                       "createdBy",
                       "createdAt",
                       "updatedAt"
@@ -14213,13 +14336,16 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                   },
                   "field": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 50
                   },
                   "operator": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 30
                   },
                   "value": {
                     "type": "string"
@@ -14237,10 +14363,12 @@
                       "type": "object",
                       "properties": {
                         "field": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 50
                         },
                         "operator": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 30
                         },
                         "value": {
                           "type": "string"
@@ -14330,6 +14458,55 @@
                     },
                     "additionalProperties": false
                   },
+                  "evaluationMode": {
+                    "type": "string",
+                    "enum": [
+                      "continuous",
+                      "periodic"
+                    ]
+                  },
+                  "schedule": {
+                    "type": "object",
+                    "properties": {
+                      "frequency": {
+                        "type": "string",
+                        "enum": [
+                          "daily",
+                          "weekly",
+                          "monthly",
+                          "quarterly",
+                          "yearly"
+                        ]
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "userIds": {
+                        "type": "array",
+                        "maxItems": 2000,
+                        "items": {
+                          "type": "string",
+                          "maxLength": 50
+                        }
+                      },
+                      "taskIds": {
+                        "type": "array",
+                        "maxItems": 2000,
+                        "items": {
+                          "type": "string",
+                          "maxLength": 50
+                        }
+                      }
+                    },
+                    "required": [
+                      "frequency",
+                      "timeZone",
+                      "userIds",
+                      "taskIds"
+                    ],
+                    "additionalProperties": false
+                  },
                   "isEnabled": {
                     "type": "boolean"
                   }
@@ -14368,7 +14545,8 @@
                       "type": "string"
                     },
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "maxLength": 255
                     },
                     "field": {
                       "type": "string"
@@ -14392,10 +14570,12 @@
                         "type": "object",
                         "properties": {
                           "field": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 50
                           },
                           "operator": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 30
                           },
                           "value": {
                             "type": "string"
@@ -14493,6 +14673,55 @@
                       "additionalProperties": false,
                       "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                     },
+                    "evaluationMode": {
+                      "type": "string",
+                      "enum": [
+                        "continuous",
+                        "periodic"
+                      ]
+                    },
+                    "schedule": {
+                      "type": "object",
+                      "properties": {
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "daily",
+                            "weekly",
+                            "monthly",
+                            "quarterly",
+                            "yearly"
+                          ]
+                        },
+                        "timeZone": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "userIds": {
+                          "type": "array",
+                          "maxItems": 2000,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 50
+                          }
+                        },
+                        "taskIds": {
+                          "type": "array",
+                          "maxItems": 2000,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 50
+                          }
+                        }
+                      },
+                      "required": [
+                        "frequency",
+                        "timeZone",
+                        "userIds",
+                        "taskIds"
+                      ],
+                      "additionalProperties": false
+                    },
                     "isEnabled": {
                       "type": "boolean"
                     },
@@ -14503,6 +14732,12 @@
                       "type": [
                         "null",
                         "number"
+                      ]
+                    },
+                    "lastEvaluatedPeriod": {
+                      "type": [
+                        "null",
+                        "string"
                       ]
                     },
                     "createdBy": {
@@ -14529,9 +14764,12 @@
                     "conditions",
                     "actionType",
                     "actionConfig",
+                    "evaluationMode",
+                    "schedule",
                     "isEnabled",
                     "conditionMet",
                     "lastTriggeredAt",
+                    "lastEvaluatedPeriod",
                     "createdBy",
                     "createdAt",
                     "updatedAt"
@@ -14683,13 +14921,16 @@
                 "type": "object",
                 "properties": {
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                   },
                   "field": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 50
                   },
                   "operator": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 30
                   },
                   "value": {
                     "type": "string"
@@ -14707,10 +14948,12 @@
                       "type": "object",
                       "properties": {
                         "field": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 50
                         },
                         "operator": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 30
                         },
                         "value": {
                           "type": "string"
@@ -14800,6 +15043,55 @@
                     },
                     "additionalProperties": false
                   },
+                  "evaluationMode": {
+                    "type": "string",
+                    "enum": [
+                      "continuous",
+                      "periodic"
+                    ]
+                  },
+                  "schedule": {
+                    "type": "object",
+                    "properties": {
+                      "frequency": {
+                        "type": "string",
+                        "enum": [
+                          "daily",
+                          "weekly",
+                          "monthly",
+                          "quarterly",
+                          "yearly"
+                        ]
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "userIds": {
+                        "type": "array",
+                        "maxItems": 2000,
+                        "items": {
+                          "type": "string",
+                          "maxLength": 50
+                        }
+                      },
+                      "taskIds": {
+                        "type": "array",
+                        "maxItems": 2000,
+                        "items": {
+                          "type": "string",
+                          "maxLength": 50
+                        }
+                      }
+                    },
+                    "required": [
+                      "frequency",
+                      "timeZone",
+                      "userIds",
+                      "taskIds"
+                    ],
+                    "additionalProperties": false
+                  },
                   "isEnabled": {
                     "type": "boolean"
                   }
@@ -14842,7 +15134,8 @@
                       "type": "string"
                     },
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "maxLength": 255
                     },
                     "field": {
                       "type": "string"
@@ -14866,10 +15159,12 @@
                         "type": "object",
                         "properties": {
                           "field": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 50
                           },
                           "operator": {
-                            "type": "string"
+                            "type": "string",
+                            "maxLength": 30
                           },
                           "value": {
                             "type": "string"
@@ -14967,6 +15262,55 @@
                       "additionalProperties": false,
                       "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                     },
+                    "evaluationMode": {
+                      "type": "string",
+                      "enum": [
+                        "continuous",
+                        "periodic"
+                      ]
+                    },
+                    "schedule": {
+                      "type": "object",
+                      "properties": {
+                        "frequency": {
+                          "type": "string",
+                          "enum": [
+                            "daily",
+                            "weekly",
+                            "monthly",
+                            "quarterly",
+                            "yearly"
+                          ]
+                        },
+                        "timeZone": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "userIds": {
+                          "type": "array",
+                          "maxItems": 2000,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 50
+                          }
+                        },
+                        "taskIds": {
+                          "type": "array",
+                          "maxItems": 2000,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 50
+                          }
+                        }
+                      },
+                      "required": [
+                        "frequency",
+                        "timeZone",
+                        "userIds",
+                        "taskIds"
+                      ],
+                      "additionalProperties": false
+                    },
                     "isEnabled": {
                       "type": "boolean"
                     },
@@ -14977,6 +15321,12 @@
                       "type": [
                         "null",
                         "number"
+                      ]
+                    },
+                    "lastEvaluatedPeriod": {
+                      "type": [
+                        "null",
+                        "string"
                       ]
                     },
                     "createdBy": {
@@ -15003,9 +15353,12 @@
                     "conditions",
                     "actionType",
                     "actionConfig",
+                    "evaluationMode",
+                    "schedule",
                     "isEnabled",
                     "conditionMet",
                     "lastTriggeredAt",
+                    "lastEvaluatedPeriod",
                     "createdBy",
                     "createdAt",
                     "updatedAt"

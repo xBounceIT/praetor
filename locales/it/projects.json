@@ -263,12 +263,15 @@
         "description": "Scegli la condizione da monitorare e le azioni da eseguire.",
         "name": "Nome regola",
         "namePlaceholder": "es. Budget oltre 80%",
+        "evaluationMode": "Quando controllare",
+        "evaluationModeDescription": "Scegli se reagire appena cambia un valore o verificare un periodo completo.",
         "field": "Campo",
         "operator": "Operatore",
         "value": "Valore",
         "valuePlaceholder": "Soglia",
         "compareAgainst": "Confronta",
         "targetField": "Altro campo",
+        "noValueRequired": "Nessun valore richiesto",
         "conditionLogic": "Combinazione",
         "actions": "Azioni",
         "action": "Azione",
@@ -291,6 +294,34 @@
         "enabled": "Abilitata",
         "enabledDescription": "Le regole abilitate vengono controllate dal valutatore pianificato."
       },
+      "evaluationModes": {
+        "continuous": {
+          "title": "Monitoraggio continuo",
+          "description": "Controlla i valori correnti e agisce quando la condizione passa da falsa a vera."
+        },
+        "periodic": {
+          "title": "Verifica periodica",
+          "description": "Controlla una volta il periodo appena concluso e può agire di nuovo a ogni ciclo."
+        }
+      },
+      "schedule": {
+        "frequency": "Frequenza",
+        "timeZone": "Fuso orario",
+        "users": "Filtra per utenti",
+        "tasks": "Filtra per attività",
+        "allUsers": "Tutti gli utenti della commessa",
+        "allTasks": "Tutte le attività della commessa",
+        "disabled": "disabilitato",
+        "unavailable": "non più disponibile",
+        "previousPeriodHint": "Ore, registrazioni, utenti e attività vengono calcolati sul periodo completo appena concluso. I filtri utenti e attività si combinano tra loro.",
+        "frequencies": {
+          "daily": "Ogni giorno",
+          "weekly": "Ogni settimana",
+          "monthly": "Ogni mese",
+          "quarterly": "Ogni trimestre",
+          "yearly": "Ogni anno"
+        }
+      },
       "actionSummary": {
         "users": "{{count}} utenti",
         "roles": "{{count}} ruoli",
@@ -310,14 +341,44 @@
         "literal": "Valore",
         "field": "Campo"
       },
+      "fieldGroups": {
+        "project": "Campi commessa",
+        "computed": "Metriche calcolate",
+        "period": "Metriche del periodo"
+      },
       "fields": {
+        "project_id": "ID commessa",
+        "project_name": "Nome commessa",
+        "client_id": "ID cliente",
+        "description": "Descrizione",
+        "is_disabled": "Commessa disabilitata",
+        "created_at": "Data creazione",
+        "order_id": "ID ordine",
+        "offer_id": "ID offerta",
+        "offer_revision_code": "Revisione offerta",
+        "start_date": "Data inizio",
+        "end_date": "Data fine",
         "revenue": "Ricavo",
+        "billing_frequency": "Frequenza di consuntivazione",
         "cost_to_date": "Costo consuntivo",
         "budget_used_pct": "Budget usato %",
         "hours_to_date": "Ore consuntive",
         "days_until_deadline": "Giorni alla scadenza",
+        "days_until_start": "Giorni all'inizio",
+        "days_since_start": "Giorni dall'inizio",
+        "tasks_count": "Numero attività",
+        "enabled_tasks_count": "Attività abilitate",
+        "planned_effort_hours": "Impegno pianificato",
+        "monthly_effort_hours": "Impegno mensile",
+        "period_hours": "Ore nel periodo",
+        "period_entry_count": "Registrazioni nel periodo",
+        "period_active_users": "Utenti attivi nel periodo",
+        "period_active_tasks": "Attività usate nel periodo",
+        "period_cost": "Costo nel periodo",
         "billing_type": "Consuntivazione",
-        "status": "Stato"
+        "status": "Stato",
+        "tipo": "Tipo commessa",
+        "tipo_confirmed": "Tipo confermato"
       },
       "operators": {
         "gt": "Maggiore di",
@@ -325,12 +386,29 @@
         "lt": "Minore di",
         "lte": "Minore o uguale a",
         "eq": "Uguale a",
-        "neq": "Diverso da"
+        "neq": "Diverso da",
+        "contains": "Contiene",
+        "not_contains": "Non contiene",
+        "starts_with": "Inizia con",
+        "ends_with": "Termina con",
+        "is_empty": "È vuoto",
+        "is_not_empty": "Non è vuoto",
+        "before": "Prima di",
+        "before_or_on": "Prima o il giorno",
+        "after": "Dopo",
+        "after_or_on": "Dopo o il giorno",
+        "is_true": "È vero",
+        "is_false": "È falso"
       },
       "values": {
+        "boolean": {
+          "true": "Vero",
+          "false": "Falso"
+        },
         "billing_type": {
           "time_and_materials": "A misura",
-          "retainer": "Canone"
+          "retainer": "Canone",
+          "mixed": "Mista"
         },
         "status": {
           "da_fare": "Da fare",
@@ -346,6 +424,7 @@
         "fieldRequired": "Il campo è obbligatorio.",
         "operatorRequired": "L'operatore è obbligatorio.",
         "valueInvalid": "Inserisci un valore valido per il campo selezionato.",
+        "timeZoneInvalid": "Inserisci un fuso orario IANA valido, ad esempio Europe/Rome.",
         "conditionsRequired": "Aggiungi almeno una condizione.",
         "recipientsRequired": "Seleziona almeno un utente o un ruolo destinatario.",
         "actionsRequired": "Aggiungi almeno una azione.",

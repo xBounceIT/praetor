@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { projects } from './projects.ts';
 import { users } from './users.ts';
 
@@ -42,6 +51,14 @@ export type ProjectRuleCondition = {
 
 export type ProjectRuleConditionLogic = 'and' | 'or';
 export type ProjectRuleConditionValueType = 'literal' | 'field';
+export type ProjectRuleEvaluationMode = 'continuous' | 'periodic';
+export type ProjectRuleScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+export type ProjectRuleSchedule = {
+  frequency: ProjectRuleScheduleFrequency;
+  timeZone: string;
+  userIds: string[];
+  taskIds: string[];
+};
 
 export const projectRules = pgTable(
   'project_rules',
@@ -53,7 +70,7 @@ export const projectRules = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     field: varchar('field', { length: 50 }).notNull(),
     operator: varchar('operator', { length: 30 }).notNull(),
-    value: varchar('value', { length: 255 }).notNull(),
+    value: text('value').notNull(),
     conditionLogic: varchar('condition_logic', { length: 10 }).notNull().default('and'),
     conditions: jsonb('conditions')
       .$type<ProjectRuleCondition[]>()
@@ -64,9 +81,19 @@ export const projectRules = pgTable(
       .$type<ProjectRuleActionConfig>()
       .notNull()
       .default(sql`'{"recipientUserIds":[],"recipientRoleIds":[]}'::jsonb`),
+    evaluationMode: varchar('evaluation_mode', { length: 20 })
+      .$type<ProjectRuleEvaluationMode>()
+      .notNull()
+      .default('continuous'),
+    schedule: jsonb('schedule_config')
+      .$type<ProjectRuleSchedule>()
+      .notNull()
+      .default(sql`'{"frequency":"monthly","timeZone":"UTC","userIds":[],"taskIds":[]}'::jsonb`),
     isEnabled: boolean('is_enabled').notNull().default(true),
     conditionMet: boolean('condition_met').notNull().default(false),
     lastTriggeredAt: timestamp('last_triggered_at'),
+    lastEvaluatedPeriod: varchar('last_evaluated_period', { length: 160 }),
+    configVersion: integer('config_version').notNull().default(0),
     createdBy: varchar('created_by', { length: 50 }).references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -77,5 +104,6 @@ export const projectRules = pgTable(
     index('idx_project_rules_project_id').on(table.projectId),
     index('idx_project_rules_enabled').on(table.isEnabled),
     index('idx_project_rules_condition_met').on(table.conditionMet),
+    index('idx_project_rules_evaluation_mode').on(table.evaluationMode),
   ],
 );

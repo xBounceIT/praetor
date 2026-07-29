@@ -92,9 +92,12 @@ const RULE: ProjectRule = {
     webhookIds: [],
     actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
   },
+  evaluationMode: 'continuous',
+  schedule: { frequency: 'monthly', timeZone: 'UTC', userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
+  lastEvaluatedPeriod: null,
   createdBy: 'u-admin',
   createdAt: 1700000000000,
   updatedAt: 1700000000000,
@@ -128,6 +131,7 @@ beforeEach(() => {
     users: [{ id: 'u1', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
     roles: [{ id: 'manager', name: 'Manager' }],
     webhooks: [{ id: 'webhook-1', name: 'Slack' }],
+    filters: { users: [], tasks: [] },
   });
   createMock.mockResolvedValue({ ...RULE, id: 'pr-created', name: 'New rule' });
   updateMock.mockImplementation(
@@ -169,7 +173,12 @@ describe('<ProjectRules />', () => {
     expect(screen.queryByText('projects:detail.rules.empty.title')).not.toBeInTheDocument();
 
     pendingRules.resolve([]);
-    pendingRecipients.resolve({ users: [], roles: [], webhooks: [] });
+    pendingRecipients.resolve({
+      users: [],
+      roles: [],
+      webhooks: [],
+      filters: { users: [], tasks: [] },
+    });
 
     await waitFor(() => expect(addButton).not.toBeDisabled());
   });

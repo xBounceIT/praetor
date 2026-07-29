@@ -75,6 +75,15 @@ describe('projectRuleFields', () => {
         permissions: [],
       }),
     ).toEqual({ ok: false, message: 'value field is not compatible with field' });
+    expect(
+      validateProjectRuleCondition({
+        field: 'is_disabled',
+        operator: 'is_false',
+        value: 'cost_to_date',
+        valueType: 'field',
+        permissions: ['reports.cost.view'],
+      }),
+    ).toEqual({ ok: false, message: 'unary operator cannot compare another field' });
   });
 
   test('treats null or missing metric values as not met', () => {
@@ -146,7 +155,7 @@ describe('projectRuleFields', () => {
     ).toBe(false);
   });
 
-  test('rejects derived mixed billing as a rule value', () => {
+  test('supports derived mixed billing as a rule value', () => {
     expect(
       validateProjectRuleCondition({
         field: 'billing_type',
@@ -154,7 +163,7 @@ describe('projectRuleFields', () => {
         value: 'mixed',
         permissions: [],
       }),
-    ).toEqual({ ok: false, message: 'value is not valid for field' });
+    ).toEqual({ ok: true });
     expect(
       evaluateProjectRuleCondition({
         field: 'billing_type',
@@ -162,6 +171,104 @@ describe('projectRuleFields', () => {
         expectedValue: 'mixed',
         actualValue: 'retainer',
       }),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  test('validates and evaluates text, date, and boolean project fields', () => {
+    expect(
+      validateProjectRuleCondition({
+        field: 'project_name',
+        operator: 'contains',
+        value: 'Support',
+        permissions: [],
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      evaluateProjectRuleCondition({
+        field: 'project_name',
+        operator: 'contains',
+        expectedValue: 'Support',
+        actualValue: 'Premium Support',
+      }),
+    ).toBe(true);
+    expect(
+      evaluateProjectRuleCondition({
+        field: 'end_date',
+        operator: 'before',
+        expectedValue: '2026-07-01',
+        actualValue: '2026-06-30',
+      }),
+    ).toBe(true);
+    expect(
+      evaluateProjectRuleCondition({
+        field: 'is_disabled',
+        operator: 'is_false',
+        expectedValue: '',
+        actualValue: false,
+      }),
+    ).toBe(true);
+    expect(
+      validateProjectRuleCondition({
+        field: 'is_disabled',
+        operator: 'eq',
+        value: 'tipo_confirmed',
+        valueType: 'field',
+        permissions: [],
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      evaluateProjectRuleCondition({
+        field: 'is_disabled',
+        operator: 'neq',
+        expectedValue: 'tipo_confirmed',
+        expectedValueType: 'field',
+        actualValue: false,
+        expectedActualValue: true,
+      }),
+    ).toBe(true);
+    expect(
+      evaluateProjectRuleCondition({
+        field: 'order_id',
+        operator: 'is_empty',
+        expectedValue: '',
+        actualValue: null,
+      }),
+    ).toBe(true);
+    expect(
+      evaluateProjectRuleCondition({
+        field: 'revenue',
+        operator: 'is_empty',
+        expectedValue: '',
+        actualValue: null,
+      }),
+    ).toBe(true);
+    expect(
+      evaluateProjectRuleCondition({
+        field: 'end_date',
+        operator: 'is_not_empty',
+        expectedValue: '',
+        actualValue: '2026-06-30',
+      }),
+    ).toBe(true);
+  });
+
+  test('allows period metrics only for periodic rules', () => {
+    expect(
+      validateProjectRuleCondition({
+        field: 'period_hours',
+        operator: 'eq',
+        value: '0',
+        permissions: [],
+      }),
+    ).toEqual({ ok: false, message: 'period_hours requires periodic evaluation' });
+    expect(
+      validateProjectRuleCondition({
+        field: 'period_hours',
+        operator: 'eq',
+        value: '0',
+        permissions: [],
+        evaluationMode: 'periodic',
+      }),
+    ).toEqual({ ok: true });
   });
 });

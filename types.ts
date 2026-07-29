@@ -503,12 +503,21 @@ export interface ProjectRuleActionConfig {
 
 export type ProjectRuleConditionLogic = 'and' | 'or';
 export type ProjectRuleConditionValueType = 'literal' | 'field';
+export type ProjectRuleEvaluationMode = 'continuous' | 'periodic';
+export type ProjectRuleScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 export interface ProjectRuleCondition {
   field: string;
   operator: string;
   value: string;
   valueType: ProjectRuleConditionValueType;
+}
+
+export interface ProjectRuleSchedule {
+  frequency: ProjectRuleScheduleFrequency;
+  timeZone: string;
+  userIds: string[];
+  taskIds: string[];
 }
 
 export interface ProjectRule {
@@ -522,9 +531,12 @@ export interface ProjectRule {
   conditions: ProjectRuleCondition[];
   actionType: ProjectRuleActionType;
   actionConfig: ProjectRuleActionConfig;
+  evaluationMode: ProjectRuleEvaluationMode;
+  schedule: ProjectRuleSchedule;
   isEnabled: boolean;
   conditionMet: boolean;
   lastTriggeredAt: number | null;
+  lastEvaluatedPeriod: string | null;
   createdBy: string | null;
   createdAt: number;
   updatedAt: number;
@@ -544,6 +556,14 @@ export interface ProjectRuleRecipientOptions {
     id: string;
     name: string;
   }>;
+  filters: {
+    users: Array<ProjectRuleRecipientUser & { isDisabled: boolean }>;
+    tasks: Array<{
+      id: string;
+      name: string;
+      isDisabled: boolean;
+    }>;
+  };
 }
 
 export interface ProjectTask {
