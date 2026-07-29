@@ -1,20 +1,33 @@
 import { describe, expect, test } from 'bun:test';
+import type {
+  ProjectRuleSchedule,
+  ProjectRuleScheduleFrequency,
+} from '../../db/schema/projectRules.ts';
 import {
+  getAppTimeZone,
   getPreviousProjectRulePeriod,
   getProjectRulePeriodForEvaluation,
-  isValidTimeZone,
   normalizeProjectRuleSchedule,
 } from '../../utils/projectRuleSchedule.ts';
 
+const schedule = (frequency: ProjectRuleScheduleFrequency): ProjectRuleSchedule => ({
+  frequency,
+  userIds: [],
+  taskIds: [],
+});
+
 describe('projectRuleSchedule', () => {
-  test('calculates the previous calendar month in the configured time zone', () => {
+  test('uses the application time zone by default', () => {
+    expect(getAppTimeZone()).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  });
+
+  test('calculates the previous calendar month in the application time zone', () => {
     expect(
-      getPreviousProjectRulePeriod(new Date('2026-06-01T00:30:00Z'), {
-        frequency: 'monthly',
-        timeZone: 'Europe/Rome',
-        userIds: [],
-        taskIds: [],
-      }),
+      getPreviousProjectRulePeriod(
+        new Date('2026-06-01T00:30:00Z'),
+        schedule('monthly'),
+        'Europe/Rome',
+      ),
     ).toEqual({
       key: 'monthly:Europe/Rome:2026-05-01:2026-06-01',
       startDate: '2026-05-01',
@@ -24,12 +37,7 @@ describe('projectRuleSchedule', () => {
 
   test('uses Monday-to-Monday windows for weekly checks', () => {
     expect(
-      getPreviousProjectRulePeriod(new Date('2026-06-10T12:00:00Z'), {
-        frequency: 'weekly',
-        timeZone: 'UTC',
-        userIds: [],
-        taskIds: [],
-      }),
+      getPreviousProjectRulePeriod(new Date('2026-06-10T12:00:00Z'), schedule('weekly'), 'UTC'),
     ).toEqual({
       key: 'weekly:UTC:2026-06-01:2026-06-08',
       startDate: '2026-06-01',
@@ -37,8 +45,7 @@ describe('projectRuleSchedule', () => {
     });
   });
 
-  test('normalizes duplicate filters and rejects invalid time zones', () => {
-    expect(isValidTimeZone('Not/AZone')).toBe(false);
+  test('normalizes duplicate filters and drops legacy per-rule time zones', () => {
     expect(
       normalizeProjectRuleSchedule({
         frequency: 'daily',
@@ -48,19 +55,17 @@ describe('projectRuleSchedule', () => {
       }),
     ).toEqual({
       frequency: 'daily',
-      timeZone: 'Europe/Rome',
       userIds: ['u1', 'u2'],
       taskIds: ['t1', 't2'],
     });
   });
 
-  test('keeps long IANA time zones inside the persisted period-key limit', () => {
-    const period = getPreviousProjectRulePeriod(new Date('2026-07-29T12:00:00Z'), {
-      frequency: 'quarterly',
-      timeZone: 'America/Argentina/ComodRivadavia',
-      userIds: [],
-      taskIds: [],
-    });
+  test('keeps application time zones inside the persisted period-key limit', () => {
+    const period = getPreviousProjectRulePeriod(
+      new Date('2026-07-29T12:00:00Z'),
+      schedule('quarterly'),
+      'America/Argentina/ComodRivadavia',
+    );
 
     expect(period.key.length).toBeLessThanOrEqual(160);
     expect(period.key).toContain('America/Argentina/ComodRivadavia');
@@ -70,13 +75,9 @@ describe('projectRuleSchedule', () => {
     expect(
       getProjectRulePeriodForEvaluation(
         new Date('2026-06-15T12:00:00Z'),
-        {
-          frequency: 'monthly',
-          timeZone: 'UTC',
-          userIds: [],
-          taskIds: [],
-        },
+        schedule('monthly'),
         'monthly:UTC:2026-02-01:2026-03-01',
+        'UTC',
       ),
     ).toEqual({
       key: 'monthly:UTC:2026-03-01:2026-04-01',
@@ -86,56 +87,44 @@ describe('projectRuleSchedule', () => {
   });
 
   test('falls back to the latest completed period for corrupt or changed schedule keys', () => {
-    const schedule = {
-      frequency: 'monthly' as const,
-      timeZone: 'Europe/Rome',
-      userIds: [],
-      taskIds: [],
+    const monthlySchedule = schedule('monthly');
+    const expected = {
+      key: 'monthly:Europe/Rome:2026-05-01:2026-06-01',
+      startDate: '2026-05-01',
+      endDate: '2026-06-01',
     };
 
     expect(
       getProjectRulePeriodForEvaluation(
         new Date('2026-06-15T12:00:00Z'),
-        schedule,
+        monthlySchedule,
         'monthly:Europe/Rome:2026-99-01:2026-03-01',
+        'Europe/Rome',
       ),
-    ).toEqual({
-      key: 'monthly:Europe/Rome:2026-05-01:2026-06-01',
-      startDate: '2026-05-01',
-      endDate: '2026-06-01',
-    });
+    ).toEqual(expected);
     expect(
       getProjectRulePeriodForEvaluation(
         new Date('2026-06-15T12:00:00Z'),
-        schedule,
+        monthlySchedule,
         'weekly:Europe/Rome:2026-05-18:2026-05-25',
+        'Europe/Rome',
       ),
-    ).toEqual({
-      key: 'monthly:Europe/Rome:2026-05-01:2026-06-01',
-      startDate: '2026-05-01',
-      endDate: '2026-06-01',
-    });
+    ).toEqual(expected);
     expect(
       getProjectRulePeriodForEvaluation(
         new Date('2026-06-15T12:00:00Z'),
-        schedule,
+        monthlySchedule,
         'monthly:Europe/Rome:2026-01-31:2026-02-28',
+        'Europe/Rome',
       ),
-    ).toEqual({
-      key: 'monthly:Europe/Rome:2026-05-01:2026-06-01',
-      startDate: '2026-05-01',
-      endDate: '2026-06-01',
-    });
+    ).toEqual(expected);
     expect(
       getProjectRulePeriodForEvaluation(
         new Date('2026-06-15T12:00:00Z'),
-        schedule,
+        monthlySchedule,
         'monthly:Europe/Rome:2026-01-31:2026-03-03',
+        'Europe/Rome',
       ),
-    ).toEqual({
-      key: 'monthly:Europe/Rome:2026-05-01:2026-06-01',
-      startDate: '2026-05-01',
-      endDate: '2026-06-01',
-    });
+    ).toEqual(expected);
   });
 });

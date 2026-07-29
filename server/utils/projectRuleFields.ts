@@ -50,15 +50,9 @@ export type ProjectRuleOperator =
 export type ProjectRuleConditionValueType = (typeof PROJECT_RULE_CONDITION_VALUE_TYPES)[number];
 
 export const PROJECT_RULE_FIELD_IDS = [
-  'project_id',
   'project_name',
-  'client_id',
   'description',
   'is_disabled',
-  'created_at',
-  'order_id',
-  'offer_id',
-  'offer_revision_code',
   'start_date',
   'end_date',
   'revenue',
@@ -100,32 +94,16 @@ export type ProjectRuleFieldDefinition = {
 
 export const PROJECT_RULE_FIELD_DEFINITIONS: readonly ProjectRuleFieldDefinition[] = [
   {
-    id: 'project_id',
-    kind: 'text',
-    operators: PROJECT_RULE_TEXT_OPERATORS,
-    group: 'project',
-  },
-  {
     id: 'project_name',
     kind: 'text',
     operators: PROJECT_RULE_TEXT_OPERATORS,
     group: 'project',
   },
-  { id: 'client_id', kind: 'text', operators: PROJECT_RULE_TEXT_OPERATORS, group: 'project' },
   { id: 'description', kind: 'text', operators: PROJECT_RULE_TEXT_OPERATORS, group: 'project' },
   {
     id: 'is_disabled',
     kind: 'boolean',
     operators: PROJECT_RULE_BOOLEAN_OPERATORS,
-    group: 'project',
-  },
-  { id: 'created_at', kind: 'date', operators: PROJECT_RULE_DATE_OPERATORS, group: 'project' },
-  { id: 'order_id', kind: 'text', operators: PROJECT_RULE_TEXT_OPERATORS, group: 'project' },
-  { id: 'offer_id', kind: 'text', operators: PROJECT_RULE_TEXT_OPERATORS, group: 'project' },
-  {
-    id: 'offer_revision_code',
-    kind: 'text',
-    operators: PROJECT_RULE_TEXT_OPERATORS,
     group: 'project',
   },
   { id: 'start_date', kind: 'date', operators: PROJECT_RULE_DATE_OPERATORS, group: 'project' },

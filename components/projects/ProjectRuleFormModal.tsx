@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   ProjectRule,
   ProjectRuleActionConfig,
@@ -128,7 +129,6 @@ const CONDITION_GRID_CLASSNAME =
 const ACTION_GRID_CLASSNAME =
   'grid gap-3 md:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_minmax(12rem,1fr)_2.25rem]';
 const PROJECT_RULE_NAME_MAX_LENGTH = 255;
-const PROJECT_RULE_TIME_ZONE_MAX_LENGTH = 100;
 
 const firstValueForField = (field: string) => {
   const definition = getProjectRuleFieldDefinition(field);
@@ -137,23 +137,11 @@ const firstValueForField = (field: string) => {
   return '';
 };
 
-const defaultTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-
 const defaultSchedule = (): ProjectRuleSchedule => ({
   frequency: 'monthly',
-  timeZone: defaultTimeZone(),
   userIds: [],
   taskIds: [],
 });
-
-const isValidTimeZone = (value: string) => {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 const defaultConditionForField = (field: string): ProjectRuleCondition => {
   const definition = getProjectRuleFieldDefinition(field);
@@ -454,8 +442,16 @@ const projectRuleFormReducer = (
   }
 };
 
-type ProjectRuleOption = { id: string; name: string; disabled?: boolean };
-type ProjectRuleFieldOption = ProjectRuleOption & { group: ProjectRuleFieldGroup };
+type ProjectRuleOption = {
+  id: string;
+  name: string;
+  description?: string;
+  disabled?: boolean;
+};
+type ProjectRuleFieldOption = ProjectRuleOption & {
+  description: string;
+  group: ProjectRuleFieldGroup;
+};
 
 const PROJECT_RULE_FIELD_GROUPS: readonly ProjectRuleFieldGroup[] = [
   'project',
@@ -475,7 +471,14 @@ const ProjectRuleFieldOptionGroups: React.FC<{ options: ProjectRuleFieldOption[]
         <SelectLabel>{t(`projects:detail.rules.fieldGroups.${group}`)}</SelectLabel>
         {groupOptions.map((option) => (
           <SelectItem key={option.id} value={option.id}>
-            {option.name}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="-mx-2 -my-1.5 flex min-w-0 flex-1 px-2 py-1.5">{option.name}</span>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={6} className="max-w-72">
+                {option.description}
+              </TooltipContent>
+            </Tooltip>
           </SelectItem>
         ))}
       </SelectGroup>
@@ -505,19 +508,10 @@ const ProjectRuleEvaluationEditor: React.FC<{
   evaluationMode: ProjectRuleEvaluationMode;
   schedule: ProjectRuleSchedule;
   recipients: ProjectRuleRecipientOptions;
-  errors: Record<string, string>;
   submitting: boolean;
   onModeChange: (mode: ProjectRuleEvaluationMode) => void;
   onScheduleChange: (patch: Partial<ProjectRuleSchedule>) => void;
-}> = ({
-  evaluationMode,
-  schedule,
-  recipients,
-  errors,
-  submitting,
-  onModeChange,
-  onScheduleChange,
-}) => {
+}> = ({ evaluationMode, schedule, recipients, submitting, onModeChange, onScheduleChange }) => {
   const { t } = useTranslation(['projects']);
   const frequencyOptions = (['daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const).map(
     (frequency) => ({
@@ -591,7 +585,7 @@ const ProjectRuleEvaluationEditor: React.FC<{
       </RadioGroup>
 
       {evaluationMode === 'periodic' && (
-        <div className="grid gap-4 rounded-lg border border-primary/20 bg-muted/25 p-4 md:grid-cols-2">
+        <div className="grid gap-4 rounded-lg border border-primary/20 bg-muted/25 p-4 md:grid-cols-3">
           <SelectControl
             id="project-rule-schedule-frequency"
             searchable={false}
@@ -605,21 +599,6 @@ const ProjectRuleEvaluationEditor: React.FC<{
               })
             }
           />
-          <Field data-invalid={!!errors.scheduleTimeZone}>
-            <FieldLabel htmlFor="project-rule-schedule-time-zone">
-              {t('projects:detail.rules.schedule.timeZone')}
-            </FieldLabel>
-            <Input
-              id="project-rule-schedule-time-zone"
-              value={schedule.timeZone}
-              maxLength={PROJECT_RULE_TIME_ZONE_MAX_LENGTH}
-              onChange={(event) => onScheduleChange({ timeZone: event.target.value })}
-              disabled={submitting}
-              aria-invalid={!!errors.scheduleTimeZone}
-              placeholder="Europe/Rome"
-            />
-            <FieldError>{errors.scheduleTimeZone}</FieldError>
-          </Field>
           <SelectControl
             id="project-rule-schedule-users"
             searchable
@@ -642,7 +621,7 @@ const ProjectRuleEvaluationEditor: React.FC<{
             value={schedule.taskIds}
             onChange={(next) => onScheduleChange({ taskIds: Array.isArray(next) ? next : [] })}
           />
-          <p className="text-sm text-muted-foreground md:col-span-2">
+          <p className="text-sm text-muted-foreground md:col-span-3">
             {t('projects:detail.rules.schedule.previousPeriodHint')}
           </p>
         </div>
@@ -770,6 +749,7 @@ const ProjectRuleConditionsEditor: React.FC<{
             ).map((definition) => ({
               id: definition.id,
               name: t(`projects:detail.rules.fields.${definition.id}`),
+              description: t(`projects:detail.rules.fieldDescriptions.${definition.id}`),
               group: definition.group,
             }));
             const unaryOperator = isProjectRuleUnaryOperator(condition.operator);
@@ -1189,6 +1169,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
   const fieldOptions = availableFields.map((definition) => ({
     id: definition.id,
     name: t(`projects:detail.rules.fields.${definition.id}`),
+    description: t(`projects:detail.rules.fieldDescriptions.${definition.id}`),
     group: definition.group,
   }));
   const userOptions = recipients.users.map((user) => ({
@@ -1285,9 +1266,6 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
     const nextErrors: Record<string, string> = {};
     const primary = conditions[0];
     if (!name.trim()) nextErrors.name = t('projects:detail.rules.errors.nameRequired');
-    if (evaluationMode === 'periodic' && !isValidTimeZone(schedule.timeZone.trim())) {
-      nextErrors.scheduleTimeZone = t('projects:detail.rules.errors.timeZoneInvalid');
-    }
     if (conditions.length === 0) {
       nextErrors.conditions = t('projects:detail.rules.errors.conditionsRequired');
     }
@@ -1359,10 +1337,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
         actionType,
         actionConfig,
         evaluationMode,
-        schedule: {
-          ...schedule,
-          timeZone: schedule.timeZone.trim() || 'UTC',
-        },
+        schedule,
         isEnabled,
       });
       onOpenChange(false);
@@ -1404,7 +1379,6 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
             evaluationMode={evaluationMode}
             schedule={schedule}
             recipients={recipients}
-            errors={errors}
             submitting={submitting}
             onModeChange={handleEvaluationModeChange}
             onScheduleChange={(patch) => dispatch({ type: 'setSchedule', patch })}

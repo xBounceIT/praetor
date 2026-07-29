@@ -38,6 +38,18 @@ describe('project rule registry', () => {
     );
   });
 
+  test('provides an Italian and English tooltip description for every condition field', async () => {
+    const [italian, english] = await Promise.all([
+      Bun.file(new URL('../../../locales/it/projects.json', import.meta.url)).json(),
+      Bun.file(new URL('../../../locales/en/projects.json', import.meta.url)).json(),
+    ]);
+
+    for (const definition of PROJECT_RULE_FIELD_DEFINITIONS) {
+      expect(italian.detail.rules.fieldDescriptions[definition.id]).toBeString();
+      expect(english.detail.rules.fieldDescriptions[definition.id]).toBeString();
+    }
+  });
+
   test('filters cost-derived fields without reports.cost.view', () => {
     const fields = getAvailableProjectRuleFields(['projects.rules.create']).map(
       (field) => field.id,
@@ -114,21 +126,15 @@ describe('project rule registry', () => {
     ).toBe(false);
   });
 
-  test('exposes all project field kinds and gates period metrics by mode', () => {
+  test('exposes mutable project fields, omits technical links, and gates period metrics by mode', () => {
     const continuousFields = getAvailableProjectRuleFields([]).map((field) => field.id);
     const periodicFields = getAvailableProjectRuleFields([], 'periodic').map((field) => field.id);
 
     expect(continuousFields).toEqual(
       expect.arrayContaining([
-        'project_id',
         'project_name',
-        'client_id',
         'description',
         'is_disabled',
-        'created_at',
-        'order_id',
-        'offer_id',
-        'offer_revision_code',
         'start_date',
         'end_date',
         'revenue',
@@ -137,6 +143,16 @@ describe('project rule registry', () => {
         'status',
         'tipo',
         'tipo_confirmed',
+      ]),
+    );
+    expect(continuousFields).not.toEqual(
+      expect.arrayContaining([
+        'project_id',
+        'client_id',
+        'created_at',
+        'order_id',
+        'offer_id',
+        'offer_revision_code',
       ]),
     );
     expect(continuousFields).not.toContain('period_hours');

@@ -15,7 +15,6 @@ export const PROJECT_RULE_SCHEDULE_FREQUENCIES = [
 
 export const DEFAULT_PROJECT_RULE_SCHEDULE: ProjectRuleSchedule = {
   frequency: 'monthly',
-  timeZone: 'UTC',
   userIds: [],
   taskIds: [],
 };
@@ -47,26 +46,15 @@ export const isProjectRuleScheduleFrequency = (
 ): value is ProjectRuleScheduleFrequency =>
   PROJECT_RULE_SCHEDULE_FREQUENCIES.includes(value as ProjectRuleScheduleFrequency);
 
-export const isValidTimeZone = (value: string): boolean => {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
-    return true;
-  } catch {
-    return false;
-  }
-};
+export const getAppTimeZone = (): string =>
+  Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 export const normalizeProjectRuleSchedule = (value: unknown): ProjectRuleSchedule => {
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const timeZone =
-    typeof raw.timeZone === 'string' && isValidTimeZone(raw.timeZone.trim())
-      ? raw.timeZone.trim()
-      : DEFAULT_PROJECT_RULE_SCHEDULE.timeZone;
   return {
     frequency: isProjectRuleScheduleFrequency(raw.frequency)
       ? raw.frequency
       : DEFAULT_PROJECT_RULE_SCHEDULE.frequency,
-    timeZone,
     userIds: uniqueStrings(raw.userIds),
     taskIds: uniqueStrings(raw.taskIds),
   };
@@ -93,10 +81,11 @@ const isIsoDate = (value: string) => {
 };
 const periodWindow = (
   schedule: ProjectRuleSchedule,
+  timeZone: string,
   startDate: string,
   endDate: string,
 ): ProjectRulePeriodWindow => ({
-  key: `${schedule.frequency}:${schedule.timeZone}:${startDate}:${endDate}`,
+  key: `${schedule.frequency}:${timeZone}:${startDate}:${endDate}`,
   startDate,
   endDate,
 });
@@ -176,8 +165,9 @@ const isScheduleBoundary = (date: string, frequency: ProjectRuleScheduleFrequenc
 export const getPreviousProjectRulePeriod = (
   now: Date,
   schedule: ProjectRuleSchedule,
+  timeZone = getAppTimeZone(),
 ): ProjectRulePeriodWindow => {
-  const { year, month, day } = datePartsInTimeZone(now, schedule.timeZone);
+  const { year, month, day } = datePartsInTimeZone(now, timeZone);
   const today = utcDate(year, month - 1, day);
   let start: Date;
   let end: Date;
@@ -211,22 +201,23 @@ export const getPreviousProjectRulePeriod = (
 
   const startDate = isoDate(start);
   const endDate = isoDate(end);
-  return periodWindow(schedule, startDate, endDate);
+  return periodWindow(schedule, timeZone, startDate, endDate);
 };
 
 export const getProjectRulePeriodForEvaluation = (
   now: Date,
   schedule: ProjectRuleSchedule,
   lastEvaluatedPeriod: string | null,
+  timeZone = getAppTimeZone(),
 ): ProjectRulePeriodWindow => {
-  const latestCompleted = getPreviousProjectRulePeriod(now, schedule);
+  const latestCompleted = getPreviousProjectRulePeriod(now, schedule, timeZone);
   if (!lastEvaluatedPeriod) return latestCompleted;
 
   const previous = parsePeriodKey(lastEvaluatedPeriod);
   if (
     !previous ||
     previous.frequency !== schedule.frequency ||
-    previous.timeZone !== schedule.timeZone ||
+    previous.timeZone !== timeZone ||
     !isScheduleBoundary(previous.startDate, schedule.frequency) ||
     !isScheduleBoundary(previous.endDate, schedule.frequency) ||
     addSchedulePeriod(previous.startDate, schedule.frequency) !== previous.endDate ||
@@ -237,5 +228,5 @@ export const getProjectRulePeriodForEvaluation = (
 
   const nextEndDate = addSchedulePeriod(previous.endDate, schedule.frequency);
   if (nextEndDate > latestCompleted.endDate) return latestCompleted;
-  return periodWindow(schedule, previous.endDate, nextEndDate);
+  return periodWindow(schedule, timeZone, previous.endDate, nextEndDate);
 };

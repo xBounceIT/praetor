@@ -183,7 +183,7 @@ describe('projectMetricsRepo.listForProjects', () => {
 });
 
 describe('projectMetricsRepo.metricValueForField', () => {
-  test('maps every persisted, computed, and periodic rule field', () => {
+  test('maps every mutable, computed, and periodic rule field', () => {
     const metrics: projectMetricsRepo.ProjectRuleMetrics = {
       projectId: 'p1',
       projectName: 'Project',
@@ -221,15 +221,9 @@ describe('projectMetricsRepo.metricValueForField', () => {
       invalidPeriodTaskIds: [],
     };
     const expected = {
-      project_id: 'p1',
       project_name: 'Project',
-      client_id: 'c1',
       description: 'Description',
       is_disabled: false,
-      created_at: '2026-01-01',
-      order_id: 'ord-1',
-      offer_id: 'off-1',
-      offer_revision_code: 'REV-2',
       start_date: '2026-02-01',
       end_date: '2026-12-31',
       revenue: 1_000,

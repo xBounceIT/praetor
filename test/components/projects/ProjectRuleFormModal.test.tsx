@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { FC } from 'react';
 import type { ProjectRuleFormModalProps } from '../../../components/projects/ProjectRuleFormModal';
 import type { ProjectRule, ProjectRuleRecipientOptions } from '../../../types';
@@ -53,7 +54,7 @@ const rule: ProjectRule = {
     actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
   },
   evaluationMode: 'continuous',
-  schedule: { frequency: 'monthly', timeZone: 'UTC', userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -132,6 +133,32 @@ describe('<ProjectRuleFormModal />', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('projects:detail.rules.fieldGroups.computed')).toBeInTheDocument();
     expect(screen.getByText('projects:detail.rules.fieldGroups.period')).toBeInTheDocument();
+  });
+
+  test('describes condition fields on hover with the native shadcn tooltip', async () => {
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    await userEvent.click(document.getElementById('project-rule-field-0') as HTMLButtonElement);
+    const option = await screen.findByRole('option', {
+      name: 'projects:detail.rules.fields.revenue',
+    });
+    const tooltipTrigger = option.querySelector('[data-slot="tooltip-trigger"]');
+    expect(tooltipTrigger).not.toBeNull();
+
+    await userEvent.hover(tooltipTrigger as HTMLElement);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'projects:detail.rules.fieldDescriptions.revenue',
+    );
   });
 
   test('renders project rule actions as addable rows', () => {
@@ -231,6 +258,7 @@ describe('<ProjectRuleFormModal />', () => {
     );
 
     fireEvent.click(screen.getByText('projects:detail.rules.evaluationModes.periodic.title'));
+    expect(document.getElementById('project-rule-schedule-time-zone')).not.toBeInTheDocument();
     fireEvent.click(document.getElementById('project-rule-schedule-users') as HTMLButtonElement);
     fireEvent.click(await screen.findByRole('option', { name: 'Alice (alice)' }));
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -243,11 +271,11 @@ describe('<ProjectRuleFormModal />', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         evaluationMode: 'periodic',
-        schedule: expect.objectContaining({
+        schedule: {
           frequency: 'monthly',
           userIds: ['u1'],
           taskIds: ['task-1'],
-        }),
+        },
       }),
     );
   });
@@ -290,7 +318,6 @@ describe('<ProjectRuleFormModal />', () => {
       evaluationMode: 'periodic',
       schedule: {
         frequency: 'monthly',
-        timeZone: 'UTC',
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

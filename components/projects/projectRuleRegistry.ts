@@ -61,15 +61,9 @@ export type ProjectRuleFieldDefinition = {
 };
 
 export const PROJECT_RULE_FIELD_DEFINITIONS: readonly ProjectRuleFieldDefinition[] = [
-  { id: 'project_id', kind: 'text', operators: TEXT_OPERATORS, group: 'project' },
   { id: 'project_name', kind: 'text', operators: TEXT_OPERATORS, group: 'project' },
-  { id: 'client_id', kind: 'text', operators: TEXT_OPERATORS, group: 'project' },
   { id: 'description', kind: 'text', operators: TEXT_OPERATORS, group: 'project' },
   { id: 'is_disabled', kind: 'boolean', operators: BOOLEAN_OPERATORS, group: 'project' },
-  { id: 'created_at', kind: 'date', operators: DATE_OPERATORS, group: 'project' },
-  { id: 'order_id', kind: 'text', operators: TEXT_OPERATORS, group: 'project' },
-  { id: 'offer_id', kind: 'text', operators: TEXT_OPERATORS, group: 'project' },
-  { id: 'offer_revision_code', kind: 'text', operators: TEXT_OPERATORS, group: 'project' },
   { id: 'start_date', kind: 'date', operators: DATE_OPERATORS, group: 'project' },
   { id: 'end_date', kind: 'date', operators: DATE_OPERATORS, group: 'project' },
   { id: 'revenue', kind: 'number', operators: NUMBER_OPERATORS, group: 'project' },

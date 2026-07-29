@@ -345,24 +345,12 @@ export const metricValueForField = (
   field: ProjectRuleField | string,
 ): ProjectRuleMetricValue => {
   switch (field) {
-    case 'project_id':
-      return metrics.projectId;
     case 'project_name':
       return metrics.projectName;
-    case 'client_id':
-      return metrics.clientId;
     case 'description':
       return metrics.description;
     case 'is_disabled':
       return metrics.isDisabled;
-    case 'created_at':
-      return metrics.createdAt;
-    case 'order_id':
-      return metrics.orderId;
-    case 'offer_id':
-      return metrics.offerId;
-    case 'offer_revision_code':
-      return metrics.offerRevisionCode;
     case 'start_date':
       return metrics.startDate;
     case 'end_date':

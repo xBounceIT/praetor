@@ -23,7 +23,6 @@ import {
   DEFAULT_PROJECT_RULE_SCHEDULE,
   isProjectRuleEvaluationMode,
   isProjectRuleScheduleFrequency,
-  isValidTimeZone,
   normalizeProjectRuleSchedule,
 } from '../utils/projectRuleSchedule.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -53,7 +52,6 @@ const projectRuleIdParamSchema = {
 
 const PROJECT_RULE_NAME_MAX_LENGTH = 255;
 const PROJECT_RULE_MAX_SCHEDULE_FILTER_IDS = 2_000;
-const PROJECT_RULE_TIME_ZONE_MAX_LENGTH = 100;
 
 const projectRuleActionSchema = {
   type: 'object',
@@ -108,7 +106,6 @@ const projectRuleScheduleSchema = {
       type: 'string',
       enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
     },
-    timeZone: { type: 'string', maxLength: PROJECT_RULE_TIME_ZONE_MAX_LENGTH },
     userIds: {
       type: 'array',
       maxItems: PROJECT_RULE_MAX_SCHEDULE_FILTER_IDS,
@@ -120,7 +117,7 @@ const projectRuleScheduleSchema = {
       items: { type: 'string', maxLength: 50 },
     },
   },
-  required: ['frequency', 'timeZone', 'userIds', 'taskIds'],
+  required: ['frequency', 'userIds', 'taskIds'],
   additionalProperties: false,
 } as const;
 
@@ -473,11 +470,6 @@ const parseSchedule = (
       message: 'schedule.frequency must be daily, weekly, monthly, quarterly, or yearly',
     };
   }
-  const timeZone = requireNonEmptyString(raw.timeZone, 'schedule.timeZone');
-  if (!timeZone.ok) return timeZone;
-  if (!isValidTimeZone(timeZone.value)) {
-    return { ok: false, message: 'schedule.timeZone must be a valid IANA time zone' };
-  }
   const userIds = ensureArrayOfStrings(raw.userIds ?? [], 'schedule.userIds');
   if (!userIds.ok) return userIds;
   const taskIds = ensureArrayOfStrings(raw.taskIds ?? [], 'schedule.taskIds');
@@ -486,7 +478,6 @@ const parseSchedule = (
     ok: true,
     value: normalizeProjectRuleSchedule({
       frequency: raw.frequency,
-      timeZone: timeZone.value,
       userIds: userIds.value,
       taskIds: taskIds.value,
     }),
@@ -837,7 +828,6 @@ const areRuleSchedulesEqual = (
   right: projectRulesRepo.ProjectRuleSchedule,
 ): boolean =>
   left.frequency === right.frequency &&
-  left.timeZone === right.timeZone &&
   left.userIds.length === right.userIds.length &&
   left.userIds.every((id, index) => id === right.userIds[index]) &&
   left.taskIds.length === right.taskIds.length &&

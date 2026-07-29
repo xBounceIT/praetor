@@ -30,6 +30,7 @@ let evaluateProjectRulesOnce: typeof import('../../services/projectRulesEvaluato
 let periodicMetricsConcurrency: number;
 let evaluationConcurrency: number;
 let webhookConcurrency: number;
+const APP_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 const RULE = {
   id: 'pr-1',
@@ -51,7 +52,7 @@ const RULE = {
     ],
   },
   evaluationMode: 'continuous' as const,
-  schedule: { frequency: 'monthly' as const, timeZone: 'UTC', userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly' as const, userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -262,7 +263,6 @@ describe('evaluateProjectRulesOnce', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        timeZone: 'UTC',
         userIds: ['u1'],
         taskIds: ['t1'],
       },
@@ -279,13 +279,13 @@ describe('evaluateProjectRulesOnce', () => {
     expect(listMetricsMock).toHaveBeenCalledWith(['p1'], now, TX_SENTINEL, {
       startDate: '2026-05-01',
       endDate: '2026-06-01',
-      timeZone: 'UTC',
+      timeZone: APP_TIME_ZONE,
       userIds: ['u1'],
       taskIds: ['t1'],
     });
     expect(markPeriodicEvaluationMock).toHaveBeenCalledWith(
       'pr-1',
-      'monthly:UTC:2026-05-01:2026-06-01',
+      `monthly:${APP_TIME_ZONE}:2026-05-01:2026-06-01`,
       true,
       now,
       7,
@@ -298,7 +298,7 @@ describe('evaluateProjectRulesOnce', () => {
       {
         ...RULE,
         evaluationMode: 'periodic',
-        lastEvaluatedPeriod: 'monthly:UTC:2026-05-01:2026-06-01',
+        lastEvaluatedPeriod: `monthly:${APP_TIME_ZONE}:2026-05-01:2026-06-01`,
       },
     ]);
 
@@ -321,7 +321,7 @@ describe('evaluateProjectRulesOnce', () => {
         value: '0',
         conditions: [{ field: 'period_hours', operator: 'eq', value: '0', valueType: 'literal' }],
         evaluationMode: 'periodic',
-        lastEvaluatedPeriod: 'monthly:UTC:2026-02-01:2026-03-01',
+        lastEvaluatedPeriod: `monthly:${APP_TIME_ZONE}:2026-02-01:2026-03-01`,
       },
     ]);
     listMetricsMock.mockImplementation(async (projectIds: string[]) =>
@@ -333,13 +333,13 @@ describe('evaluateProjectRulesOnce', () => {
     expect(listMetricsMock).toHaveBeenCalledWith(['p1'], now, TX_SENTINEL, {
       startDate: '2026-03-01',
       endDate: '2026-04-01',
-      timeZone: 'UTC',
+      timeZone: APP_TIME_ZONE,
       userIds: [],
       taskIds: [],
     });
     expect(markPeriodicEvaluationMock).toHaveBeenCalledWith(
       'pr-1',
-      'monthly:UTC:2026-03-01:2026-04-01',
+      `monthly:${APP_TIME_ZONE}:2026-03-01:2026-04-01`,
       true,
       now,
       7,
@@ -417,7 +417,6 @@ describe('evaluateProjectRulesOnce', () => {
       evaluationMode: 'periodic',
       schedule: {
         frequency: 'monthly',
-        timeZone: 'UTC',
         userIds: ['u2', 'u1'],
         taskIds: ['t2', 't1'],
       },
@@ -502,7 +501,6 @@ describe('evaluateProjectRulesOnce', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        timeZone: 'UTC',
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

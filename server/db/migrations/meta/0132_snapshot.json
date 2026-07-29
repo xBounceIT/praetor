@@ -3210,7 +3210,7 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "default": "'{\"frequency\":\"monthly\",\"timeZone\":\"UTC\",\"userIds\":[],\"taskIds\":[]}'::jsonb"
+          "default": "'{\"frequency\":\"monthly\",\"userIds\":[],\"taskIds\":[]}'::jsonb"
         },
         "is_enabled": {
           "name": "is_enabled",

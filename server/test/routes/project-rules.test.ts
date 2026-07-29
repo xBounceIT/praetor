@@ -81,7 +81,7 @@ const SAMPLE_RULE = {
     ],
   },
   evaluationMode: 'continuous' as const,
-  schedule: { frequency: 'monthly' as const, timeZone: 'UTC', userIds: [], taskIds: [] },
+  schedule: { frequency: 'monthly' as const, userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -647,7 +647,6 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        timeZone: 'Europe/Rome',
         userIds: ['u2'],
         taskIds: ['t1'],
       },
@@ -741,7 +740,6 @@ describe('project rule routes', () => {
         evaluationMode: 'periodic',
         schedule: {
           frequency: 'monthly',
-          timeZone: 'UTC',
           userIds: Array.from({ length: 2_001 }, (_, index) => `u${index}`),
           taskIds: [],
         },
@@ -786,7 +784,7 @@ describe('project rule routes', () => {
     expect(createRuleMock).not.toHaveBeenCalled();
   });
 
-  test('POST rejects unsupported fields and operators', async () => {
+  test('POST rejects technical linkage fields and unsupported operators', async () => {
     currentPermissions = ['projects.rules.create'];
 
     const badField = await app.inject({
@@ -794,10 +792,10 @@ describe('project rule routes', () => {
       url: '/api/projects/p1/rules',
       headers: authHeaders(),
       payload: {
-        name: 'Bad field',
-        field: 'unknown_metric',
-        operator: 'gte',
-        value: '1000',
+        name: 'Technical field',
+        field: 'client_id',
+        operator: 'eq',
+        value: 'c1',
         actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: [] },
       },
     });
@@ -1116,7 +1114,6 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        timeZone: 'UTC',
         userIds: ['u1', 'u2'],
         taskIds: ['t1', 't2'],
       },
@@ -1448,7 +1445,6 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        timeZone: 'UTC',
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },
@@ -1500,7 +1496,6 @@ describe('project rule routes', () => {
       evaluationMode: 'periodic' as const,
       schedule: {
         frequency: 'monthly' as const,
-        timeZone: 'UTC',
         userIds: ['deleted-user'],
         taskIds: ['deleted-task'],
       },

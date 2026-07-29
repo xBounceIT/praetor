@@ -515,7 +515,6 @@ export interface ProjectRuleCondition {
 
 export interface ProjectRuleSchedule {
   frequency: ProjectRuleScheduleFrequency;
-  timeZone: string;
   userIds: string[];
   taskIds: string[];
 }

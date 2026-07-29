@@ -14109,10 +14109,6 @@
                               "yearly"
                             ]
                           },
-                          "timeZone": {
-                            "type": "string",
-                            "maxLength": 100
-                          },
                           "userIds": {
                             "type": "array",
                             "maxItems": 2000,
@@ -14132,7 +14128,6 @@
                         },
                         "required": [
                           "frequency",
-                          "timeZone",
                           "userIds",
                           "taskIds"
                         ],
@@ -14478,10 +14473,6 @@
                           "yearly"
                         ]
                       },
-                      "timeZone": {
-                        "type": "string",
-                        "maxLength": 100
-                      },
                       "userIds": {
                         "type": "array",
                         "maxItems": 2000,
@@ -14501,7 +14492,6 @@
                     },
                     "required": [
                       "frequency",
-                      "timeZone",
                       "userIds",
                       "taskIds"
                     ],
@@ -14693,10 +14683,6 @@
                             "yearly"
                           ]
                         },
-                        "timeZone": {
-                          "type": "string",
-                          "maxLength": 100
-                        },
                         "userIds": {
                           "type": "array",
                           "maxItems": 2000,
@@ -14716,7 +14702,6 @@
                       },
                       "required": [
                         "frequency",
-                        "timeZone",
                         "userIds",
                         "taskIds"
                       ],
@@ -15063,10 +15048,6 @@
                           "yearly"
                         ]
                       },
-                      "timeZone": {
-                        "type": "string",
-                        "maxLength": 100
-                      },
                       "userIds": {
                         "type": "array",
                         "maxItems": 2000,
@@ -15086,7 +15067,6 @@
                     },
                     "required": [
                       "frequency",
-                      "timeZone",
                       "userIds",
                       "taskIds"
                     ],
@@ -15282,10 +15262,6 @@
                             "yearly"
                           ]
                         },
-                        "timeZone": {
-                          "type": "string",
-                          "maxLength": 100
-                        },
                         "userIds": {
                           "type": "array",
                           "maxItems": 2000,
@@ -15305,7 +15281,6 @@
                       },
                       "required": [
                         "frequency",
-                        "timeZone",
                         "userIds",
                         "taskIds"
                       ],

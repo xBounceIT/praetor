@@ -11,6 +11,7 @@ import {
   isProjectRuleUnaryOperator,
 } from '../utils/projectRuleFields.ts';
 import {
+  getAppTimeZone,
   getProjectRulePeriodForEvaluation,
   type ProjectRulePeriodWindow,
 } from '../utils/projectRuleSchedule.ts';
@@ -242,13 +243,19 @@ export const evaluateProjectRulesOnce = async ({
   logger,
   exec = db,
 }: EvaluateProjectRulesOptions = {}): Promise<ProjectRulesEvaluationResult> => {
+  const appTimeZone = getAppTimeZone();
   const rules = await projectRulesRepo.listEnabled(exec);
   const continuousRules = rules.filter((rule) => rule.evaluationMode !== 'periodic');
   const periodicContexts = rules
     .filter((rule) => rule.evaluationMode === 'periodic')
     .map((rule) => ({
       rule,
-      period: getProjectRulePeriodForEvaluation(now, rule.schedule, rule.lastEvaluatedPeriod),
+      period: getProjectRulePeriodForEvaluation(
+        now,
+        rule.schedule,
+        rule.lastEvaluatedPeriod,
+        appTimeZone,
+      ),
     }))
     .filter(({ rule, period }) => rule.lastEvaluatedPeriod !== period.key);
   const continuousMetricsByProjectId = await projectMetricsRepo.listForProjects(
@@ -269,7 +276,7 @@ export const evaluateProjectRulesOnce = async ({
           rule.projectId,
           period.startDate,
           period.endDate,
-          rule.schedule.timeZone,
+          appTimeZone,
           [...rule.schedule.userIds].sort(),
           [...rule.schedule.taskIds].sort(),
         ]);
@@ -278,7 +285,7 @@ export const evaluateProjectRulesOnce = async ({
           metricsPromise = projectMetricsRepo.listForProjects([rule.projectId], now, exec, {
             startDate: period.startDate,
             endDate: period.endDate,
-            timeZone: rule.schedule.timeZone,
+            timeZone: appTimeZone,
             userIds: rule.schedule.userIds,
             taskIds: rule.schedule.taskIds,
           });

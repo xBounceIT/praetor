@@ -228,7 +228,7 @@ describe('projectRuleFields', () => {
     ).toBe(true);
     expect(
       evaluateProjectRuleCondition({
-        field: 'order_id',
+        field: 'description',
         operator: 'is_empty',
         expectedValue: '',
         actualValue: null,
@@ -250,6 +250,26 @@ describe('projectRuleFields', () => {
         actualValue: '2026-06-30',
       }),
     ).toBe(true);
+  });
+
+  test('rejects technical identifiers and immutable linkage fields', () => {
+    for (const field of [
+      'project_id',
+      'client_id',
+      'created_at',
+      'order_id',
+      'offer_id',
+      'offer_revision_code',
+    ]) {
+      expect(
+        validateProjectRuleCondition({
+          field,
+          operator: 'eq',
+          value: 'value',
+          permissions: [],
+        }),
+      ).toEqual({ ok: false, message: 'field must be a supported project rule field' });
+    }
   });
 
   test('allows period metrics only for periodic rules', () => {
