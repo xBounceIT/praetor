@@ -57,6 +57,16 @@ describe('Sonner configuration', () => {
     expect(mergeToastClassNames(appSuccessToastClassNames, {})).toEqual(appSuccessToastClassNames);
   });
 
+  test('merges Sonner default and loader className overrides', () => {
+    const merged = mergeToastClassNames(appSuccessToastClassNames, {
+      default: 'extra-default',
+      loader: 'extra-loader',
+    });
+    expect(merged.default).toContain('extra-default');
+    expect(merged.loader).toContain('extra-loader');
+    expect(merged.toast).toBe(appSuccessToastClassNames.toast);
+  });
+
   test('only exposes the offer action when the user can view client offers', () => {
     const action = { label: 'View offer', onClick: () => {} };
 

@@ -75,31 +75,16 @@ export const appWarningToastClassNames = buildVariantClassNames({
 /** Alias kept for offer-created call sites; identical to `appSuccessToastClassNames`. */
 export const offerCreatedToastClassNames = appSuccessToastClassNames;
 
-const TOAST_CLASSNAME_KEYS = [
-  'toast',
-  'title',
-  'description',
-  'actionButton',
-  'cancelButton',
-  'closeButton',
-  'error',
-  'success',
-  'warning',
-  'info',
-  'loading',
-  'content',
-  'icon',
-] as const satisfies ReadonlyArray<keyof ToastClassnames>;
-
 export const mergeToastClassNames = (
   base: ToastClassnames,
   override?: ToastClassnames,
 ): ToastClassnames => {
   if (!override) return base;
   const merged: ToastClassnames = { ...base };
-  for (const key of TOAST_CLASSNAME_KEYS) {
-    if (!override[key]) continue;
-    merged[key] = [base[key], override[key]].filter(Boolean).join(' ');
+  for (const key of Object.keys(override) as Array<keyof ToastClassnames>) {
+    const overrideValue = override[key];
+    if (!overrideValue) continue;
+    merged[key] = [base[key], overrideValue].filter(Boolean).join(' ');
   }
   return merged;
 };
