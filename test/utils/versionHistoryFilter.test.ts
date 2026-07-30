@@ -12,6 +12,7 @@ const rows = [
     createdAt: Date.UTC(2026, 6, 15, 10, 32),
     reason: 'update' as const,
     revisionCode: 'REV 3',
+    title: 'Q3 renewal',
     createdByUserName: 'Alice',
   },
   {
@@ -39,6 +40,12 @@ describe('filterVersionHistoryRows', () => {
   test('filters by revision code', () => {
     expect(filterVersionHistoryRows(rows, 'rev 2', 'en', labels).map((row) => row.id)).toEqual([
       'r2',
+    ]);
+  });
+
+  test('filters by revision title', () => {
+    expect(filterVersionHistoryRows(rows, 'renewal', 'en', labels).map((row) => row.id)).toEqual([
+      'r3',
     ]);
   });
 

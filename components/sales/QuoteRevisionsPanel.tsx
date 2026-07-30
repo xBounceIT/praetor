@@ -8,6 +8,7 @@ export const QuoteRevisionsPanel = (props: {
   onPreview: (revision: QuoteRevision) => void;
   onClearPreview: () => void;
   onRestored: (quote: Quote) => void;
+  canEditTitle?: boolean;
   disabled?: boolean;
   secondaryAction?: {
     label: string;
@@ -21,10 +22,12 @@ export const QuoteRevisionsPanel = (props: {
     selectedRevisionId={props.selectedRevisionId}
     list={clientQuotesApi.listRevisions}
     get={clientQuotesApi.getRevision}
+    updateTitle={clientQuotesApi.updateRevisionTitle}
     restore={clientQuotesApi.restoreRevision}
     onPreview={props.onPreview}
     onClearPreview={props.onClearPreview}
     onRestored={props.onRestored}
+    canEditTitle={props.canEditTitle}
     disabled={props.disabled}
     secondaryAction={props.secondaryAction}
     className={props.className}

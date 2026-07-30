@@ -154,6 +154,7 @@ export interface ClientQuotesViewProps {
   supplierQuotes: SupplierQuote[];
   communicationChannels?: QuoteCommunicationChannel[];
   canManageCommunicationChannels?: boolean;
+  canEditRevisionTitles?: boolean;
   onCreateCommunicationChannel?: (data: {
     name: string;
     icon: QuoteCommunicationChannelIcon;
@@ -472,6 +473,7 @@ const useClientQuotesController = ({
   supplierQuotes,
   communicationChannels = DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
   canManageCommunicationChannels = false,
+  canEditRevisionTitles = false,
   onCreateCommunicationChannel = noopQuoteCommunicationChannelMutation,
   onUpdateCommunicationChannel = noopQuoteCommunicationChannelMutation,
   onDeleteCommunicationChannel = noopQuoteCommunicationChannelMutation,
@@ -493,7 +495,6 @@ const useClientQuotesController = ({
   canViewInternalListing = true,
 }: ClientQuotesViewProps) => {
   const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
-
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
 
   const tableInitialFilterState = useMemo(() => {
@@ -1154,7 +1155,7 @@ const useClientQuotesController = ({
           ]
         : candidatePayloads;
 
-    const payload = {
+    const payload: QuoteMutation = {
       ...formData,
       id: formData.id?.trim() || undefined,
       paymentTerms: primaryCandidate.paymentTerms,
@@ -2367,6 +2368,7 @@ const useClientQuotesController = ({
     products,
     communicationChannels,
     canManageCommunicationChannels,
+    canEditRevisionTitles,
     onCreateCommunicationChannel,
     onUpdateCommunicationChannel,
     onDeleteCommunicationChannel,
@@ -2532,6 +2534,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
                   }
                   onClearPreview={handleClearPreview}
                   onRestored={handleVersionRestored}
+                  canEditTitle={controller.canEditRevisionTitles}
                   disabled={revisionRestoreDisabled}
                   secondaryAction={{
                     label: t('sales:clientQuotes.revisionHistory.openVersionHistory', {

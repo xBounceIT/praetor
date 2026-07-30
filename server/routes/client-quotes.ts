@@ -1132,6 +1132,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     exists: clientQuotesRepo.existsById,
     list: revisionsRepo.listForQuote,
     find: revisionsRepo.findQuoteById,
+    updateTitle: revisionsRepo.updateQuoteTitle,
     restore: async (quoteId, revision, userId, tx) => {
       const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
       if (missingReference) {

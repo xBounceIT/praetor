@@ -7,7 +7,7 @@ describe('supplierQuotesApi path segments', () => {
     ).text();
 
     expect(source).not.toMatch(/\$\{(?:id|revisionId)\}/);
-    expect(source.match(/supplierQuotePath\(id\)/g) ?? []).toHaveLength(12);
-    expect(source.match(/encodePathSegment\(revisionId\)/g) ?? []).toHaveLength(2);
+    expect(source.match(/supplierQuotePath\(id\)/g) ?? []).toHaveLength(13);
+    expect(source.match(/encodePathSegment\(revisionId\)/g) ?? []).toHaveLength(3);
   });
 });

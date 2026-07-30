@@ -923,10 +923,13 @@ export interface RevisionRow {
   id: string;
   revisionNumber: number;
   revisionCode: string;
+  title: string | null;
   createdByUserId: string | null;
   createdByUserName: string | null;
   createdAt: number;
 }
+
+export type RevisionTitleUpdate = Pick<RevisionRow, 'id' | 'title'>;
 
 export interface QuoteRevision extends RevisionRow {
   snapshot: QuoteVersionSnapshot;

@@ -5,6 +5,7 @@ import type {
   OfferVersion,
   OfferVersionRow,
   RevisionRow,
+  RevisionTitleUpdate,
 } from '../../types';
 import { fetchApi } from './client';
 import { normalizeClientOffer } from './normalizers';
@@ -57,6 +58,19 @@ export const clientOffersApi = {
   getRevision: (id: string, revisionId: string): Promise<OfferRevision> =>
     fetchApi<OfferRevision>(
       `/sales/client-offers/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}`,
+    ),
+
+  updateRevisionTitle: (
+    id: string,
+    revisionId: string,
+    title: string | null,
+  ): Promise<RevisionTitleUpdate> =>
+    fetchApi<RevisionTitleUpdate>(
+      `/sales/client-offers/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      },
     ),
 
   restoreRevision: (id: string, revisionId: string): Promise<ClientOffer> =>

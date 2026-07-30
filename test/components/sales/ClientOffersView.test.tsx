@@ -303,6 +303,32 @@ describe('<ClientOffersView /> list', () => {
   });
 });
 
+describe('<ClientOffersView /> revision creation', () => {
+  test('sends a draft immediately without asking for a revision title', async () => {
+    const user = userEvent.setup();
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: 'O-TITLE' })]}
+        onUpdateOffer={onUpdateOffer}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+    await user.click(await screen.findByRole('button', { name: 'sales:clientOffers.markSent' }));
+
+    await waitFor(() =>
+      expect(onUpdateOffer).toHaveBeenCalledWith('O-TITLE', {
+        status: 'sent',
+      }),
+    );
+    expect(
+      screen.queryByRole('textbox', { name: 'revisionTitleDialog.fieldLabel' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('<ClientOffersView /> terminal status revert action', () => {
   test('hides terminal revert when caller is not privileged', () => {
     render(<ClientOffersView {...baseProps} offers={[terminalAccepted, terminalDenied]} />);

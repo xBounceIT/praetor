@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { ClientOffer, OfferRevision, RevisionRow } from '../../types';
+import type { ClientOffer, OfferRevision, RevisionRow, RevisionTitleUpdate } from '../../types';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 import { render } from '../helpers/render';
 
@@ -17,6 +17,9 @@ const listRevisionsMock = mock<(id: string) => Promise<RevisionRow[]>>(() => Pro
 const getRevisionMock = mock<(id: string, revisionId: string) => Promise<OfferRevision>>(() =>
   Promise.reject(new Error('not configured')),
 );
+const updateRevisionTitleMock = mock<
+  (id: string, revisionId: string, title: string | null) => Promise<RevisionTitleUpdate>
+>(() => Promise.reject(new Error('not configured')));
 const restoreRevisionMock = mock<(id: string, revisionId: string) => Promise<ClientOffer>>(() =>
   Promise.reject(new Error('not configured')),
 );
@@ -53,6 +56,7 @@ const REVISION_ROW: RevisionRow = {
   id: 'or-2',
   revisionNumber: 2,
   revisionCode: 'REV2',
+  title: 'Q3 renewal',
   createdByUserId: 'u-1',
   createdByUserName: 'Ada Lovelace',
   createdAt: 1_700_000_000_000,
@@ -62,6 +66,7 @@ const OLDER_REVISION_ROW: RevisionRow = {
   id: 'or-1',
   revisionNumber: 1,
   revisionCode: 'REV1',
+  title: null,
   createdByUserId: 'u-0',
   createdByUserName: 'Grace Hopper',
   createdAt: 1_600_000_000_000,
@@ -103,9 +108,12 @@ const baseProps = {
   onPreview: () => {},
   onClearPreview: () => {},
   onRestored: () => {},
+  canEditTitle: true,
   revisionApi: {
     listRevisions: (id: string) => listRevisionsMock(id),
     getRevision: (id: string, revisionId: string) => getRevisionMock(id, revisionId),
+    updateRevisionTitle: (id: string, revisionId: string, title: string | null) =>
+      updateRevisionTitleMock(id, revisionId, title),
     restoreRevision: (id: string, revisionId: string) => restoreRevisionMock(id, revisionId),
   },
 };
@@ -113,6 +121,7 @@ const baseProps = {
 beforeEach(() => {
   listRevisionsMock.mockReset();
   getRevisionMock.mockReset();
+  updateRevisionTitleMock.mockReset();
   restoreRevisionMock.mockReset();
   listRevisionsMock.mockImplementation(() => Promise.resolve([REVISION_ROW, OLDER_REVISION_ROW]));
 });
@@ -143,6 +152,90 @@ describe('<OfferRevisionsPanel />', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'REV1' }));
     await waitFor(() => expect(getRevisionMock).toHaveBeenCalledWith('OFF_26_001', 'or-1'));
     expect(onPreview).toHaveBeenCalledWith(FULL_REVISION);
+  });
+
+  test('shows the revision title instead of the generic snapshot label and searches it', async () => {
+    render(<OfferRevisionsPanel {...baseProps} />);
+
+    await waitFor(() => expect(screen.getByText(/Q3 renewal/)).toBeInTheDocument());
+    expect(screen.getAllByText(/clientOffers\.revisionHistory\.snapshot/)).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('version-history-search-toggle'));
+    fireEvent.change(
+      screen.getByRole('textbox', {
+        name: 'clientOffers.revisionHistory.searchAriaLabel',
+      }),
+      { target: { value: 'renewal' } },
+    );
+
+    expect(screen.getByText('REV2')).toBeInTheDocument();
+    expect(screen.queryByText('REV1')).not.toBeInTheDocument();
+  });
+
+  test('hides title editing when the user lacks update permission', async () => {
+    render(<OfferRevisionsPanel {...baseProps} canEditTitle={false} />);
+
+    await waitFor(() => expect(screen.getByText(/Q3 renewal/)).toBeInTheDocument());
+    expect(
+      screen.queryByRole('button', {
+        name: 'revisionTitleDialog.editAction: REV2',
+      }),
+    ).not.toBeInTheDocument();
+    expect(updateRevisionTitleMock).not.toHaveBeenCalled();
+  });
+
+  test('edits a revision title from the pencil action and refreshes the searchable row', async () => {
+    updateRevisionTitleMock.mockImplementation(() =>
+      Promise.resolve({ id: 'or-2', title: 'Final Q3 proposal' }),
+    );
+    render(<OfferRevisionsPanel {...baseProps} />);
+
+    await waitFor(() => expect(screen.getByText(/Q3 renewal/)).toBeInTheDocument());
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'revisionTitleDialog.editAction: REV2',
+      }),
+    );
+    const input = screen.getByRole('textbox', {
+      name: 'revisionTitleDialog.fieldLabel',
+    });
+    expect(input).toHaveValue('Q3 renewal');
+    fireEvent.change(input, { target: { value: 'Final Q3 proposal' } });
+    fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
+
+    await waitFor(() =>
+      expect(updateRevisionTitleMock).toHaveBeenCalledWith(
+        'OFF_26_001',
+        'or-2',
+        'Final Q3 proposal',
+      ),
+    );
+    expect(await screen.findByText(/Final Q3 proposal/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('clears a revision title to restore the generic snapshot label', async () => {
+    updateRevisionTitleMock.mockImplementation(() => Promise.resolve({ id: 'or-2', title: null }));
+    render(<OfferRevisionsPanel {...baseProps} />);
+
+    await waitFor(() => expect(screen.getByText(/Q3 renewal/)).toBeInTheDocument());
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'revisionTitleDialog.editAction: REV2',
+      }),
+    );
+    fireEvent.change(
+      screen.getByRole('textbox', {
+        name: 'revisionTitleDialog.fieldLabel',
+      }),
+      { target: { value: '   ' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
+
+    await waitFor(() =>
+      expect(updateRevisionTitleMock).toHaveBeenCalledWith('OFF_26_001', 'or-2', null),
+    );
+    expect(await screen.findAllByText(/clientOffers\.revisionHistory\.snapshot/)).toHaveLength(2);
   });
 
   test('restores the selected revision after confirmation and reloads the rail', async () => {

@@ -518,6 +518,11 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     expect(body.effectiveStatus).toBe('sent');
     expect(body).toHaveProperty('linkedSupplierQuoteId');
     expect(body.linkedSupplierQuoteExpired).toBe(false);
+    expect(createDerivedSupplierRevisionsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      HAPPY_USER.id,
+      expect.anything(),
+    );
   });
 
   test('preserves notes when a flat update omits the field', async () => {

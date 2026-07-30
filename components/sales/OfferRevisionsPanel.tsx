@@ -4,7 +4,7 @@ import { RevisionHistoryPanel } from '../shared/RevisionHistoryPanel';
 
 type OfferRevisionApi = Pick<
   typeof clientOffersApi,
-  'listRevisions' | 'getRevision' | 'restoreRevision'
+  'listRevisions' | 'getRevision' | 'updateRevisionTitle' | 'restoreRevision'
 >;
 
 export const OfferRevisionsPanel = (props: {
@@ -13,6 +13,7 @@ export const OfferRevisionsPanel = (props: {
   onPreview: (revision: OfferRevision) => void;
   onClearPreview: () => void;
   onRestored: (offer: ClientOffer) => void;
+  canEditTitle?: boolean;
   disabled?: boolean;
   revisionApi?: OfferRevisionApi;
   secondaryAction?: {
@@ -27,10 +28,12 @@ export const OfferRevisionsPanel = (props: {
     selectedRevisionId={props.selectedRevisionId}
     list={(props.revisionApi ?? clientOffersApi).listRevisions}
     get={(props.revisionApi ?? clientOffersApi).getRevision}
+    updateTitle={(props.revisionApi ?? clientOffersApi).updateRevisionTitle}
     restore={(props.revisionApi ?? clientOffersApi).restoreRevision}
     onPreview={props.onPreview}
     onClearPreview={props.onClearPreview}
     onRestored={props.onRestored}
+    canEditTitle={props.canEditTitle}
     disabled={props.disabled}
     secondaryAction={props.secondaryAction}
     className={props.className}

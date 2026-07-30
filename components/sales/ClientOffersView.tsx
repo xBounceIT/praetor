@@ -130,6 +130,7 @@ export interface ClientOffersViewProps {
   onCreateClientsOrder?: (offer: ClientOffer) => void | Promise<void>;
   onViewQuote?: (quoteId: string) => void;
   canRevertTerminalStatus?: boolean;
+  canEditRevisionTitles?: boolean;
   currency: string;
   canViewSupplierQuotes?: boolean;
   canViewInternalListing?: boolean;
@@ -305,6 +306,7 @@ const useClientOffersController = ({
   onCreateClientsOrder,
   onViewQuote,
   canRevertTerminalStatus = false,
+  canEditRevisionTitles = false,
   currency,
   canViewSupplierQuotes = true,
   canViewInternalListing = true,
@@ -1406,6 +1408,7 @@ const useClientOffersController = ({
     currency,
     canViewSupplierQuotes,
     canViewInternalListing,
+    canEditRevisionTitles,
     paymentTermsOptions,
     clientOptions,
     productOptions,
@@ -1546,6 +1549,7 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
                   }
                   onClearPreview={handleClearPreview}
                   onRestored={handleVersionRestored}
+                  canEditTitle={controller.canEditRevisionTitles}
                   disabled={revisionRestoreDisabled}
                   secondaryAction={{
                     label: t('sales:clientOffers.revisionHistory.openVersionHistory', {

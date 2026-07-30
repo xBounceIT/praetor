@@ -6,6 +6,7 @@ import type {
   QuoteVersion,
   QuoteVersionRow,
   RevisionRow,
+  RevisionTitleUpdate,
 } from '../../types';
 import { fetchApi } from './client';
 import { normalizeQuote } from './normalizers';
@@ -64,6 +65,19 @@ export const clientQuotesApi = {
   getRevision: (id: string, revisionId: string): Promise<QuoteRevision> =>
     fetchApi<QuoteRevision>(
       `/sales/client-quotes/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}`,
+    ),
+
+  updateRevisionTitle: (
+    id: string,
+    revisionId: string,
+    title: string | null,
+  ): Promise<RevisionTitleUpdate> =>
+    fetchApi<RevisionTitleUpdate>(
+      `/sales/client-quotes/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      },
     ),
 
   restoreRevision: (id: string, revisionId: string): Promise<Quote> =>

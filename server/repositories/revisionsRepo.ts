@@ -14,15 +14,19 @@ export type RevisionRow = {
   id: string;
   revisionNumber: number;
   revisionCode: string;
+  title: string | null;
   createdByUserId: string | null;
   createdByUserName: string | null;
   createdAt: number;
 };
 
+export type RevisionTitleUpdate = Pick<RevisionRow, 'id' | 'title'>;
+
 const mapRow = (row: {
   id: string;
   revisionNumber: number;
   revisionCode: string;
+  title: string | null;
   createdByUserId: string | null;
   createdByUserName: string | null;
   createdAt: Date | null;
@@ -39,6 +43,7 @@ const list = async (
         id: quoteRevisions.id,
         revisionNumber: quoteRevisions.revisionNumber,
         revisionCode: quoteRevisions.revisionCode,
+        title: quoteRevisions.title,
         createdByUserId: quoteRevisions.createdByUserId,
         createdByUserName: users.name,
         createdAt: quoteRevisions.createdAt,
@@ -55,6 +60,7 @@ const list = async (
         id: offerRevisions.id,
         revisionNumber: offerRevisions.revisionNumber,
         revisionCode: offerRevisions.revisionCode,
+        title: offerRevisions.title,
         createdByUserId: offerRevisions.createdByUserId,
         createdByUserName: users.name,
         createdAt: offerRevisions.createdAt,
@@ -70,6 +76,7 @@ const list = async (
       id: supplierQuoteRevisions.id,
       revisionNumber: supplierQuoteRevisions.revisionNumber,
       revisionCode: supplierQuoteRevisions.revisionCode,
+      title: supplierQuoteRevisions.title,
       createdByUserId: supplierQuoteRevisions.createdByUserId,
       createdByUserName: users.name,
       createdAt: supplierQuoteRevisions.createdAt,
@@ -150,6 +157,50 @@ export const findSupplierQuoteById = async (
         snapshot: row.revision.snapshot,
       }
     : null;
+};
+
+export const updateQuoteTitle = async (
+  quoteId: string,
+  revisionId: string,
+  title: string | null,
+  exec: DbExecutor = db,
+): Promise<RevisionTitleUpdate | null> => {
+  const [row] = await exec
+    .update(quoteRevisions)
+    .set({ title })
+    .where(and(eq(quoteRevisions.quoteId, quoteId), eq(quoteRevisions.id, revisionId)))
+    .returning({ id: quoteRevisions.id, title: quoteRevisions.title });
+  return row ?? null;
+};
+
+export const updateOfferTitle = async (
+  offerId: string,
+  revisionId: string,
+  title: string | null,
+  exec: DbExecutor = db,
+): Promise<RevisionTitleUpdate | null> => {
+  const [row] = await exec
+    .update(offerRevisions)
+    .set({ title })
+    .where(and(eq(offerRevisions.offerId, offerId), eq(offerRevisions.id, revisionId)))
+    .returning({ id: offerRevisions.id, title: offerRevisions.title });
+  return row ?? null;
+};
+
+export const updateSupplierQuoteTitle = async (
+  quoteId: string,
+  revisionId: string,
+  title: string | null,
+  exec: DbExecutor = db,
+): Promise<RevisionTitleUpdate | null> => {
+  const [row] = await exec
+    .update(supplierQuoteRevisions)
+    .set({ title })
+    .where(
+      and(eq(supplierQuoteRevisions.quoteId, quoteId), eq(supplierQuoteRevisions.id, revisionId)),
+    )
+    .returning({ id: supplierQuoteRevisions.id, title: supplierQuoteRevisions.title });
+  return row ?? null;
 };
 
 export const latestQuote = async (quoteId: string, exec: DbExecutor = db) => {

@@ -22,6 +22,16 @@ const revisionInsertBlock = (table: string) => {
 };
 
 describe('seed.sql revision snapshots stay aligned with live writers', () => {
+  test('all revision timelines seed searchable titles idempotently', () => {
+    for (const table of ['quote_revisions', 'offer_revisions', 'supplier_quote_revisions']) {
+      const block = revisionInsertBlock(table);
+      expect(block).toContain('revision_code, title, created_by_user_id');
+      expect(block).toContain("'Invio iniziale'");
+      expect(block).toContain('title = EXCLUDED.title');
+    }
+    expect(SEED_SQL).toContain("'Revisione commerciale'");
+  });
+
   test('quote_revisions snapshots include description and pricingSemanticsVersion', () => {
     const block = revisionInsertBlock('quote_revisions');
     expect(block).toContain("'description', q.description");

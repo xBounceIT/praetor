@@ -194,6 +194,35 @@ afterEach(() => {
   restoreRevisionMock.mockRejectedValue(new Error('not used'));
 });
 
+describe('<ClientQuotesView /> revision creation', () => {
+  test('sends a draft immediately without asking for a revision title', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        quotes={[buildQuote({ id: 'Q-TITLE' })]}
+        communicationChannels={communicationChannels}
+        onUpdateQuote={onUpdateQuote}
+      />,
+    );
+
+    await openItemActions();
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.markAsSent' }));
+
+    await waitFor(() =>
+      expect(onUpdateQuote).toHaveBeenCalledWith(
+        'Q-TITLE',
+        expect.objectContaining({
+          status: 'sent',
+        }),
+      ),
+    );
+    expect(
+      screen.queryByRole('textbox', { name: 'revisionTitleDialog.fieldLabel' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('<ClientQuotesView /> candidate version previews', () => {
   test('switches the candidate tabs to the historical family and restores the current family', async () => {
     const currentCandidate = {
