@@ -96,6 +96,44 @@ const requirePosition = (label: string, idx: number): number => {
   return idx;
 };
 
+// Find the next statement terminator or selected top-level keyword without treating content
+// inside string literals or nested expressions as SQL structure.
+const findSqlBoundary = (sql: string, start: number, keywords: readonly string[] = []): number => {
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < sql.length; i += 1) {
+    const char = sql[i];
+    if (inString) {
+      if (char === "'") {
+        if (sql[i + 1] === "'") {
+          i += 1;
+        } else {
+          inString = false;
+        }
+      }
+      continue;
+    }
+    if (char === "'") {
+      inString = true;
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char === ')') {
+      depth -= 1;
+      continue;
+    }
+    if (depth !== 0) continue;
+    if (char === ';') return i;
+    for (const keyword of keywords) {
+      if (sql.slice(i, i + keyword.length).toUpperCase() === keyword) return i;
+    }
+  }
+  return sql.length;
+};
+
 // Match the closing paren for the `(` at `openIdx`, respecting strings and nesting. Reuses
 // walkSqlTopLevel's state machine: its first top-level 'close' event is this paren's match.
 const matchParen = (sql: string, openIdx: number): number => {
@@ -106,6 +144,31 @@ const matchParen = (sql: string, openIdx: number): number => {
 };
 
 export type ParsedRow = Record<string, string>;
+
+export type InsertTarget = {
+  table: string;
+  columns: string[];
+};
+
+// Return the target table and column list for every INSERT in seed.sql, regardless of whether
+// the rows come from inline VALUES or INSERT ... SELECT. This lets schema-drift tests cover the
+// complete seed surface instead of maintaining a table-by-table allowlist.
+export const parseInsertTargets = (sql: string): InsertTarget[] => {
+  const targets: InsertTarget[] = [];
+  const header = /INSERT\s+INTO\s+([a-z_]+)\s*\(/gi;
+  let match: RegExpExecArray | null = header.exec(sql);
+  while (match !== null) {
+    const columnsOpen = match.index + match[0].length - 1;
+    const columnsClose = matchParen(sql, columnsOpen);
+    targets.push({
+      table: match[1],
+      columns: splitTopLevelCommas(sql.slice(columnsOpen + 1, columnsClose)),
+    });
+    header.lastIndex = columnsClose + 1;
+    match = header.exec(sql);
+  }
+  return targets;
+};
 
 // Parse every `INSERT INTO <table> (cols) VALUES (...), (...)` block whose values are inline
 // literal tuples (clients, projects, customer_offers, sales, …). Returns one record per
@@ -119,21 +182,28 @@ export const parseInsertValuesBlocks = (sql: string, table: string): ParsedRow[]
   while (match !== null) {
     const colsOpen = match.index + match[0].length - 1;
     const colsClose = matchParen(sql, colsOpen);
-    const columns = splitTopLevelCommas(sql.slice(colsOpen + 1, colsClose)).map((c) => c.trim());
+    const columns = splitTopLevelCommas(sql.slice(colsOpen + 1, colsClose));
 
-    const valuesKw = requirePosition(
-      'VALUES keyword',
-      sql.toUpperCase().indexOf('VALUES', colsClose),
-    );
-    const onConflict = sql.toUpperCase().indexOf('ON CONFLICT', valuesKw);
-    const semicolon = sql.indexOf(';', valuesKw);
-    const endCandidates = [onConflict, semicolon].filter((idx) => idx !== -1);
-    const end = endCandidates.length > 0 ? Math.min(...endCandidates) : sql.length;
+    const afterColumns = sql.slice(colsClose + 1);
+    const valuesMatch = /^\s*VALUES\b/i.exec(afterColumns);
+    if (!valuesMatch) {
+      header.lastIndex = colsClose + 1;
+      match = header.exec(sql);
+      continue;
+    }
+    const valuesKw =
+      colsClose + 1 + requirePosition('VALUES keyword', valuesMatch[0].search(/VALUES/i));
+    const end = findSqlBoundary(sql, valuesKw + 'VALUES'.length, ['ON CONFLICT']);
 
     for (const tuple of extractTopLevelTuples(sql.slice(valuesKw + 'VALUES'.length, end))) {
+      if (tuple.length !== columns.length) {
+        throw new Error(
+          `seed.sql: ${table} INSERT expected ${columns.length} values, got ${tuple.length}`,
+        );
+      }
       const row: ParsedRow = {};
       columns.forEach((col, idx) => {
-        if (idx < tuple.length) row[col] = unquote(tuple[idx]);
+        row[col] = unquote(tuple[idx]);
       });
       rows.push(row);
     }
@@ -157,16 +227,23 @@ export const parseSelectValuesBlocks = (sql: string, table: string): SelectValue
   while (cursor < sql.length) {
     const insertIdx = sql.indexOf(`INSERT INTO ${table}`, cursor);
     if (insertIdx === -1) break;
+    const boundedStatementEnd = findSqlBoundary(sql, insertIdx);
 
     fromValuesRe.lastIndex = insertIdx;
     const fromValues = fromValuesRe.exec(sql);
-    if (!fromValues) break;
+    if (!fromValues || fromValues.index >= boundedStatementEnd) {
+      cursor = boundedStatementEnd + 1;
+      continue;
+    }
     const bodyStart = fromValues.index + fromValues[0].length;
 
     // The first `) AS v(` after the VALUES body is the `)` that closes `FROM (`.
     aliasRe.lastIndex = bodyStart;
     const alias = aliasRe.exec(sql);
-    if (!alias) break;
+    if (!alias || alias.index >= boundedStatementEnd) {
+      cursor = boundedStatementEnd + 1;
+      continue;
+    }
     const aliasColsStart = alias.index + alias[0].length;
     const aliasClose = requirePosition("')' closing AS v(...)", sql.indexOf(')', aliasColsStart));
     const aliasColumns = sql
@@ -176,14 +253,19 @@ export const parseSelectValuesBlocks = (sql: string, table: string): SelectValue
 
     const body = sql.slice(bodyStart, alias.index);
     const rows = extractTopLevelTuples(body).map((tuple) => {
+      if (tuple.length !== aliasColumns.length) {
+        throw new Error(
+          `seed.sql: ${table} VALUES alias expected ${aliasColumns.length} values, got ${tuple.length}`,
+        );
+      }
       const row: ParsedRow = {};
       aliasColumns.forEach((col, idx) => {
-        if (idx < tuple.length) row[col] = unquote(tuple[idx]);
+        row[col] = unquote(tuple[idx]);
       });
       return row;
     });
     blocks.push({ aliasColumns, rows });
-    cursor = aliasClose;
+    cursor = boundedStatementEnd + 1;
   }
   return blocks;
 };

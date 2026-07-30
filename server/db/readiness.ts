@@ -1,8 +1,8 @@
 import { readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sql } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
+import { getTableName, sql } from 'drizzle-orm';
+import { PgTable } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db, executeRows, schema } from './drizzle.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,63 +30,10 @@ type VerifyDbReadinessOptions = {
   probes?: readonly DbReadinessProbe[];
 };
 
-const schemaReadinessTables = [
-  ['audit_logs', schema.auditLogs],
-  ['client_profile_options', schema.clientProfileOptions],
-  ['clients', schema.clients],
-  ['customer_offer_items', schema.customerOfferItems],
-  ['customer_offers', schema.customerOffers],
-  ['email_config', schema.emailConfig],
-  ['external_identities', schema.externalIdentities],
-  ['general_settings', schema.generalSettings],
-  ['invoice_items', schema.invoiceItems],
-  ['invoices', schema.invoices],
-  ['ldap_config', schema.ldapConfig],
-  ['notifications', schema.notifications],
-  ['offer_versions', schema.offerVersions],
-  ['order_versions', schema.orderVersions],
-  ['product_categories', schema.productCategories],
-  ['product_subcategories', schema.productSubcategories],
-  ['products', schema.products],
-  ['product_types', schema.productTypes],
-  ['project_rules', schema.projectRules],
-  ['projects', schema.projects],
-  ['quote_items', schema.quoteItems],
-  ['quotes', schema.quotes],
-  ['quote_versions', schema.quoteVersions],
-  ['report_chat_messages', schema.reportChatMessages],
-  ['report_chat_sessions', schema.reportChatSessions],
-  ['role_permissions', schema.rolePermissions],
-  ['roles', schema.roles],
-  ['sale_items', schema.saleItems],
-  ['sales', schema.sales],
-  ['settings', schema.settings],
-  ['siem_config', schema.siemConfig],
-  ['siem_outbox', schema.siemOutbox],
-  ['sso_login_tickets', schema.ssoLoginTickets],
-  ['sso_providers', schema.ssoProviders],
-  ['sso_states', schema.ssoStates],
-  ['supplier_invoice_items', schema.supplierInvoiceItems],
-  ['supplier_invoices', schema.supplierInvoices],
-  ['supplier_order_versions', schema.supplierOrderVersions],
-  ['supplier_quote_attachments', schema.supplierQuoteAttachments],
-  ['supplier_quote_items', schema.supplierQuoteItems],
-  ['supplier_quotes', schema.supplierQuotes],
-  ['supplier_quote_versions', schema.supplierQuoteVersions],
-  ['supplier_sale_items', schema.supplierSaleItems],
-  ['supplier_sales', schema.supplierSales],
-  ['suppliers', schema.suppliers],
-  ['tasks', schema.tasks],
-  ['time_entries', schema.timeEntries],
-  ['user_clients', schema.userClients],
-  ['user_projects', schema.userProjects],
-  ['user_roles', schema.userRoles],
-  ['user_tasks', schema.userTasks],
-  ['users', schema.users],
-  ['user_work_units', schema.userWorkUnits],
-  ['work_unit_managers', schema.workUnitManagers],
-  ['work_units', schema.workUnits],
-] satisfies readonly (readonly [string, PgTable])[];
+const schemaReadinessTables = (Object.values(schema) as unknown[])
+  .filter((value): value is PgTable => value instanceof PgTable)
+  .map((table) => [getTableName(table), table] as const)
+  .sort(([left], [right]) => left.localeCompare(right));
 
 export const schemaReadinessProbes = schemaReadinessTables.map(
   ([name, table]): DbReadinessProbe => ({
