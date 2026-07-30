@@ -59,6 +59,28 @@ describe('<RevisionTitleDialog />', () => {
     expect(onConfirm).toHaveBeenCalledWith('');
   });
 
+  test('does not submit the parent document form when saving through the portal', () => {
+    const onConfirm = mock((_title: string) => {});
+    const onDocumentSubmit = mock((event: React.FormEvent<HTMLFormElement>) =>
+      event.preventDefault(),
+    );
+    render(
+      <form onSubmit={onDocumentSubmit}>
+        <RevisionTitleDialog
+          open
+          initialTitle="Existing title"
+          onOpenChange={() => {}}
+          onConfirm={onConfirm}
+        />
+      </form>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
+
+    expect(onConfirm).toHaveBeenCalledWith('Existing title');
+    expect(onDocumentSubmit).not.toHaveBeenCalled();
+  });
+
   test('keeps the dialog locked and exposes the save error while updating', () => {
     render(
       <RevisionTitleDialog

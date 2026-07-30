@@ -150,7 +150,7 @@ export const registerRevisionHistoryRoutes = <
           },
           required: ['title'],
         },
-        response: { 200: revisionTitleUpdateSchema, ...standardErrorResponses },
+        response: { 200: revisionTitleUpdateSchema, ...standardRateLimitedErrorResponses },
       },
     },
     async (request, reply) => {

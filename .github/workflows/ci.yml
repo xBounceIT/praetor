@@ -171,6 +171,17 @@ jobs:
           RUN_TIME_ENTRY_DUPLICATE_KEY_MIGRATION_TEST: '1'
         run: bun test ./test/db/migration0130AllowDuplicateTimeEntryKeys.postgres.test.ts
 
+      - name: Verify revision-title upgrade on legacy rows
+        working-directory: server
+        env:
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: praetor_test
+          DB_USER: praetor
+          DB_PASSWORD: ci-postgres-password
+          RUN_REVISION_TITLES_MIGRATION_TEST: '1'
+        run: bun test ./test/db/migration0133RevisionTitles.postgres.test.ts
+
       - name: Seed required system-role references
         env:
           PGHOST: localhost

@@ -53,6 +53,7 @@ function RevisionTitleDialogContent({
         className="grid gap-5"
         onSubmit={(event) => {
           event.preventDefault();
+          event.stopPropagation();
           onConfirm(title.trim());
         }}
       >
