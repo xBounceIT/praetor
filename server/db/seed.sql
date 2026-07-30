@@ -1545,32 +1545,42 @@ INSERT INTO time_entries (
     task, task_id, notes, duration, hourly_cost, is_placeholder, location
 )
 SELECT
-    v.id, v.user_id, v.entry_date, v.client_id, v.client_name, v.project_id, v.project_name,
+    v.id, v.user_id, v.entry_date::date, p.client_id, c.name, v.project_id, p.name,
     v.task,
     (SELECT t.id FROM tasks t WHERE t.project_id = v.project_id AND t.name = v.task ORDER BY t.id LIMIT 1),
-    v.notes, v.duration, v.hourly_cost, v.is_placeholder, v.location
+    v.notes, v.duration, cost_period.cost_per_hour, v.is_placeholder, v.location
 FROM (VALUES
-    ('dm_te_01', 'u3',  CURRENT_DATE - INTERVAL '28 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Initial Design',       'Wireframe sketches for homepage',          6.00, 45.00, FALSE, 'office'),
-    ('dm_te_02', 'u3',  CURRENT_DATE - INTERVAL '27 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Implement header and nav components',      7.50, 45.00, FALSE, 'office'),
-    ('dm_te_03', 'u5',  CURRENT_DATE - INTERVAL '26 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Build hero section and CTA blocks',        8.00, 50.00, FALSE, 'remote'),
-    ('dm_te_04', 'u5',  CURRENT_DATE - INTERVAL '25 days', 'c1', 'Acme Corp',    'p2', 'Mobile App',         'API Integration',      'Wire up authentication endpoints',         4.00, 50.00, FALSE, 'remote'),
-    ('dm_te_05', 'u6',  CURRENT_DATE - INTERVAL '24 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Responsive layout for mobile breakpoints', 7.00, 40.00, FALSE, 'office'),
-    ('dm_te_06', 'u6',  CURRENT_DATE - INTERVAL '23 days', 'c1', 'Acme Corp',    'p2', 'Mobile App',         'API Integration',      'Connect product listing to backend',       5.50, 40.00, FALSE, 'remote'),
-    ('dm_te_07', 'u2',  CURRENT_DATE - INTERVAL '22 days', 'c2', 'Global Tech',  'p3', 'Internal Research',  'General Support',      'Sprint kickoff and backlog grooming',      3.00, 65.00, FALSE, 'office'),
-    ('dm_te_08', 'u7',  CURRENT_DATE - INTERVAL '21 days', 'c2', 'Global Tech',  'p3', 'Internal Research',  'Market Analysis',      'Competitive landscape research',           6.00, 55.00, FALSE, 'remote'),
-    ('dm_te_09', 'u3',  CURRENT_DATE - INTERVAL '20 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Code review and refactor pass',            4.50, 45.00, FALSE, 'remote'),
-    ('dm_te_10', 'u5',  CURRENT_DATE - INTERVAL '19 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Accessibility audit and fixes',            3.50, 50.00, FALSE, 'remote'),
-    ('dm_te_11', 'u6',  CURRENT_DATE - INTERVAL '18 days', 'c1', 'Acme Corp',    'p2', 'Mobile App',         'API Integration',      'UI polish on product detail screen',       6.00, 40.00, FALSE, 'office'),
-    ('dm_te_12', 'u2',  CURRENT_DATE - INTERVAL '17 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Initial Design',       'Sprint planning and story pointing',       2.00, 65.00, FALSE, 'office'),
-    ('dm_te_13', 'u7',  CURRENT_DATE - INTERVAL '15 days', 'c2', 'Global Tech',  'p3', 'Internal Research',  'Market Analysis',      'Competitor pricing analysis report',       7.00, 55.00, FALSE, 'remote'),
-    ('dm_te_14', 'u3',  CURRENT_DATE - INTERVAL '14 days', 'c1', 'Acme Corp',    'p2', 'Mobile App',         'API Integration',      'Integration testing against staging env',  5.00, 45.00, FALSE, 'office'),
-    ('dm_te_15', 'u5',  CURRENT_DATE - INTERVAL '12 days', 'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Performance profiling and bundle tuning',  4.00, 50.00, FALSE, 'remote'),
-    ('dm_te_16', 'u6',  CURRENT_DATE - INTERVAL '10 days', 'c1', 'Acme Corp',    'p2', 'Mobile App',         'API Integration',      'Bug fixes from QA round two',              6.50, 40.00, FALSE, 'office'),
-    ('dm_te_17', 'u2',  CURRENT_DATE - INTERVAL '8 days',  'c2', 'Global Tech',  'p3', 'Internal Research',  'General Support',      'Status report for stakeholders',           1.50, 65.00, FALSE, 'remote'),
-    ('dm_te_18', 'u7',  CURRENT_DATE - INTERVAL '6 days',  'c2', 'Global Tech',  'p3', 'Internal Research',  'Market Analysis',      'On-site data collection interviews',       5.00, 55.00, FALSE, 'customer_premise'),
-    ('dm_te_19', 'u3',  CURRENT_DATE - INTERVAL '4 days',  'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Final QA pass before handoff',             8.00, 45.00, FALSE, 'office'),
-    ('dm_te_20', 'u5',  CURRENT_DATE - INTERVAL '2 days',  'c1', 'Acme Corp',    'p1', 'Website Redesign',   'Frontend Dev',         'Deployment preparation and smoke test',    3.00, 50.00, FALSE, 'remote')
-) AS v(id, user_id, entry_date, client_id, client_name, project_id, project_name, task, notes, duration, hourly_cost, is_placeholder, location)
+    ('dm_te_01', 'u3', CURRENT_DATE - INTERVAL '28 days', 'p1', 'Initial Design',  'Wireframe sketches for homepage',          6.00, FALSE, 'office'),
+    ('dm_te_02', 'u3', CURRENT_DATE - INTERVAL '27 days', 'p1', 'Frontend Dev',    'Implement header and nav components',      7.50, FALSE, 'office'),
+    ('dm_te_03', 'u5', CURRENT_DATE - INTERVAL '26 days', 'p1', 'Frontend Dev',    'Build hero section and CTA blocks',        8.00, FALSE, 'remote'),
+    ('dm_te_04', 'u5', CURRENT_DATE - INTERVAL '25 days', 'p2', 'API Integration', 'Wire up authentication endpoints',         4.00, FALSE, 'remote'),
+    ('dm_te_05', 'u6', CURRENT_DATE - INTERVAL '24 days', 'p1', 'Frontend Dev',    'Responsive layout for mobile breakpoints', 7.00, FALSE, 'office'),
+    ('dm_te_06', 'u6', CURRENT_DATE - INTERVAL '23 days', 'p2', 'API Integration', 'Connect product listing to backend',       5.50, FALSE, 'remote'),
+    ('dm_te_07', 'u2', CURRENT_DATE - INTERVAL '22 days', 'p3', 'General Support', 'Sprint kickoff and backlog grooming',      3.00, FALSE, 'office'),
+    ('dm_te_08', 'u7', CURRENT_DATE - INTERVAL '21 days', 'p3', 'Market Analysis', 'Competitive landscape research',           6.00, FALSE, 'remote'),
+    ('dm_te_09', 'u3', CURRENT_DATE - INTERVAL '20 days', 'p1', 'Frontend Dev',    'Code review and refactor pass',            4.50, FALSE, 'remote'),
+    ('dm_te_10', 'u5', CURRENT_DATE - INTERVAL '19 days', 'p1', 'Frontend Dev',    'Accessibility audit and fixes',            3.50, FALSE, 'remote'),
+    ('dm_te_11', 'u6', CURRENT_DATE - INTERVAL '18 days', 'p2', 'API Integration', 'UI polish on product detail screen',       6.00, FALSE, 'office'),
+    ('dm_te_12', 'u2', CURRENT_DATE - INTERVAL '17 days', 'p1', 'Initial Design',  'Sprint planning and story pointing',       2.00, FALSE, 'office'),
+    ('dm_te_13', 'u7', CURRENT_DATE - INTERVAL '15 days', 'p3', 'Market Analysis', 'Competitor pricing analysis report',       7.00, FALSE, 'remote'),
+    ('dm_te_14', 'u3', CURRENT_DATE - INTERVAL '14 days', 'p2', 'API Integration', 'Integration testing against staging env',  5.00, FALSE, 'office'),
+    ('dm_te_15', 'u5', CURRENT_DATE - INTERVAL '12 days', 'p1', 'Frontend Dev',    'Performance profiling and bundle tuning',  4.00, FALSE, 'remote'),
+    ('dm_te_16', 'u6', CURRENT_DATE - INTERVAL '10 days', 'p2', 'API Integration', 'Bug fixes from QA round two',              6.50, FALSE, 'office'),
+    ('dm_te_17', 'u2', CURRENT_DATE - INTERVAL '8 days',  'p3', 'General Support', 'Status report for stakeholders',           1.50, FALSE, 'remote'),
+    ('dm_te_18', 'u7', CURRENT_DATE - INTERVAL '6 days',  'p3', 'Market Analysis', 'On-site data collection interviews',       5.00, FALSE, 'customer_premise'),
+    ('dm_te_19', 'u3', CURRENT_DATE - INTERVAL '4 days',  'p1', 'Frontend Dev',    'Final QA pass before handoff',             8.00, FALSE, 'office'),
+    ('dm_te_20', 'u5', CURRENT_DATE - INTERVAL '2 days',  'p1', 'Frontend Dev',    'Deployment preparation and smoke test',    3.00, FALSE, 'remote')
+) AS v(id, user_id, entry_date, project_id, task, notes, duration, is_placeholder, location)
+JOIN projects p ON p.id = v.project_id
+JOIN clients c ON c.id = p.client_id
+JOIN LATERAL (
+    SELECT cost_period.cost_per_hour
+    FROM user_hourly_cost_periods cost_period
+    WHERE cost_period.user_id = v.user_id
+      AND (cost_period.effective_from IS NULL OR cost_period.effective_from <= v.entry_date::date)
+    ORDER BY cost_period.effective_from DESC NULLS LAST
+    LIMIT 1
+) cost_period ON TRUE
 ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.user_id,
     date = EXCLUDED.date,
@@ -2125,32 +2135,33 @@ SET revision_number = 2,
 WHERE id = pg_temp.demo_document_code('supplier_quote', 2)
   AND revision_number >= 1;
 
-UPDATE time_entries te
-SET client_id = own_company.id,
-    client_name = own_company.name
-FROM clients own_company
-WHERE own_company.id = 'praetor-own-company'
-  AND te.project_id = 'p3';
-
 INSERT INTO time_entries (
     id, user_id, date, client_id, client_name, project_id, project_name,
     task, task_id, notes, duration, hourly_cost, is_placeholder, location
 )
 SELECT
     v.id, v.user_id, v.entry_date::date,
-    v.client_id, v.client_name, v.project_id,
-    p.name,
+    p.client_id, c.name, v.project_id, p.name,
     v.task,
     (SELECT t.id FROM tasks t WHERE t.project_id = v.project_id AND t.name = v.task ORDER BY t.id LIMIT 1),
-    v.notes, v.duration, v.hourly_cost, v.is_placeholder, v.location
+    v.notes, v.duration, cost_period.cost_per_hour, v.is_placeholder, v.location
 FROM (VALUES
-    ('dm_te_21', 'u2',  CURRENT_DATE - INTERVAL '16 days', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'dm_proj_01', 'Security audit review',         'Reviewed pen-test findings with client',          3.00, 65.00, FALSE, 'office'),
-    ('dm_te_22', 'u5',  CURRENT_DATE - INTERVAL '13 days', 'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'dm_proj_02', 'Deployment configuration',      'Set up CI pipeline and staging environment',      5.00, 50.00, FALSE, 'remote'),
-    ('dm_te_23', 'u6',  CURRENT_DATE - INTERVAL '9 days',  'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'dm_proj_01', 'Assessment report draft',       'Drafted executive summary and findings',          4.50, 40.00, FALSE, 'office'),
-    ('dm_te_24', 'u3',  CURRENT_DATE - INTERVAL '7 days',  'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'dm_proj_02', 'Infra provisioning',            'Provisioned cloud resources for first wave',      6.00, 45.00, FALSE, 'remote'),
-    ('dm_te_25', 'u2',  CURRENT_DATE - INTERVAL '3 days',  'dm_cli_01', 'Northwind Retail Italia S.p.A.', 'dm_proj_01', 'Final review sign-off',         'Client sign-off meeting and deliverable handoff', 2.00, 65.00, FALSE, 'customer_premise')
-) AS v(id, user_id, entry_date, client_id, client_name, project_id, task, notes, duration, hourly_cost, is_placeholder, location)
+    ('dm_te_21', 'u2', CURRENT_DATE - INTERVAL '16 days', 'dm_proj_01', 'Security audit review',    'Reviewed pen-test findings with client',          3.00, FALSE, 'office'),
+    ('dm_te_22', 'u5', CURRENT_DATE - INTERVAL '13 days', 'dm_proj_02', 'Deployment configuration', 'Set up CI pipeline and staging environment',      5.00, FALSE, 'remote'),
+    ('dm_te_23', 'u6', CURRENT_DATE - INTERVAL '9 days',  'dm_proj_01', 'Assessment report draft',  'Drafted executive summary and findings',          4.50, FALSE, 'office'),
+    ('dm_te_24', 'u3', CURRENT_DATE - INTERVAL '7 days',  'dm_proj_02', 'Infra provisioning',       'Provisioned cloud resources for first wave',      6.00, FALSE, 'remote'),
+    ('dm_te_25', 'u2', CURRENT_DATE - INTERVAL '3 days',  'dm_proj_01', 'Final review sign-off',    'Client sign-off meeting and deliverable handoff', 2.00, FALSE, 'customer_premise')
+) AS v(id, user_id, entry_date, project_id, task, notes, duration, is_placeholder, location)
 JOIN projects p ON p.id = v.project_id
+JOIN clients c ON c.id = p.client_id
+JOIN LATERAL (
+    SELECT cost_period.cost_per_hour
+    FROM user_hourly_cost_periods cost_period
+    WHERE cost_period.user_id = v.user_id
+      AND (cost_period.effective_from IS NULL OR cost_period.effective_from <= v.entry_date::date)
+    ORDER BY cost_period.effective_from DESC NULLS LAST
+    LIMIT 1
+) cost_period ON TRUE
 ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.user_id,
     date = EXCLUDED.date,
