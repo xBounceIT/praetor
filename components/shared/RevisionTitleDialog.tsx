@@ -57,12 +57,14 @@ function RevisionTitleDialogContent({
         }}
       >
         <DialogHeader className="pr-7">
-          <div className="mb-1 flex size-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-            <Tag className="size-4" aria-hidden="true" />
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+              <Tag className="size-4" aria-hidden="true" />
+            </div>
+            <DialogTitle>
+              {t('revisionTitleDialog.title', { defaultValue: 'Titolo revisione' })}
+            </DialogTitle>
           </div>
-          <DialogTitle>
-            {t('revisionTitleDialog.title', { defaultValue: 'Titolo revisione' })}
-          </DialogTitle>
           <DialogDescription>
             {t('revisionTitleDialog.description', {
               defaultValue: 'Modifica il titolo usato per riconoscere e cercare questa revisione.',

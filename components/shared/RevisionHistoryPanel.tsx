@@ -23,6 +23,7 @@ interface RevisionHistoryPanelProps<TRevision extends RevisionWithSnapshot, TRes
   onPreview: (revision: TRevision) => void;
   onClearPreview: () => void;
   onRestored: (restored: TRestored) => void;
+  canEditTitle?: boolean;
   disabled?: boolean;
   secondaryAction?: {
     label: string;
@@ -42,6 +43,7 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
   onPreview,
   onClearPreview,
   onRestored,
+  canEditTitle = false,
   disabled,
   secondaryAction,
   className,
@@ -118,7 +120,7 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
 
   const handleTitleUpdate = useCallback(
     async (title: string) => {
-      if (!titleRow) return;
+      if (!canEditTitle || !titleRow) return;
       setTitleInFlight(true);
       setTitleError(null);
       try {
@@ -142,7 +144,7 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
         setTitleInFlight(false);
       }
     },
-    [objectId, state.rows, t, titleRow, updateTitle],
+    [canEditTitle, objectId, state.rows, t, titleRow, updateTitle],
   );
 
   const rows = state.rows.map((row) => ({ ...row, reason: 'update' as const }));
@@ -200,15 +202,19 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
           }),
         }}
         onSelect={handleSelect}
-        onEditTitle={(row) => {
-          setTitleError(null);
-          setTitleRow(row);
-        }}
+        onEditTitle={
+          canEditTitle
+            ? (row) => {
+                setTitleError(null);
+                setTitleRow(row);
+              }
+            : undefined
+        }
         onClearPreview={onClearPreview}
         onRestore={() => setConfirmOpen(true)}
       />
       <RevisionTitleDialog
-        open={Boolean(titleRow)}
+        open={canEditTitle && Boolean(titleRow)}
         initialTitle={titleRow?.title}
         isSaving={titleInFlight}
         error={titleError}

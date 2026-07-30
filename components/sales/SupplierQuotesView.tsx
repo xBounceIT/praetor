@@ -175,6 +175,7 @@ export interface SupplierQuotesViewProps {
   products: Product[];
   communicationChannels?: QuoteCommunicationChannel[];
   canManageCommunicationChannels?: boolean;
+  canEditRevisionTitles?: boolean;
   onCreateCommunicationChannel?: (data: {
     name: string;
     icon: QuoteCommunicationChannelIcon;
@@ -474,6 +475,7 @@ const useSupplierQuotesController = ({
   products,
   communicationChannels = DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
   canManageCommunicationChannels = false,
+  canEditRevisionTitles = false,
   onCreateCommunicationChannel = noopQuoteCommunicationChannelMutation,
   onUpdateCommunicationChannel = noopQuoteCommunicationChannelMutation,
   onDeleteCommunicationChannel = noopQuoteCommunicationChannelMutation,
@@ -1250,6 +1252,7 @@ const useSupplierQuotesController = ({
     addItem,
     baseReadOnly,
     canManageCommunicationChannels,
+    canEditRevisionTitles,
     canOpenQuoteModal,
     clientOptions,
     closeModal,
@@ -1366,6 +1369,7 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
                   }
                   onClearPreview={controller.handleClearPreview}
                   onRestored={controller.handleVersionRestored}
+                  canEditTitle={controller.canEditRevisionTitles}
                   disabled={revisionRestoreDisabled}
                   secondaryAction={{
                     label: controller.t('sales:supplierQuotes.revisionHistory.openVersionHistory', {

@@ -108,6 +108,7 @@ const baseProps = {
   onPreview: () => {},
   onClearPreview: () => {},
   onRestored: () => {},
+  canEditTitle: true,
   revisionApi: {
     listRevisions: (id: string) => listRevisionsMock(id),
     getRevision: (id: string, revisionId: string) => getRevisionMock(id, revisionId),
@@ -169,6 +170,18 @@ describe('<OfferRevisionsPanel />', () => {
 
     expect(screen.getByText('REV2')).toBeInTheDocument();
     expect(screen.queryByText('REV1')).not.toBeInTheDocument();
+  });
+
+  test('hides title editing when the user lacks update permission', async () => {
+    render(<OfferRevisionsPanel {...baseProps} canEditTitle={false} />);
+
+    await waitFor(() => expect(screen.getByText(/Q3 renewal/)).toBeInTheDocument());
+    expect(
+      screen.queryByRole('button', {
+        name: 'revisionTitleDialog.editAction: REV2',
+      }),
+    ).not.toBeInTheDocument();
+    expect(updateRevisionTitleMock).not.toHaveBeenCalled();
   });
 
   test('edits a revision title from the pencil action and refreshes the searchable row', async () => {

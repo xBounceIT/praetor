@@ -27,6 +27,9 @@ describe('<RevisionTitleDialog />', () => {
     expect(input).toHaveAttribute('maxlength', '200');
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveStyle({ zIndex: '65' });
     expect(screen.getByRole('dialog')).toHaveStyle({ zIndex: '66' });
+    const dialogTitle = screen.getByRole('heading', { name: 'revisionTitleDialog.title' });
+    expect(dialogTitle.parentElement).toHaveClass('flex', 'items-center');
+    expect(dialogTitle.parentElement?.querySelector('svg')).not.toBeNull();
 
     fireEvent.change(input, { target: { value: '  Q3 renewal  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));

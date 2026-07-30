@@ -4146,6 +4146,10 @@ const SalesRoutes: React.FC<{ controller: AuthenticatedAppContentController }> =
             clients={clients}
             products={products}
             supplierQuotes={supplierQuotes}
+            canEditRevisionTitles={hasPermission(
+              currentUser.permissions,
+              buildPermission('sales.client_quotes', 'update'),
+            )}
             communicationChannels={quoteCommunicationChannels}
             canManageCommunicationChannels={canManageQuoteCommunicationChannels}
             onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
@@ -4216,6 +4220,10 @@ const SalesRoutes: React.FC<{ controller: AuthenticatedAppContentController }> =
             clients={clients}
             products={products}
             supplierQuotes={supplierQuotes}
+            canEditRevisionTitles={hasPermission(
+              currentUser.permissions,
+              buildPermission('sales.client_offers', 'update'),
+            )}
             offerIdsWithOrders={offerIdsWithOrders}
             onUpdateOffer={handleUpdateClientOffer}
             onRevertOfferToDraft={handleRevertClientOfferToDraft}
@@ -4249,6 +4257,10 @@ const SalesRoutes: React.FC<{ controller: AuthenticatedAppContentController }> =
             suppliers={suppliers}
             clients={clients}
             products={products}
+            canEditRevisionTitles={hasPermission(
+              currentUser.permissions,
+              buildPermission('sales.supplier_quotes', 'update'),
+            )}
             communicationChannels={quoteCommunicationChannels}
             canManageCommunicationChannels={canManageQuoteCommunicationChannels}
             onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}

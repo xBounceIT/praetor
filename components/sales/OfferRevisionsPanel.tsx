@@ -13,6 +13,7 @@ export const OfferRevisionsPanel = (props: {
   onPreview: (revision: OfferRevision) => void;
   onClearPreview: () => void;
   onRestored: (offer: ClientOffer) => void;
+  canEditTitle?: boolean;
   disabled?: boolean;
   revisionApi?: OfferRevisionApi;
   secondaryAction?: {
@@ -32,6 +33,7 @@ export const OfferRevisionsPanel = (props: {
     onPreview={props.onPreview}
     onClearPreview={props.onClearPreview}
     onRestored={props.onRestored}
+    canEditTitle={props.canEditTitle}
     disabled={props.disabled}
     secondaryAction={props.secondaryAction}
     className={props.className}
