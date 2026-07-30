@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { RevisionRow } from '@/types';
+import type { RevisionRow, RevisionTitleUpdate } from '@/types';
 import { asyncRowsReducer, createInitialAsyncRowsState } from './asyncRowsState';
 import DeleteConfirmModal from './DeleteConfirmModal';
+import { RevisionTitleDialog } from './RevisionTitleDialog';
 import { VersionHistoryPanel } from './VersionHistoryPanel';
 
 type RevisionWithSnapshot = RevisionRow & { snapshot: unknown };
@@ -13,6 +14,11 @@ interface RevisionHistoryPanelProps<TRevision extends RevisionWithSnapshot, TRes
   selectedRevisionId: string | null;
   list: (id: string) => Promise<RevisionRow[]>;
   get: (id: string, revisionId: string) => Promise<TRevision>;
+  updateTitle: (
+    id: string,
+    revisionId: string,
+    title: string | null,
+  ) => Promise<RevisionTitleUpdate>;
   restore: (id: string, revisionId: string) => Promise<TRestored>;
   onPreview: (revision: TRevision) => void;
   onClearPreview: () => void;
@@ -31,6 +37,7 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
   selectedRevisionId,
   list,
   get,
+  updateTitle,
   restore,
   onPreview,
   onClearPreview,
@@ -46,6 +53,9 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
   );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [restoreInFlight, setRestoreInFlight] = useState(false);
+  const [titleRow, setTitleRow] = useState<RevisionRow | null>(null);
+  const [titleInFlight, setTitleInFlight] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     dispatch({ type: 'loading' });
@@ -106,6 +116,35 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
     }
   }, [objectId, onRestored, reload, restore, selectedRevisionId, t, translationPrefix]);
 
+  const handleTitleUpdate = useCallback(
+    async (title: string) => {
+      if (!titleRow) return;
+      setTitleInFlight(true);
+      setTitleError(null);
+      try {
+        const updated = await updateTitle(objectId, titleRow.id, title.trim() || null);
+        dispatch({
+          type: 'loaded',
+          rows: state.rows.map((row) =>
+            row.id === updated.id ? { ...row, title: updated.title } : row,
+          ),
+        });
+        setTitleRow(null);
+      } catch (error) {
+        setTitleError(
+          error instanceof Error && error.message
+            ? error.message
+            : t('revisionTitleDialog.saveFailed', {
+                defaultValue: 'Impossibile aggiornare il titolo della revisione.',
+              }),
+        );
+      } finally {
+        setTitleInFlight(false);
+      }
+    },
+    [objectId, state.rows, t, titleRow, updateTitle],
+  );
+
   const rows = state.rows.map((row) => ({ ...row, reason: 'update' as const }));
   return (
     <>
@@ -152,14 +191,34 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
           previewBadge: t(`${translationPrefix}.revisionHistory.previewBadge`, {
             defaultValue: 'Anteprima',
           }),
+          editTitle: t('revisionTitleDialog.editAction', {
+            defaultValue: 'Modifica titolo revisione',
+          }),
           infoTooltip: t(`${translationPrefix}.revisionHistory.infoTooltip`, {
             defaultValue:
               'Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.',
           }),
         }}
         onSelect={handleSelect}
+        onEditTitle={(row) => {
+          setTitleError(null);
+          setTitleRow(row);
+        }}
         onClearPreview={onClearPreview}
         onRestore={() => setConfirmOpen(true)}
+      />
+      <RevisionTitleDialog
+        open={Boolean(titleRow)}
+        initialTitle={titleRow?.title}
+        isSaving={titleInFlight}
+        error={titleError}
+        onOpenChange={(open) => {
+          if (!open && !titleInFlight) {
+            setTitleError(null);
+            setTitleRow(null);
+          }
+        }}
+        onConfirm={(title) => void handleTitleUpdate(title)}
       />
       <DeleteConfirmModal
         isOpen={confirmOpen}

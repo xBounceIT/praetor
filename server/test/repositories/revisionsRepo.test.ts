@@ -43,7 +43,7 @@ describe('revision title persistence', () => {
     ]);
   });
 
-  test('binds the title when inserting each revision kind', async () => {
+  test('creates each revision kind without accepting a title at send time', async () => {
     exec.enqueueEmptyN(6);
 
     await revisionsRepo.insertQuoteAndAdvance(
@@ -51,7 +51,6 @@ describe('revision title persistence', () => {
         objectId: 'q-1',
         revisionNumber: 2,
         revisionCode: 'REV2',
-        title: 'Quote renewal',
         snapshot: {} as QuoteVersionSnapshot,
         createdByUserId: 'u-1',
       },
@@ -62,7 +61,6 @@ describe('revision title persistence', () => {
         objectId: 'o-1',
         revisionNumber: 2,
         revisionCode: 'REV2',
-        title: 'Offer renewal',
         snapshot: {} as OfferVersionSnapshot,
         createdByUserId: 'u-1',
       },
@@ -73,7 +71,6 @@ describe('revision title persistence', () => {
         objectId: 'sq-1',
         revisionNumber: 2,
         revisionCode: 'REV2',
-        title: 'Supplier renewal',
         snapshot: {} as SupplierQuoteVersionSnapshot,
         createdByUserId: 'u-1',
       },
@@ -83,10 +80,45 @@ describe('revision title persistence', () => {
     const inserts = exec.calls.filter((call) => call.sql.toLowerCase().startsWith('insert into'));
     expect(inserts).toHaveLength(3);
     expect(inserts[0].sql.toLowerCase()).toContain('insert into "quote_revisions"');
-    expect(inserts[0].params).toContain('Quote renewal');
+    expect(inserts[0].sql.toLowerCase()).toContain('default');
+    expect(inserts[0].params).not.toContain('Quote renewal');
     expect(inserts[1].sql.toLowerCase()).toContain('insert into "offer_revisions"');
-    expect(inserts[1].params).toContain('Offer renewal');
+    expect(inserts[1].sql.toLowerCase()).toContain('default');
+    expect(inserts[1].params).not.toContain('Offer renewal');
     expect(inserts[2].sql.toLowerCase()).toContain('insert into "supplier_quote_revisions"');
-    expect(inserts[2].params).toContain('Supplier renewal');
+    expect(inserts[2].sql.toLowerCase()).toContain('default');
+    expect(inserts[2].params).not.toContain('Supplier renewal');
+  });
+
+  test('updates titles only within the owning document for every revision kind', async () => {
+    exec.enqueue({ rows: [['qr-2', 'Quote renewal']] });
+    exec.enqueue({ rows: [['or-2', 'Offer renewal']] });
+    exec.enqueue({ rows: [['sqr-2', null]] });
+
+    await expect(
+      revisionsRepo.updateQuoteTitle('q-1', 'qr-2', 'Quote renewal', testDb),
+    ).resolves.toEqual({ id: 'qr-2', title: 'Quote renewal' });
+    await expect(
+      revisionsRepo.updateOfferTitle('o-1', 'or-2', 'Offer renewal', testDb),
+    ).resolves.toEqual({ id: 'or-2', title: 'Offer renewal' });
+    await expect(
+      revisionsRepo.updateSupplierQuoteTitle('sq-1', 'sqr-2', null, testDb),
+    ).resolves.toEqual({ id: 'sqr-2', title: null });
+
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('update "quote_revisions"');
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['Quote renewal', 'q-1', 'qr-2']));
+    expect(exec.calls[1].sql.toLowerCase()).toContain('update "offer_revisions"');
+    expect(exec.calls[1].params).toEqual(expect.arrayContaining(['Offer renewal', 'o-1', 'or-2']));
+    expect(exec.calls[2].sql.toLowerCase()).toContain('update "supplier_quote_revisions"');
+    expect(exec.calls[2].params).toEqual(expect.arrayContaining([null, 'sq-1', 'sqr-2']));
+  });
+
+  test('returns null when the revision does not belong to the requested document', async () => {
+    exec.enqueue({ rows: [] });
+
+    await expect(
+      revisionsRepo.updateOfferTitle('another-offer', 'or-2', 'Wrong owner', testDb),
+    ).resolves.toBeNull();
   });
 });

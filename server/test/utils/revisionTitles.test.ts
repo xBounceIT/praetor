@@ -16,7 +16,7 @@ describe('parseRevisionTitle', () => {
     expect(parseRevisionTitle(maximumTitle)).toEqual({ ok: true, value: maximumTitle });
     expect(parseRevisionTitle('x'.repeat(REVISION_TITLE_MAX_LENGTH + 1))).toEqual({
       ok: false,
-      message: `revisionTitle must be ${REVISION_TITLE_MAX_LENGTH} characters or fewer`,
+      message: `title must be ${REVISION_TITLE_MAX_LENGTH} characters or fewer`,
     });
   });
 });

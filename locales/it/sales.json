@@ -20,13 +20,16 @@
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
   "revisionTitleDialog": {
-    "title": "Titolo revisione",
-    "description": "Aggiungi un titolo per riconoscere e cercare questa revisione. Puoi anche lasciarlo vuoto.",
+    "title": "Modifica titolo revisione",
+    "description": "Modifica il titolo usato per riconoscere e cercare questa revisione.",
     "fieldLabel": "Titolo",
     "placeholder": "Es. Proposta finale Q3",
-    "hint": "Apparirà nello storico al posto di “Snapshot inviato”.",
+    "hint": "Lascia vuoto per mostrare nuovamente la dicitura “Snapshot inviato”.",
     "cancel": "Annulla",
-    "confirm": "Invia"
+    "confirm": "Salva",
+    "saving": "Salvataggio…",
+    "editAction": "Modifica titolo revisione",
+    "saveFailed": "Impossibile aggiornare il titolo della revisione."
   },
   "communicationChannels": {
     "fieldLabel": "Canale",

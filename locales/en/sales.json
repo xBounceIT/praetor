@@ -20,13 +20,16 @@
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
   "revisionTitleDialog": {
-    "title": "Revision title",
-    "description": "Add a title to recognize and search this revision. You can also leave it blank.",
+    "title": "Edit revision title",
+    "description": "Edit the title used to recognize and search this revision.",
     "fieldLabel": "Title",
     "placeholder": "E.g. Final Q3 proposal",
-    "hint": "It will appear in history instead of “Sent snapshot”.",
+    "hint": "Leave it blank to show “Sent snapshot” again.",
     "cancel": "Cancel",
-    "confirm": "Send"
+    "confirm": "Save",
+    "saving": "Saving…",
+    "editAction": "Edit revision title",
+    "saveFailed": "Could not update the revision title."
   },
   "communicationChannels": {
     "fieldLabel": "Channel",

@@ -49,6 +49,7 @@ describe('clientOffersApi path segments', () => {
     await clientOffersApi.restoreVersion(offerId, versionId);
     await clientOffersApi.listRevisions(offerId);
     await clientOffersApi.getRevision(offerId, versionId);
+    await clientOffersApi.updateRevisionTitle(offerId, versionId, 'Q3 renewal');
     await clientOffersApi.restoreRevision(offerId, versionId);
 
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
@@ -60,7 +61,14 @@ describe('clientOffersApi path segments', () => {
       `/api/sales/client-offers/${encodedOfferId}/versions/${encodedVersionId}/restore`,
       `/api/sales/client-offers/${encodedOfferId}/revisions`,
       `/api/sales/client-offers/${encodedOfferId}/revisions/${encodedVersionId}`,
+      `/api/sales/client-offers/${encodedOfferId}/revisions/${encodedVersionId}`,
       `/api/sales/client-offers/${encodedOfferId}/revisions/${encodedVersionId}/restore`,
     ]);
+    expect(fetchMock.mock.calls[8]?.[1]).toEqual(
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'Q3 renewal' }),
+      }),
+    );
   });
 });

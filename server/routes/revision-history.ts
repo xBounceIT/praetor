@@ -2,13 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import type { DbExecutor } from '../db/drizzle.ts';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { requirePermission } from '../middleware/auth.ts';
-import type { RevisionRow } from '../repositories/revisionsRepo.ts';
+import type { RevisionRow, RevisionTitleUpdate } from '../repositories/revisionsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { RevisionRestoreConflict } from '../services/revisionRestore.ts';
 import { logAudit } from '../utils/audit.ts';
 import type { Permission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { parseRevisionTitle, REVISION_TITLE_MAX_LENGTH } from '../utils/revision-titles.ts';
 import { badRequest, requireNonEmptyString } from '../utils/validation.ts';
 
 const revisionRowSchema = {
@@ -34,6 +35,15 @@ const revisionSchema = {
   required: [...revisionRowSchema.required, 'snapshot'],
 } as const;
 
+const revisionTitleUpdateSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    title: { type: ['string', 'null'] },
+  },
+  required: ['id', 'title'],
+} as const;
+
 type RevisionWithSnapshot = RevisionRow & { snapshot: unknown };
 
 export const registerRevisionHistoryRoutes = <
@@ -48,6 +58,12 @@ export const registerRevisionHistoryRoutes = <
     list: (objectId: string) => Promise<RevisionRow[]>;
     exists: (objectId: string, exec?: DbExecutor) => Promise<boolean>;
     find: (objectId: string, revisionId: string, exec?: DbExecutor) => Promise<TRevision | null>;
+    updateTitle: (
+      objectId: string,
+      revisionId: string,
+      title: string | null,
+      exec?: DbExecutor,
+    ) => Promise<RevisionTitleUpdate | null>;
     restore: (
       objectId: string,
       revision: TRevision,
@@ -114,6 +130,61 @@ export const registerRevisionHistoryRoutes = <
         });
       }
       return revision;
+    },
+  );
+
+  fastify.patch(
+    '/:id/revisions/:revisionId',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        requirePermission(options.updatePermission),
+      ],
+      schema: {
+        summary: `Update a ${options.entityType} revision title`,
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            title: { type: ['string', 'null'], maxLength: REVISION_TITLE_MAX_LENGTH },
+          },
+          required: ['title'],
+        },
+        response: { 200: revisionTitleUpdateSchema, ...standardErrorResponses },
+      },
+    },
+    async (request, reply) => {
+      const { id, revisionId } = request.params as { id: string; revisionId: string };
+      const objectIdResult = requireNonEmptyString(id, 'id');
+      if (!objectIdResult.ok) return badRequest(reply, objectIdResult.message);
+      const revisionIdResult = requireNonEmptyString(revisionId, 'revisionId');
+      if (!revisionIdResult.ok) return badRequest(reply, revisionIdResult.message);
+      const titleResult = parseRevisionTitle((request.body as { title?: unknown }).title, 'title');
+      if (!titleResult.ok) return badRequest(reply, titleResult.message);
+
+      const updated = await options.updateTitle(
+        objectIdResult.value,
+        revisionIdResult.value,
+        titleResult.value,
+      );
+      if (!updated) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Revision not found',
+          action: `${options.entityType}.revision_title_update.not_found`,
+          entityType: options.entityType,
+          entityId: objectIdResult.value,
+        });
+      }
+
+      await logAudit({
+        request,
+        action: `${options.entityType}.revision.title_updated`,
+        entityType: options.entityType,
+        entityId: objectIdResult.value,
+        details: { secondaryLabel: revisionIdResult.value },
+      });
+      return updated;
     },
   );
 

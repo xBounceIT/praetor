@@ -505,14 +505,13 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent' }));
 
-    const res = await putStatus({ status: 'sent', revisionTitle: 'Q3 renewal' });
+    const res = await putStatus({ status: 'sent' });
     expect(res.statusCode).toBe(200);
     expect(cqLockCurrentByIdMock).toHaveBeenCalled();
     expect(createQuoteRevisionIfChangedMock).toHaveBeenCalledWith(
       'q-1',
       HAPPY_USER.id,
       expect.anything(),
-      'Q3 renewal',
     );
     const body = JSON.parse(res.body);
     expect(body.status).toBe('sent');
@@ -523,7 +522,6 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
       expect.anything(),
       HAPPY_USER.id,
       expect.anything(),
-      'Q3 renewal',
     );
   });
 

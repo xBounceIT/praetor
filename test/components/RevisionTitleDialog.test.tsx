@@ -1,6 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { useState } from 'react';
+import { fireEvent, screen } from '@testing-library/react';
 import { render } from '../helpers/render';
 
 mock.module('react-i18next', () => ({
@@ -8,75 +7,70 @@ mock.module('react-i18next', () => ({
 }));
 
 const { RevisionTitleDialog } = await import('../../components/shared/RevisionTitleDialog');
-const { useRevisionTitlePrompt } = await import('../../components/shared/useRevisionTitlePrompt');
-
-export function RevisionTitlePromptHarness() {
-  const prompt = useRevisionTitlePrompt();
-  const [result, setResult] = useState('');
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={async () => {
-          const nextResult = await prompt.requestRevisionTitle();
-          setResult(
-            nextResult.confirmed ? `confirmed:${nextResult.title ?? 'untitled'}` : 'cancelled',
-          );
-        }}
-      >
-        open-prompt
-      </button>
-      <output>{result}</output>
-      <RevisionTitleDialog
-        open={prompt.open}
-        onOpenChange={prompt.onOpenChange}
-        onConfirm={prompt.confirm}
-      />
-    </>
-  );
-}
 
 describe('<RevisionTitleDialog />', () => {
-  test('trims and returns an optional searchable title', async () => {
-    render(<RevisionTitlePromptHarness />);
+  test('loads the current title and submits its trimmed replacement', () => {
+    const onConfirm = mock((_title: string) => {});
+    render(
+      <RevisionTitleDialog
+        open
+        initialTitle="Existing title"
+        onOpenChange={() => {}}
+        onConfirm={onConfirm}
+      />,
+    );
 
-    fireEvent.click(screen.getByText('open-prompt'));
-    const input = await screen.findByRole('textbox', {
+    const input = screen.getByRole('textbox', {
       name: 'revisionTitleDialog.fieldLabel',
     });
+    expect(input).toHaveValue('Existing title');
     expect(input).toHaveAttribute('maxlength', '200');
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toHaveStyle({ zIndex: '65' });
     expect(screen.getByRole('dialog')).toHaveStyle({ zIndex: '66' });
+
     fireEvent.change(input, { target: { value: '  Q3 renewal  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
 
-    await waitFor(() => expect(screen.getByText('confirmed:Q3 renewal')).toBeInTheDocument());
+    expect(onConfirm).toHaveBeenCalledWith('Q3 renewal');
   });
 
-  test('confirms an untitled revision when the optional field is blank', async () => {
-    render(<RevisionTitlePromptHarness />);
-
-    fireEvent.click(screen.getByText('open-prompt'));
-    fireEvent.click(
-      await screen.findByRole('button', {
-        name: 'revisionTitleDialog.confirm',
-      }),
+  test('submits an empty title so the history can restore its fallback label', () => {
+    const onConfirm = mock((_title: string) => {});
+    render(
+      <RevisionTitleDialog
+        open
+        initialTitle="Existing title"
+        onOpenChange={() => {}}
+        onConfirm={onConfirm}
+      />,
     );
 
-    await waitFor(() => expect(screen.getByText('confirmed:untitled')).toBeInTheDocument());
+    fireEvent.change(
+      screen.getByRole('textbox', {
+        name: 'revisionTitleDialog.fieldLabel',
+      }),
+      { target: { value: '   ' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
+
+    expect(onConfirm).toHaveBeenCalledWith('');
   });
 
-  test('keeps the pending send cancelled when the dialog is dismissed', async () => {
-    render(<RevisionTitlePromptHarness />);
-
-    fireEvent.click(screen.getByText('open-prompt'));
-    fireEvent.click(
-      await screen.findByRole('button', {
-        name: 'revisionTitleDialog.cancel',
-      }),
+  test('keeps the dialog locked and exposes the save error while updating', () => {
+    render(
+      <RevisionTitleDialog
+        open
+        initialTitle={null}
+        isSaving
+        error="Could not save"
+        onOpenChange={() => {}}
+        onConfirm={() => {}}
+      />,
     );
 
-    await waitFor(() => expect(screen.getByText('cancelled')).toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not save');
+    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'revisionTitleDialog.cancel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'revisionTitleDialog.saving' })).toBeDisabled();
   });
 });

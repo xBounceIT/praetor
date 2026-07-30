@@ -20,6 +20,8 @@ export type RevisionRow = {
   createdAt: number;
 };
 
+export type RevisionTitleUpdate = Pick<RevisionRow, 'id' | 'title'>;
+
 const mapRow = (row: {
   id: string;
   revisionNumber: number;
@@ -157,6 +159,50 @@ export const findSupplierQuoteById = async (
     : null;
 };
 
+export const updateQuoteTitle = async (
+  quoteId: string,
+  revisionId: string,
+  title: string | null,
+  exec: DbExecutor = db,
+): Promise<RevisionTitleUpdate | null> => {
+  const [row] = await exec
+    .update(quoteRevisions)
+    .set({ title })
+    .where(and(eq(quoteRevisions.quoteId, quoteId), eq(quoteRevisions.id, revisionId)))
+    .returning({ id: quoteRevisions.id, title: quoteRevisions.title });
+  return row ?? null;
+};
+
+export const updateOfferTitle = async (
+  offerId: string,
+  revisionId: string,
+  title: string | null,
+  exec: DbExecutor = db,
+): Promise<RevisionTitleUpdate | null> => {
+  const [row] = await exec
+    .update(offerRevisions)
+    .set({ title })
+    .where(and(eq(offerRevisions.offerId, offerId), eq(offerRevisions.id, revisionId)))
+    .returning({ id: offerRevisions.id, title: offerRevisions.title });
+  return row ?? null;
+};
+
+export const updateSupplierQuoteTitle = async (
+  quoteId: string,
+  revisionId: string,
+  title: string | null,
+  exec: DbExecutor = db,
+): Promise<RevisionTitleUpdate | null> => {
+  const [row] = await exec
+    .update(supplierQuoteRevisions)
+    .set({ title })
+    .where(
+      and(eq(supplierQuoteRevisions.quoteId, quoteId), eq(supplierQuoteRevisions.id, revisionId)),
+    )
+    .returning({ id: supplierQuoteRevisions.id, title: supplierQuoteRevisions.title });
+  return row ?? null;
+};
+
 export const latestQuote = async (quoteId: string, exec: DbExecutor = db) => {
   const rows = await exec
     .select()
@@ -189,7 +235,6 @@ type InsertRevisionInput<T> = {
   objectId: string;
   revisionNumber: number;
   revisionCode: string;
-  title: string | null;
   snapshot: T;
   createdByUserId: string | null;
 };
@@ -203,7 +248,6 @@ export const insertQuoteAndAdvance = async (
     quoteId: input.objectId,
     revisionNumber: input.revisionNumber,
     revisionCode: input.revisionCode,
-    title: input.title,
     snapshot: input.snapshot,
     createdByUserId: input.createdByUserId,
   });
@@ -222,7 +266,6 @@ export const insertOfferAndAdvance = async (
     offerId: input.objectId,
     revisionNumber: input.revisionNumber,
     revisionCode: input.revisionCode,
-    title: input.title,
     snapshot: input.snapshot,
     createdByUserId: input.createdByUserId,
   });
@@ -241,7 +284,6 @@ export const insertSupplierQuoteAndAdvance = async (
     quoteId: input.objectId,
     revisionNumber: input.revisionNumber,
     revisionCode: input.revisionCode,
-    title: input.title,
     snapshot: input.snapshot,
     createdByUserId: input.createdByUserId,
   });

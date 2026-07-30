@@ -194,8 +194,8 @@ afterEach(() => {
   restoreRevisionMock.mockRejectedValue(new Error('not used'));
 });
 
-describe('<ClientQuotesView /> revision titles', () => {
-  test('asks for a title before a quick draft → sent transition', async () => {
+describe('<ClientQuotesView /> revision creation', () => {
+  test('sends a draft immediately without asking for a revision title', async () => {
     const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
     render(
       <ClientQuotesView
@@ -208,21 +208,18 @@ describe('<ClientQuotesView /> revision titles', () => {
 
     await openItemActions();
     fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.markAsSent' }));
-    const titleInput = await screen.findByRole('textbox', {
-      name: 'revisionTitleDialog.fieldLabel',
-    });
-    fireEvent.change(titleInput, { target: { value: 'Q3 renewal' } });
-    fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
 
     await waitFor(() =>
       expect(onUpdateQuote).toHaveBeenCalledWith(
         'Q-TITLE',
         expect.objectContaining({
           status: 'sent',
-          revisionTitle: 'Q3 renewal',
         }),
       ),
     );
+    expect(
+      screen.queryByRole('textbox', { name: 'revisionTitleDialog.fieldLabel' }),
+    ).not.toBeInTheDocument();
   });
 });
 

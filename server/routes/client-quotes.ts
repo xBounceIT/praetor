@@ -69,7 +69,6 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { parseRevisionTitle, REVISION_TITLE_MAX_LENGTH } from '../utils/revision-titles.ts';
 import {
   logSupplierItemSyncAudits,
   type PreviousClientLine,
@@ -823,7 +822,6 @@ const quoteUpdateBodySchema = {
     discount: documentDiscountValueSchema,
     discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
-    revisionTitle: { type: 'string', maxLength: REVISION_TITLE_MAX_LENGTH },
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
@@ -1134,6 +1132,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     exists: clientQuotesRepo.existsById,
     list: revisionsRepo.listForQuote,
     find: revisionsRepo.findQuoteById,
+    updateTitle: revisionsRepo.updateQuoteTitle,
     restore: async (quoteId, revision, userId, tx) => {
       const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
       if (missingReference) {
@@ -1802,7 +1801,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount,
         discountType,
         status,
-        revisionTitle: rawRevisionTitle,
         expirationDate,
         communicationChannelId,
         notes,
@@ -1817,16 +1815,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount: unknown;
         discountType: unknown;
         status: unknown;
-        revisionTitle?: unknown;
         expirationDate: unknown;
         communicationChannelId: unknown;
         notes: unknown;
       };
       const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const revisionTitleResult = parseRevisionTitle(rawRevisionTitle);
-      if (!revisionTitleResult.ok) return badRequest(reply, revisionTitleResult.message);
-      const revisionTitle = revisionTitleResult.value;
       const nextIdUpdateResult =
         nextId === undefined ? undefined : validateQuoteCodeUpdate(nextId, idResult.value);
       if (nextIdUpdateResult && !nextIdUpdateResult.ok) {
@@ -2254,14 +2248,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 finalParent.id,
                 request.user?.id ?? null,
                 tx,
-                revisionTitle,
               );
               if (revision) finalParent = { ...finalParent, ...revision };
               await createDerivedSupplierRevisions(
                 supplierRevisionStates,
                 request.user?.id ?? null,
                 tx,
-                revisionTitle,
               );
             }
             return { kind: 'success' as const, parent: finalParent };
@@ -2775,14 +2767,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               quote.id,
               request.user?.id ?? null,
               tx,
-              revisionTitle,
             );
             if (revision) revisedQuote = { ...quote, ...revision };
             await createDerivedSupplierRevisions(
               supplierRevisionStates,
               request.user?.id ?? null,
               tx,
-              revisionTitle,
             );
           }
           return { quote: revisedQuote, items, syncAudits };

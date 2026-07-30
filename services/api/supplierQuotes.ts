@@ -1,5 +1,6 @@
 import type {
   RevisionRow,
+  RevisionTitleUpdate,
   SupplierQuote,
   SupplierQuoteAttachment,
   SupplierQuoteRevision,
@@ -52,6 +53,19 @@ export const supplierQuotesApi = {
   getRevision: (id: string, revisionId: string): Promise<SupplierQuoteRevision> =>
     fetchApi<SupplierQuoteRevision>(
       `${supplierQuotePath(id)}/revisions/${encodePathSegment(revisionId)}`,
+    ),
+
+  updateRevisionTitle: (
+    id: string,
+    revisionId: string,
+    title: string | null,
+  ): Promise<RevisionTitleUpdate> =>
+    fetchApi<RevisionTitleUpdate>(
+      `${supplierQuotePath(id)}/revisions/${encodePathSegment(revisionId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      },
     ),
 
   restoreRevision: (id: string, revisionId: string): Promise<SupplierQuote> =>

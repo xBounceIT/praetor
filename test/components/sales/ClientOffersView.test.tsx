@@ -1,13 +1,7 @@
 import { afterEach, describe, expect, mock } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type {
-  Client,
-  ClientOffer,
-  ClientOfferMutation,
-  Product,
-  SupplierQuote,
-} from '../../../types';
+import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { reactTest as test } from '../../helpers/reactTest';
@@ -309,10 +303,10 @@ describe('<ClientOffersView /> list', () => {
   });
 });
 
-describe('<ClientOffersView /> revision titles', () => {
-  test('asks for a title before a quick draft → sent transition', async () => {
+describe('<ClientOffersView /> revision creation', () => {
+  test('sends a draft immediately without asking for a revision title', async () => {
     const user = userEvent.setup();
-    const onUpdateOffer = mock((_id: string, _updates: ClientOfferMutation) => Promise.resolve());
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
     render(
       <ClientOffersView
         {...baseProps}
@@ -323,18 +317,15 @@ describe('<ClientOffersView /> revision titles', () => {
 
     await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
     await user.click(await screen.findByRole('button', { name: 'sales:clientOffers.markSent' }));
-    const titleInput = await screen.findByRole('textbox', {
-      name: 'revisionTitleDialog.fieldLabel',
-    });
-    await user.type(titleInput, 'Q3 renewal');
-    await user.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
 
     await waitFor(() =>
       expect(onUpdateOffer).toHaveBeenCalledWith('O-TITLE', {
         status: 'sent',
-        revisionTitle: 'Q3 renewal',
       }),
     );
+    expect(
+      screen.queryByRole('textbox', { name: 'revisionTitleDialog.fieldLabel' }),
+    ).not.toBeInTheDocument();
   });
 });
 

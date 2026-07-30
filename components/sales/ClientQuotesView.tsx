@@ -130,14 +130,12 @@ import {
 import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import { ModalRestoreToDraftButton } from '../shared/ModalRestoreToDraftButton';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
-import { RevisionTitleDialog } from '../shared/RevisionTitleDialog';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
-import { useRevisionTitlePrompt } from '../shared/useRevisionTitlePrompt';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
@@ -495,8 +493,6 @@ const useClientQuotesController = ({
   canViewInternalListing = true,
 }: ClientQuotesViewProps) => {
   const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
-  const revisionTitlePrompt = useRevisionTitlePrompt();
-
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
 
   const tableInitialFilterState = useMemo(() => {
@@ -1202,23 +1198,13 @@ const useClientQuotesController = ({
   const handleStatusUpdate = async (id: string, updates: QuoteMutation) => {
     try {
       const quote = quotes.find((entry) => entry.id === id);
-      let submittedUpdates = updates;
-      if (updates.status === 'sent' && quote && normalizeQuoteStatus(quote.status) === 'draft') {
-        const promptResult = await revisionTitlePrompt.requestRevisionTitle();
-        if (!promptResult.confirmed) return;
-        submittedUpdates = {
-          ...updates,
-          revisionTitle: promptResult.title ?? undefined,
-        };
-      }
       if (updates.status === 'sent' && quote?.candidates?.length) {
         await onUpdateQuote(id, {
           id: quote.id,
           description: quote.description,
           clientId: quote.clientId,
           clientName: quote.clientName,
-          status: submittedUpdates.status,
-          revisionTitle: submittedUpdates.revisionTitle,
+          status: updates.status,
           candidates: quote.candidates,
           items: quote.candidates[0].items,
           paymentTerms: quote.candidates[0].paymentTerms,
@@ -1229,7 +1215,7 @@ const useClientQuotesController = ({
           notes: quote.candidates[0].notes,
         });
       } else {
-        await onUpdateQuote(id, submittedUpdates);
+        await onUpdateQuote(id, updates);
       }
       if (editingQuote?.id === id && updates.status === 'draft') {
         applyQuoteDraftLocally(editingQuote);
@@ -2468,7 +2454,6 @@ const useClientQuotesController = ({
     confirmCandidatePromotion,
     rollbackCandidatePromotion,
     handleStatusUpdate,
-    revisionTitlePrompt,
     hasOfferForQuote,
     getOfferStatusForQuote,
     columns,
@@ -2485,11 +2470,6 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = (props) => {
 
 const ClientQuotesLayout: React.FC<{ controller: ClientQuotesController }> = ({ controller }) => (
   <div className="space-y-8">
-    <RevisionTitleDialog
-      open={controller.revisionTitlePrompt.open}
-      onOpenChange={controller.revisionTitlePrompt.onOpenChange}
-      onConfirm={controller.revisionTitlePrompt.confirm}
-    />
     <ClientQuoteFormModal controller={controller} />
     <ClientQuoteClientChangeModal controller={controller} />
     <ClientQuotePromotionModal controller={controller} />

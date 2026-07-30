@@ -1,4 +1,4 @@
-import { Search, XIcon } from 'lucide-react';
+import { Pencil, Search, XIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ interface VersionHistoryPanelLabels {
   noResults: string;
   currentBadge: string;
   previewBadge: string;
+  editTitle?: string;
   infoTooltip?: string;
 }
 
@@ -45,6 +46,7 @@ interface VersionHistoryPanelProps<Row extends VersionHistoryPanelRow> {
   onSelect: (row: Row) => void;
   onClearPreview: () => void;
   onRestore: () => void;
+  onEditTitle?: (row: Row) => void;
   /** Compact timeline for modal tops; dialog allows a taller scroll area. */
   layout?: 'inline' | 'dialog';
   secondaryAction?: {
@@ -183,6 +185,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   onSelect,
   onClearPreview,
   onRestore,
+  onEditTitle,
   layout = 'inline',
   secondaryAction,
   className,
@@ -312,49 +315,66 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
               const rowLabel = row.title?.trim() || reasonLabel || optionLabel;
 
               return (
-                <label
+                <div
                   key={row.id}
-                  htmlFor={`history-row-${row.id}`}
                   className={cn(
-                    'flex cursor-pointer items-center gap-2.5 rounded-md border-b border-border/50 last:border-b-0 hover:bg-muted/40 sm:gap-3',
+                    'flex items-center gap-2.5 rounded-md border-b border-border/50 last:border-b-0 hover:bg-muted/40 sm:gap-3',
                     isDialog ? 'px-3 py-3' : 'px-2.5 py-2.5',
                     selected && 'border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15',
                   )}
                   style={{ minHeight: INLINE_ROW_MIN_HEIGHT }}
                 >
-                  {row.revisionCode ? (
-                    <span className="shrink-0 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] font-semibold tracking-wide text-foreground">
-                      {row.revisionCode}
-                    </span>
-                  ) : null}
-
-                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="truncate text-xs text-muted-foreground">
-                      {rowLabel}
-                      {row.createdByUserName ? ` · ${row.createdByUserName}` : ''}
-                    </span>
-                    {isCurrent ? (
-                      <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-400">
-                        {labels.currentBadge}
-                      </span>
-                    ) : selected ? (
-                      <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase dark:text-amber-400">
-                        {labels.previewBadge}
+                  <label
+                    htmlFor={`history-row-${row.id}`}
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 sm:gap-3"
+                  >
+                    {row.revisionCode ? (
+                      <span className="shrink-0 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] font-semibold tracking-wide text-foreground">
+                        {row.revisionCode}
                       </span>
                     ) : null}
-                  </span>
 
-                  <span
-                    data-testid="version-history-timestamp"
-                    className={cn(
-                      'shrink-0 text-[11px] whitespace-nowrap text-muted-foreground',
-                      // Version rows have no revision code — keep the timestamp as the unique
-                      // identifier on narrow screens too.
-                      row.revisionCode ? 'hidden sm:inline' : 'inline',
-                    )}
-                  >
-                    {timestamp}
-                  </span>
+                    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="truncate text-xs text-muted-foreground">
+                        {rowLabel}
+                        {row.createdByUserName ? ` · ${row.createdByUserName}` : ''}
+                      </span>
+                      {isCurrent ? (
+                        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-400">
+                          {labels.currentBadge}
+                        </span>
+                      ) : selected ? (
+                        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase dark:text-amber-400">
+                          {labels.previewBadge}
+                        </span>
+                      ) : null}
+                    </span>
+
+                    <span
+                      data-testid="version-history-timestamp"
+                      className={cn(
+                        'shrink-0 text-[11px] whitespace-nowrap text-muted-foreground',
+                        // Version rows have no revision code — keep the timestamp as the unique
+                        // identifier on narrow screens too.
+                        row.revisionCode ? 'hidden sm:inline' : 'inline',
+                      )}
+                    >
+                      {timestamp}
+                    </span>
+                  </label>
+
+                  {onEditTitle && labels.editTitle ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                      aria-label={`${labels.editTitle}: ${optionLabel}`}
+                      onClick={() => onEditTitle(row)}
+                    >
+                      <Pencil className="size-3.5" aria-hidden="true" />
+                    </Button>
+                  ) : null}
 
                   <RadioGroupItem
                     id={`history-row-${row.id}`}
@@ -362,7 +382,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                     className="shrink-0"
                     aria-label={optionLabel}
                   />
-                </label>
+                </div>
               );
             })}
             {emptySlots}

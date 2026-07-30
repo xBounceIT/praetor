@@ -476,6 +476,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     exists: supplierQuotesRepo.existsById,
     list: revisionsRepo.listForSupplierQuote,
     find: revisionsRepo.findSupplierQuoteById,
+    updateTitle: revisionsRepo.updateSupplierQuoteTitle,
     restore: async (quoteId, revision, userId, tx) => {
       const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
       if (missingReference) {

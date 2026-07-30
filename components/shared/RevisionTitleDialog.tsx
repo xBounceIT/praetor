@@ -1,4 +1,4 @@
-import { Send, Tag } from 'lucide-react';
+import { LoaderCircle, Save, Tag } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -19,19 +19,28 @@ const REVISION_TITLE_DIALOG_Z_INDEX = 65;
 
 interface RevisionTitleDialogProps {
   open: boolean;
+  initialTitle?: string | null;
+  isSaving?: boolean;
+  error?: string | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (title: string) => void;
 }
 
 function RevisionTitleDialogContent({
+  initialTitle,
+  isSaving,
+  error,
   onCancel,
   onConfirm,
 }: {
+  initialTitle: string | null;
+  isSaving: boolean;
+  error: string | null;
   onCancel: () => void;
   onConfirm: (title: string) => void;
 }) {
   const { t } = useTranslation('sales');
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(initialTitle ?? '');
 
   return (
     <DialogContent
@@ -44,7 +53,7 @@ function RevisionTitleDialogContent({
         className="grid gap-5"
         onSubmit={(event) => {
           event.preventDefault();
-          onConfirm(title);
+          onConfirm(title.trim());
         }}
       >
         <DialogHeader className="pr-7">
@@ -56,8 +65,7 @@ function RevisionTitleDialogContent({
           </DialogTitle>
           <DialogDescription>
             {t('revisionTitleDialog.description', {
-              defaultValue:
-                'Aggiungi un titolo per riconoscere e cercare questa revisione. Puoi anche lasciarlo vuoto.',
+              defaultValue: 'Modifica il titolo usato per riconoscere e cercare questa revisione.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -70,6 +78,7 @@ function RevisionTitleDialogContent({
             id="revision-title"
             autoFocus
             value={title}
+            disabled={isSaving}
             maxLength={REVISION_TITLE_MAX_LENGTH}
             placeholder={t('revisionTitleDialog.placeholder', {
               defaultValue: 'Es. Proposta finale Q3',
@@ -79,7 +88,8 @@ function RevisionTitleDialogContent({
           <FieldDescription className="flex justify-between gap-3">
             <span>
               {t('revisionTitleDialog.hint', {
-                defaultValue: 'Apparirà nello storico al posto di “Snapshot inviato”.',
+                defaultValue:
+                  'Lascia vuoto per mostrare nuovamente la dicitura “Snapshot inviato”.',
               })}
             </span>
             <span className="shrink-0 tabular-nums">
@@ -88,13 +98,25 @@ function RevisionTitleDialogContent({
           </FieldDescription>
         </Field>
 
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel}>
+          <Button type="button" variant="outline" disabled={isSaving} onClick={onCancel}>
             {t('revisionTitleDialog.cancel', { defaultValue: 'Annulla' })}
           </Button>
-          <Button type="submit">
-            <Send className="size-4" aria-hidden="true" />
-            {t('revisionTitleDialog.confirm', { defaultValue: 'Invia' })}
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Save className="size-4" aria-hidden="true" />
+            )}
+            {isSaving
+              ? t('revisionTitleDialog.saving', { defaultValue: 'Salvataggio…' })
+              : t('revisionTitleDialog.confirm', { defaultValue: 'Salva' })}
           </Button>
         </DialogFooter>
       </form>
@@ -102,11 +124,24 @@ function RevisionTitleDialogContent({
   );
 }
 
-export function RevisionTitleDialog({ open, onOpenChange, onConfirm }: RevisionTitleDialogProps) {
+export function RevisionTitleDialog({
+  open,
+  initialTitle = null,
+  isSaving = false,
+  error = null,
+  onOpenChange,
+  onConfirm,
+}: RevisionTitleDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (
-        <RevisionTitleDialogContent onCancel={() => onOpenChange(false)} onConfirm={onConfirm} />
+        <RevisionTitleDialogContent
+          initialTitle={initialTitle}
+          isSaving={isSaving}
+          error={error}
+          onCancel={() => onOpenChange(false)}
+          onConfirm={onConfirm}
+        />
       ) : null}
     </Dialog>
   );

@@ -42,14 +42,13 @@ export const createDerivedSupplierRevisions = async (
   previousStates: SupplierRevisionState,
   createdByUserId: string | null,
   exec: DbExecutor,
-  title: string | null = null,
 ): Promise<void> => {
   for (const [quoteId, previousStatus] of previousStates) {
     if (previousStatus !== 'draft') continue;
     // react-doctor-disable-next-line react-doctor/async-await-in-loop -- Each revision re-locks and evaluates the quote in the shared transaction; preserving quote order avoids lock inversions.
     const current = await supplierQuotesRepo.lockEffectiveStatusById(quoteId, exec);
     if (current && effectiveLockedSupplierStatus(current) === 'sent') {
-      await createSupplierQuoteRevisionIfChanged(quoteId, createdByUserId, exec, title);
+      await createSupplierQuoteRevisionIfChanged(quoteId, createdByUserId, exec);
     }
   }
 };
@@ -164,7 +163,6 @@ export const createQuoteRevisionIfChanged = async (
   quoteId: string,
   createdByUserId: string | null,
   exec: DbExecutor,
-  title: string | null = null,
 ): Promise<AllocatedRevision | null> => {
   const [current, candidates, latest] = await Promise.all([
     clientQuotesRepo.findFullForSnapshot(quoteId, exec),
@@ -178,7 +176,7 @@ export const createQuoteRevisionIfChanged = async (
   }
   const allocated = await allocate(current.quote.revisionNumber, exec);
   await revisionsRepo.insertQuoteAndAdvance(
-    { objectId: quoteId, ...allocated, title, snapshot, createdByUserId },
+    { objectId: quoteId, ...allocated, snapshot, createdByUserId },
     exec,
   );
   return allocated;
@@ -188,7 +186,6 @@ export const createOfferRevisionIfChanged = async (
   offerId: string,
   createdByUserId: string | null,
   exec: DbExecutor,
-  title: string | null = null,
 ): Promise<AllocatedRevision | null> => {
   const [current, latest] = await Promise.all([
     clientOffersRepo.findFullForSnapshot(offerId, exec),
@@ -201,7 +198,7 @@ export const createOfferRevisionIfChanged = async (
   }
   const allocated = await allocate(current.offer.revisionNumber, exec);
   await revisionsRepo.insertOfferAndAdvance(
-    { objectId: offerId, ...allocated, title, snapshot, createdByUserId },
+    { objectId: offerId, ...allocated, snapshot, createdByUserId },
     exec,
   );
   return allocated;
@@ -211,7 +208,6 @@ export const createSupplierQuoteRevisionIfChanged = async (
   quoteId: string,
   createdByUserId: string | null,
   exec: DbExecutor,
-  title: string | null = null,
 ): Promise<AllocatedRevision | null> => {
   const [current, latest] = await Promise.all([
     supplierQuotesRepo.findFullForSnapshot(quoteId, exec),
@@ -224,7 +220,7 @@ export const createSupplierQuoteRevisionIfChanged = async (
   }
   const allocated = await allocate(current.quote.revisionNumber, exec);
   await revisionsRepo.insertSupplierQuoteAndAdvance(
-    { objectId: quoteId, ...allocated, title, snapshot, createdByUserId },
+    { objectId: quoteId, ...allocated, snapshot, createdByUserId },
     exec,
   );
   return allocated;

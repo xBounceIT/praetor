@@ -21,6 +21,7 @@ export const QuoteRevisionsPanel = (props: {
     selectedRevisionId={props.selectedRevisionId}
     list={clientQuotesApi.listRevisions}
     get={clientQuotesApi.getRevision}
+    updateTitle={clientQuotesApi.updateRevisionTitle}
     restore={clientQuotesApi.restoreRevision}
     onPreview={props.onPreview}
     onClearPreview={props.onClearPreview}

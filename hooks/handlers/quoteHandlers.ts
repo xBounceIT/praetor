@@ -3,7 +3,6 @@ import api from '../../services/api';
 import type {
   AutoCreatedSupplierOrder,
   ClientOffer,
-  ClientOfferMutation,
   ClientsOrder,
   Invoice,
   Quote,
@@ -255,7 +254,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
-  const updateClientOffer = async (id: string, updates: ClientOfferMutation) => {
+  const updateClientOffer = async (id: string, updates: Partial<ClientOffer>) => {
     try {
       // Read BEFORE the await: an update can REMOVE an offer-only sourced line (one not present
       // on the linked quote), in which case neither `updated` nor the source quote reports the

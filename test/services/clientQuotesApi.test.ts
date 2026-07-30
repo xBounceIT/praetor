@@ -24,8 +24,8 @@ describe('clientQuotesApi path construction', () => {
     ).text();
 
     expect(source).not.toMatch(/\$\{(?:id|versionId|revisionId)\}/);
-    expect(source.match(/encodePathSegment\(id\)/g) ?? []).toHaveLength(10);
+    expect(source.match(/encodePathSegment\(id\)/g) ?? []).toHaveLength(11);
     expect(source.match(/encodePathSegment\(versionId\)/g) ?? []).toHaveLength(2);
-    expect(source.match(/encodePathSegment\(revisionId\)/g) ?? []).toHaveLength(2);
+    expect(source.match(/encodePathSegment\(revisionId\)/g) ?? []).toHaveLength(3);
   });
 });

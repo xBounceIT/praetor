@@ -9,6 +9,7 @@ import * as realOfferVersionsRepo from '../../repositories/offerVersionsRepo.ts'
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
 import * as realQuoteCandidatesRepo from '../../repositories/quoteCandidatesRepo.ts';
 import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
+import * as realRevisionsRepo from '../../repositories/revisionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
@@ -38,6 +39,7 @@ const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const quoteCandidatesRepoSnap = { ...realQuoteCandidatesRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
+const revisionsRepoSnap = { ...realRevisionsRepo };
 const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
@@ -83,6 +85,7 @@ const allocateDocumentCodeMock = mock();
 const createOfferRevisionIfChangedMock = mock();
 const lockSupplierRevisionStatesMock = mock();
 const createDerivedSupplierRevisionsMock = mock();
+const updateOfferTitleMock = mock();
 
 const qcListForQuoteMock = mock();
 const qcReactivateAllMock = mock();
@@ -165,6 +168,10 @@ beforeAll(async () => {
     insert: qvInsertMock,
     buildSnapshot: qvBuildSnapshotMock,
   }));
+  mock.module('../../repositories/revisionsRepo.ts', () => ({
+    ...revisionsRepoSnap,
+    updateOfferTitle: updateOfferTitleMock,
+  }));
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
     findExistingForOffer: clientOrderFindExistingForOfferMock,
@@ -233,6 +240,7 @@ afterAll(() => {
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/quoteCandidatesRepo.ts', () => quoteCandidatesRepoSnap);
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
+  mock.module('../../repositories/revisionsRepo.ts', () => revisionsRepoSnap);
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../utils/order-ids.ts', () => orderIdsSnap);
@@ -356,6 +364,7 @@ const allMocks = [
   createOfferRevisionIfChangedMock,
   lockSupplierRevisionStatesMock,
   createDerivedSupplierRevisionsMock,
+  updateOfferTitleMock,
   qcListForQuoteMock,
   qcReactivateAllMock,
   qvInsertMock,
@@ -678,7 +687,7 @@ describe('client-offer immutable revisions', () => {
     coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent' }));
 
-    const res = await putOffer({ status: 'sent', revisionTitle: 'Q3 renewal' });
+    const res = await putOffer({ status: 'sent' });
 
     expect(res.statusCode).toBe(200);
     expect(coLockExistingByIdMock).toHaveBeenCalled();
@@ -686,14 +695,12 @@ describe('client-offer immutable revisions', () => {
       'off-1',
       HAPPY_USER.id,
       expect.anything(),
-      'Q3 renewal',
     );
     expect(lockSupplierRevisionStatesMock).toHaveBeenCalled();
     expect(createDerivedSupplierRevisionsMock).toHaveBeenCalledWith(
       expect.anything(),
       HAPPY_USER.id,
       expect.anything(),
-      'Q3 renewal',
     );
     expect(JSON.parse(res.body).revisionCode).toBe('REV1');
   });
@@ -708,17 +715,60 @@ describe('client-offer immutable revisions', () => {
       return { revisionNumber: 1, revisionCode: 'REV1' };
     });
 
-    const res = await putOffer({ status: 'accepted', revisionTitle: 'Approved proposal' });
+    const res = await putOffer({ status: 'accepted' });
 
     expect(res.statusCode).toBe(200);
     expect(createOfferRevisionIfChangedMock).toHaveBeenCalledWith(
       'off-1',
       HAPPY_USER.id,
       expect.anything(),
-      'Approved proposal',
     );
     expect(clientOrderCreateMock).toHaveBeenCalled();
     expect(JSON.parse(res.body).revisionCode).toBe('REV1');
+  });
+});
+
+describe('PATCH /api/sales/client-offers/:id/revisions/:revisionId', () => {
+  test('normalizes and updates the revision title independently from sending', async () => {
+    updateOfferTitleMock.mockResolvedValue({ id: 'or-2', title: 'Q3 renewal' });
+
+    const res = await testApp.inject({
+      method: 'PATCH',
+      url: '/api/sales/client-offers/off-1/revisions/or-2',
+      headers: authHeader(),
+      payload: { title: '  Q3 renewal  ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateOfferTitleMock).toHaveBeenCalledWith('off-1', 'or-2', 'Q3 renewal');
+    expect(JSON.parse(res.body)).toEqual({ id: 'or-2', title: 'Q3 renewal' });
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'client_offer.revision.title_updated',
+        entityId: 'off-1',
+      }),
+    );
+  });
+
+  test('clears a title and returns 404 for a revision outside the document', async () => {
+    updateOfferTitleMock.mockResolvedValueOnce({ id: 'or-2', title: null }).mockResolvedValue(null);
+
+    const cleared = await testApp.inject({
+      method: 'PATCH',
+      url: '/api/sales/client-offers/off-1/revisions/or-2',
+      headers: authHeader(),
+      payload: { title: '   ' },
+    });
+    const missing = await testApp.inject({
+      method: 'PATCH',
+      url: '/api/sales/client-offers/off-1/revisions/or-other',
+      headers: authHeader(),
+      payload: { title: 'Wrong owner' },
+    });
+
+    expect(cleared.statusCode).toBe(200);
+    expect(updateOfferTitleMock).toHaveBeenNthCalledWith(1, 'off-1', 'or-2', null);
+    expect(missing.statusCode).toBe(404);
   });
 });
 

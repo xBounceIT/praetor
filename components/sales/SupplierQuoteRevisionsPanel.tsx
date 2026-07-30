@@ -21,6 +21,7 @@ export const SupplierQuoteRevisionsPanel = (props: {
     selectedRevisionId={props.selectedRevisionId}
     list={supplierQuotesApi.listRevisions}
     get={supplierQuotesApi.getRevision}
+    updateTitle={supplierQuotesApi.updateRevisionTitle}
     restore={supplierQuotesApi.restoreRevision}
     onPreview={props.onPreview}
     onClearPreview={props.onClearPreview}

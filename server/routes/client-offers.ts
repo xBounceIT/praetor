@@ -67,7 +67,6 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { parseRevisionTitle, REVISION_TITLE_MAX_LENGTH } from '../utils/revision-titles.ts';
 import {
   logSupplierItemSyncAudits,
   type PreviousClientLine,
@@ -265,7 +264,6 @@ const offerUpdateBodySchema = {
     discount: documentDiscountValueSchema,
     discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
-    revisionTitle: { type: 'string', maxLength: REVISION_TITLE_MAX_LENGTH },
     deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: 'string', format: 'date' },
     notes: { type: 'string' },
@@ -625,6 +623,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     exists: clientOffersRepo.existsById,
     list: revisionsRepo.listForOffer,
     find: revisionsRepo.findOfferById,
+    updateTitle: revisionsRepo.updateOfferTitle,
     restore: async (offerId, revision, userId, tx) => {
       const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
       if (missingReference) {
@@ -1091,7 +1090,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount,
         discountType,
         status,
-        revisionTitle: rawRevisionTitle,
         deliveryDate,
         expirationDate,
         notes,
@@ -1105,7 +1103,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         discount?: unknown;
         discountType?: unknown;
         status?: unknown;
-        revisionTitle?: unknown;
         deliveryDate?: unknown;
         expirationDate?: unknown;
         notes?: unknown;
@@ -1113,9 +1110,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const revisionTitleResult = parseRevisionTitle(rawRevisionTitle);
-      if (!revisionTitleResult.ok) return badRequest(reply, revisionTitleResult.message);
-      const revisionTitle = revisionTitleResult.value;
 
       const existingOffer = await clientOffersRepo.findExisting(idResult.value);
       if (!existingOffer) {
@@ -1555,14 +1549,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               offer.id,
               request.user?.id ?? null,
               tx,
-              revisionTitle,
             );
             if (revision) revisedOffer = { ...offer, ...revision };
             await createDerivedSupplierRevisions(
               supplierRevisionStates,
               request.user?.id ?? null,
               tx,
-              revisionTitle,
             );
           }
           if (createsClientOrder) {

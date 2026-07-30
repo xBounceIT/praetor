@@ -1,11 +1,11 @@
 import type {
   ClientOffer,
-  ClientOfferMutation,
   ClientOfferUpdateResult,
   OfferRevision,
   OfferVersion,
   OfferVersionRow,
   RevisionRow,
+  RevisionTitleUpdate,
 } from '../../types';
 import { fetchApi } from './client';
 import { normalizeClientOffer } from './normalizers';
@@ -23,7 +23,7 @@ export const clientOffersApi = {
       body: JSON.stringify(offerData),
     }).then(normalizeClientOffer),
 
-  update: (id: string, updates: ClientOfferMutation): Promise<ClientOfferUpdateResult> =>
+  update: (id: string, updates: Partial<ClientOffer>): Promise<ClientOfferUpdateResult> =>
     fetchApi<ClientOfferUpdateResult>(`/sales/client-offers/${encodePathSegment(id)}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -58,6 +58,19 @@ export const clientOffersApi = {
   getRevision: (id: string, revisionId: string): Promise<OfferRevision> =>
     fetchApi<OfferRevision>(
       `/sales/client-offers/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}`,
+    ),
+
+  updateRevisionTitle: (
+    id: string,
+    revisionId: string,
+    title: string | null,
+  ): Promise<RevisionTitleUpdate> =>
+    fetchApi<RevisionTitleUpdate>(
+      `/sales/client-offers/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      },
     ),
 
   restoreRevision: (id: string, revisionId: string): Promise<ClientOffer> =>
