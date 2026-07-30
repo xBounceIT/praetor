@@ -807,7 +807,7 @@ const SuppliersTable: React.FC<SuppliersTableProps> = ({
                     aria-label={
                       row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')
                     }
-                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       row.isDisabled
                         ? 'text-praetor hover:bg-zinc-100'
                         : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
@@ -832,7 +832,7 @@ const SuppliersTable: React.FC<SuppliersTableProps> = ({
                         onConfirmDelete(row);
                       }}
                       aria-label={t('common:buttons.delete')}
-                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>

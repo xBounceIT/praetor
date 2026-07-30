@@ -159,6 +159,7 @@ export interface TimeReportViewProps {
   currentUserId: string;
 }
 
+// react-doctor-disable-next-line react-doctor/no-giant-component -- The report builder is a cohesive stateful workflow whose filters, saved views, generation snapshot, export, and entry editor must share one consistency boundary.
 const TimeReportView = ({
   permissions,
   currency,
@@ -221,12 +222,15 @@ const TimeReportView = ({
     return () => controller.abort();
   }, [reportApi, savedViewsApi, t]);
 
-  useEffect(() => {
-    if (!currentUserId) return;
-    setDefinition((current) =>
-      current.userIds.some(Boolean) ? current : { ...current, userIds: [currentUserId] },
-    );
-  }, [currentUserId]);
+  const [defaultedCurrentUserId, setDefaultedCurrentUserId] = useState(currentUserId);
+  if (defaultedCurrentUserId !== currentUserId) {
+    setDefaultedCurrentUserId(currentUserId);
+    if (currentUserId) {
+      setDefinition((current) =>
+        current.userIds.some(Boolean) ? current : { ...current, userIds: [currentUserId] },
+      );
+    }
+  }
 
   useEffect(() => {
     if (!result || !generatedDefinition) return;
@@ -268,11 +272,12 @@ const TimeReportView = ({
   const handleClientChange = (value: string | string[]) => {
     if (Array.isArray(value)) return;
     const clientId = value || null;
-    const allowedProjects = new Set(
-      options?.projects
-        .filter((project) => clientId === null || project.clientId === clientId)
-        .map((project) => project.id) ?? [],
-    );
+    const allowedProjects = new Set<string>();
+    for (const project of options?.projects ?? []) {
+      if (clientId === null || project.clientId === clientId) {
+        allowedProjects.add(project.id);
+      }
+    }
     const projectIds = definition.projectIds.filter((id) => allowedProjects.has(id)).slice(0, 1);
     updateDefinition({
       clientId,
@@ -305,12 +310,11 @@ const TimeReportView = ({
     });
   };
 
+  const selectedFieldSet = useMemo(() => new Set(definition.fields), [definition.fields]);
   const toggleField = (field: TimeReportField, checked: boolean) => {
     updateDefinition({
       fields: checked
-        ? FIELD_ORDER.filter(
-            (candidate) => candidate === field || definition.fields.includes(candidate),
-          )
+        ? FIELD_ORDER.filter((candidate) => candidate === field || selectedFieldSet.has(candidate))
         : definition.fields.filter((candidate) => candidate !== field),
     });
   };
@@ -777,7 +781,7 @@ const TimeReportView = ({
               {FIELD_ORDER.filter((field) => field !== 'cost' || canViewCost).map((field) => (
                 <label key={field} className="flex items-center gap-2 text-sm">
                   <Checkbox
-                    checked={definition.fields.includes(field)}
+                    checked={selectedFieldSet.has(field)}
                     onCheckedChange={(checked) => toggleField(field, checked === true)}
                   />
                   {t(`timeReport.columns.${field}`)}

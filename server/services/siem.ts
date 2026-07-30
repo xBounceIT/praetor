@@ -359,6 +359,7 @@ class SiemService {
       while (this.staging.length > 0) {
         const events = this.staging.splice(0, 100);
         try {
+          // react-doctor-disable-next-line react-doctor/async-await-in-loop -- Runtime batches are persisted sequentially to preserve event order and provide bounded backpressure.
           await siemRepo.enqueue(events);
         } catch (error) {
           logger.error(
@@ -499,6 +500,7 @@ class SiemService {
         if (this.stopping || !this.config?.enabled || this.config.revision !== config.revision)
           break;
         if (Date.now() - lastClaimRenewal >= CLAIM_RENEW_INTERVAL_MS) {
+          // react-doctor-disable-next-line react-doctor/async-await-in-loop -- Renew the batch lease before the next ordered send; deferring or parallelizing this can let another worker reclaim in-flight events.
           await siemRepo.renewClaims(this.claimToken);
           lastClaimRenewal = Date.now();
         }
@@ -508,6 +510,7 @@ class SiemService {
             facility: config.facility,
             maxBytes: config.protocol === 'udp' ? UDP_MAX_BYTES : STREAM_MAX_BYTES,
           });
+          // react-doctor-disable-next-line react-doctor/async-await-in-loop -- SIEM delivery is ordered and stops on the first failed item so retries cannot overtake earlier events.
           await this.transport.send(message, config);
           await siemRepo.complete(item.id, this.claimToken);
           delivered = true;

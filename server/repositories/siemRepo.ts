@@ -329,6 +329,7 @@ export const cleanup = (
     RETURNING 1
   ) SELECT COUNT(*)::int AS count FROM deleted`,
     );
+    // react-doctor-disable-next-line react-doctor/server-sequential-independent-await -- Capacity cleanup must observe the rows remaining after retention cleanup so it does not over-delete.
     const capacityRows = await executeRows<{ count: number }>(
       tx,
       sql`WITH overflow AS MATERIALIZED (

@@ -720,8 +720,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ? await usersRepo.listAllForAdmin()
         : await usersRepo.listScopedForManager(request.user.id, managerScope);
 
+      const visibleCostUserIds = users.reduce<string[]>((ids, user) => {
+        if (canViewCostFor(request, user.id)) ids.push(user.id);
+        return ids;
+      }, []);
       const currentCosts = await userHourlyCostPeriodsRepo.listCostsForDate(
-        users.filter((user) => canViewCostFor(request, user.id)).map((user) => user.id),
+        visibleCostUserIds,
         todayLocalDateOnly(),
       );
       return users.map((user) =>

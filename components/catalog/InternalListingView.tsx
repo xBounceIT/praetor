@@ -2144,7 +2144,7 @@ const renderInternalListingProductActions = (
                 ? controller.t('crm:internalListing.enableProduct')
                 : controller.t('crm:internalListing.disableProduct')
             }
-            className={`p-2 rounded-lg transition-all ${
+            className={`p-2 rounded-lg transition-colors ${
               product.isDisabled
                 ? 'text-praetor hover:bg-emerald-50'
                 : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
@@ -2175,7 +2175,7 @@ const renderInternalListingProductActions = (
               controller.confirmDelete(product);
             }}
             aria-label={controller.t('common:buttons.delete')}
-            className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+            className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
             <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
           </Button>

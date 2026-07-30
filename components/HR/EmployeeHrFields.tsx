@@ -34,13 +34,17 @@ type EmployeeHrFieldsProps = {
   currency: string;
   hourlyCostPeriods: EmployeeHourlyCostPeriodDraft[];
   setHourlyCostPeriods: React.Dispatch<React.SetStateAction<EmployeeHourlyCostPeriodDraft[]>>;
-  isHourlyCostPeriodsLoading: boolean;
-  hourlyCostPeriodsLoadError: string | null;
-  canViewCosts: boolean;
-  canUpdateCosts: boolean;
-  identityReadOnly: boolean;
-  canEditHrDetails?: boolean;
-  canEditFullName?: boolean;
+  hourlyCostStatus: {
+    loading: boolean;
+    error: string | null;
+  };
+  access: {
+    viewCosts: boolean;
+    updateCosts: boolean;
+    identityReadOnly: boolean;
+    editHrDetails: boolean;
+    editFullName?: boolean;
+  };
   departmentValue?: string;
   responsibleUserOptions?: ResponsibleUserOption[];
   currentEmployeeId?: string | null;
@@ -174,19 +178,24 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
   currency,
   hourlyCostPeriods,
   setHourlyCostPeriods,
-  isHourlyCostPeriodsLoading,
-  hourlyCostPeriodsLoadError,
-  canViewCosts,
-  canUpdateCosts,
-  identityReadOnly,
-  canEditHrDetails = true,
-  canEditFullName = canEditHrDetails,
+  hourlyCostStatus,
+  access,
   departmentValue,
   responsibleUserOptions = EMPTY_RESPONSIBLE_USER_OPTIONS,
   currentEmployeeId = null,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
   const notSetLabel = t('employeeProfile.notSet');
+  const {
+    editFullName = access.editHrDetails,
+    editHrDetails: canEditHrDetails,
+    identityReadOnly,
+    updateCosts: canUpdateCosts,
+    viewCosts: canViewCosts,
+  } = access;
+  const canEditFullName = editFullName;
+  const { error: hourlyCostPeriodsLoadError, loading: isHourlyCostPeriodsLoading } =
+    hourlyCostStatus;
 
   const setField = <K extends keyof EmployeeHrFormData>(field: K, value: EmployeeHrFormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

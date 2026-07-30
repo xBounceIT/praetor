@@ -246,18 +246,23 @@ export const evaluateProjectRulesOnce = async ({
   const appTimeZone = getAppTimeZone();
   const rules = await projectRulesRepo.listEnabled(exec);
   const continuousRules = rules.filter((rule) => rule.evaluationMode !== 'periodic');
-  const periodicContexts = rules
-    .filter((rule) => rule.evaluationMode === 'periodic')
-    .map((rule) => ({
-      rule,
-      period: getProjectRulePeriodForEvaluation(
-        now,
-        rule.schedule,
-        rule.lastEvaluatedPeriod,
-        appTimeZone,
-      ),
-    }))
-    .filter(({ rule, period }) => rule.lastEvaluatedPeriod !== period.key);
+  const periodicContexts = rules.flatMap((rule) => {
+    if (rule.evaluationMode !== 'periodic') return [];
+    const period = getProjectRulePeriodForEvaluation(
+      now,
+      rule.schedule,
+      rule.lastEvaluatedPeriod,
+      appTimeZone,
+    );
+    return rule.lastEvaluatedPeriod === period.key
+      ? []
+      : [
+          {
+            rule,
+            period,
+          },
+        ];
+  });
   const continuousMetricsByProjectId = await projectMetricsRepo.listForProjects(
     continuousRules.map((rule) => rule.projectId),
     now,

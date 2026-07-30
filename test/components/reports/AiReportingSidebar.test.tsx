@@ -36,11 +36,13 @@ describe('<AiReportingSidebar />', () => {
         t={t as never}
         sessions={sessions}
         activeSessionId="revenue"
-        isLoadingSessions={false}
-        isCreatingSession={false}
-        isNewChatDisabled={false}
-        canArchive
-        isDeletingSession={false}
+        status={{
+          isLoadingSessions: false,
+          isCreatingSession: false,
+          isNewChatDisabled: false,
+          isDeletingSession: false,
+        }}
+        capabilities={{ archive: true }}
         onSelectSession={onSelectSession}
         onConfirmDeleteSession={() => {}}
         onRenameSession={() => Promise.resolve(true)}
@@ -65,11 +67,13 @@ describe('<AiReportingSidebar />', () => {
         t={t as never}
         sessions={sessions}
         activeSessionId="revenue"
-        isLoadingSessions={false}
-        isCreatingSession={false}
-        isNewChatDisabled={false}
-        canArchive
-        isDeletingSession={false}
+        status={{
+          isLoadingSessions: false,
+          isCreatingSession: false,
+          isNewChatDisabled: false,
+          isDeletingSession: false,
+        }}
+        capabilities={{ archive: true }}
         onSelectSession={() => {}}
         onConfirmDeleteSession={() => {}}
         onRenameSession={() => Promise.resolve(true)}
@@ -89,11 +93,13 @@ describe('<AiReportingSidebar />', () => {
         t={t as never}
         sessions={sessions}
         activeSessionId="revenue"
-        isLoadingSessions={false}
-        isCreatingSession={false}
-        isNewChatDisabled={false}
-        canArchive
-        isDeletingSession={false}
+        status={{
+          isLoadingSessions: false,
+          isCreatingSession: false,
+          isNewChatDisabled: false,
+          isDeletingSession: false,
+        }}
+        capabilities={{ archive: true }}
         onSelectSession={() => {}}
         onConfirmDeleteSession={onConfirmDeleteSession}
         onRenameSession={() => Promise.resolve(true)}

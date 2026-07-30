@@ -867,7 +867,7 @@ const useClientsController = ({
                       editContact(row.contactIndex);
                     }}
                     aria-label={t('common:buttons.edit')}
-                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                    className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                   >
                     <i className="fa-solid fa-pen"></i>
                   </button>
@@ -885,7 +885,7 @@ const useClientsController = ({
                       removeContact(row.contactIndex);
                     }}
                     aria-label={t('common:buttons.delete')}
-                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
                     <i className="fa-solid fa-trash"></i>
                   </button>
@@ -1098,7 +1098,7 @@ const useClientsController = ({
                         openEditModal(row);
                       }}
                       aria-label={t('common:buttons.edit')}
-                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-pen"></i>
                     </button>
@@ -1121,7 +1121,7 @@ const useClientsController = ({
                     aria-label={
                       row.isDisabled ? t('common:buttons.enable') : t('crm:clients.disableClient')
                     }
-                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`p-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       row.isDisabled
                         ? 'text-praetor hover:bg-zinc-100'
                         : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
@@ -1146,7 +1146,7 @@ const useClientsController = ({
                         confirmDelete(row);
                       }}
                       aria-label={t('common:buttons.delete')}
-                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>

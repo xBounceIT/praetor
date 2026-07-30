@@ -494,16 +494,17 @@ const includeUnavailableSelections = (
   unavailableLabel: string,
 ): ProjectRuleOption[] => {
   const availableIds = new Set(options.map((option) => option.id));
-  return [
-    ...options,
-    ...selectedIds
-      .filter((id) => !availableIds.has(id))
-      .map((id) => ({
+  const unavailableOptions = selectedIds.reduce<ProjectRuleOption[]>((result, id) => {
+    if (!availableIds.has(id)) {
+      result.push({
         id,
         name: `${id} · ${unavailableLabel}`,
         disabled: true,
-      })),
-  ];
+      });
+    }
+    return result;
+  }, []);
+  return [...options, ...unavailableOptions];
 };
 
 const ProjectRuleEvaluationEditor: React.FC<{
@@ -668,6 +669,115 @@ const ProjectRuleEvaluationEditor: React.FC<{
   );
 };
 
+const createProjectRuleConditionRowModel = (
+  condition: ProjectRuleFormConditionRow,
+  index: number,
+  errors: Record<string, string>,
+  permissions: string[],
+  evaluationMode: ProjectRuleEvaluationMode,
+  t: ReturnType<typeof useTranslation>['t'],
+) => {
+  const fieldDefinition = getProjectRuleFieldDefinition(condition.field);
+  const operatorOptions =
+    fieldDefinition?.operators.map((id) => ({
+      id,
+      name: t(`projects:detail.rules.operators.${id}`),
+    })) ?? [];
+  const enumValueOptions =
+    fieldDefinition?.enumValues?.map((id) => ({
+      id,
+      name: t(getProjectRuleValueLabelKey(condition.field, id)),
+    })) ?? [];
+  const booleanValueOptions =
+    fieldDefinition?.kind === 'boolean'
+      ? ['true', 'false'].map((id) => ({
+          id,
+          name: t(getProjectRuleValueLabelKey(condition.field, id)),
+        }))
+      : [];
+  const valueType = condition.valueType ?? 'literal';
+  const valueFieldOptions = getAvailableProjectRuleValueFields(
+    condition.field,
+    permissions,
+    evaluationMode,
+  ).map((definition) => ({
+    id: definition.id,
+    name: t(`projects:detail.rules.fields.${definition.id}`),
+    description: t(`projects:detail.rules.fieldDescriptions.${definition.id}`),
+    group: definition.group,
+  }));
+  const unaryOperator = isProjectRuleUnaryOperator(condition.operator);
+  const valueTypeChoices: readonly ProjectRuleConditionValueType[] =
+    !unaryOperator && valueFieldOptions.length > 0 ? ['literal', 'field'] : ['literal'];
+
+  return {
+    fieldDefinition,
+    operatorOptions,
+    enumValueOptions,
+    booleanValueOptions,
+    valueType,
+    valueFieldOptions,
+    unaryOperator,
+    valueTypeChoices,
+    fieldError: errors[`field-${index}`],
+    operatorError: errors[`operator-${index}`],
+    valueError: errors[`value-${index}`],
+  };
+};
+
+const ProjectRuleConditionsToolbar: React.FC<{
+  conditionLogic: ProjectRuleConditionLogic;
+  submitting: boolean;
+  canAddCondition: boolean;
+  dispatch: React.Dispatch<ProjectRuleFormAction>;
+  onAddCondition: () => void;
+}> = ({ conditionLogic, submitting, canAddCondition, dispatch, onAddCondition }) => {
+  const { t } = useTranslation(['projects']);
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <Field className="max-w-xs">
+        <FieldLabel htmlFor="project-rule-condition-logic">
+          {t('projects:detail.rules.form.conditionLogic')}
+        </FieldLabel>
+        <Select
+          value={conditionLogic}
+          onValueChange={(next) =>
+            dispatch({
+              type: 'setConditionLogic',
+              conditionLogic: next as ProjectRuleConditionLogic,
+            })
+          }
+          disabled={submitting}
+        >
+          <SelectTrigger id="project-rule-condition-logic" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {(['and', 'or'] as const).map((logic) => (
+                <SelectItem key={logic} value={logic}>
+                  {t(`projects:detail.rules.conditionLogic.${logic}`)}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onAddCondition}
+        disabled={submitting || !canAddCondition}
+      >
+        <PlusIcon className="size-4" />
+        {t('projects:detail.rules.actions.addCondition')}
+      </Button>
+    </div>
+  );
+};
+
 const ProjectRuleConditionsEditor: React.FC<{
   conditionLogic: ProjectRuleConditionLogic;
   conditions: ProjectRuleFormConditionRow[];
@@ -705,46 +815,13 @@ const ProjectRuleConditionsEditor: React.FC<{
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <Field className="max-w-xs">
-          <FieldLabel htmlFor="project-rule-condition-logic">
-            {t('projects:detail.rules.form.conditionLogic')}
-          </FieldLabel>
-          <Select
-            value={conditionLogic}
-            onValueChange={(next) =>
-              dispatch({
-                type: 'setConditionLogic',
-                conditionLogic: next as ProjectRuleConditionLogic,
-              })
-            }
-            disabled={submitting}
-          >
-            <SelectTrigger id="project-rule-condition-logic" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {(['and', 'or'] as const).map((logic) => (
-                  <SelectItem key={logic} value={logic}>
-                    {t(`projects:detail.rules.conditionLogic.${logic}`)}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onAddCondition}
-          disabled={submitting || availableFields.length === 0}
-        >
-          <PlusIcon className="size-4" />
-          {t('projects:detail.rules.actions.addCondition')}
-        </Button>
-      </div>
+      <ProjectRuleConditionsToolbar
+        conditionLogic={conditionLogic}
+        submitting={submitting}
+        canAddCondition={availableFields.length > 0}
+        dispatch={dispatch}
+        onAddCondition={onAddCondition}
+      />
 
       <div className="rounded-md border border-border">
         <div
@@ -761,43 +838,27 @@ const ProjectRuleConditionsEditor: React.FC<{
 
         <div className="divide-y divide-border">
           {conditions.map((condition, index) => {
-            const fieldDefinition = getProjectRuleFieldDefinition(condition.field);
-            const operatorOptions =
-              fieldDefinition?.operators.map((id) => ({
-                id,
-                name: t(`projects:detail.rules.operators.${id}`),
-              })) ?? [];
-            const enumValueOptions =
-              fieldDefinition?.enumValues?.map((id) => ({
-                id,
-                name: t(getProjectRuleValueLabelKey(condition.field, id)),
-              })) ?? [];
-            const booleanValueOptions =
-              fieldDefinition?.kind === 'boolean'
-                ? ['true', 'false'].map((id) => ({
-                    id,
-                    name: t(getProjectRuleValueLabelKey(condition.field, id)),
-                  }))
-                : [];
-            const valueType = condition.valueType ?? 'literal';
-            const valueFieldOptions = getAvailableProjectRuleValueFields(
-              condition.field,
+            const row = createProjectRuleConditionRowModel(
+              condition,
+              index,
+              errors,
               permissions,
               evaluationMode,
-            ).map((definition) => ({
-              id: definition.id,
-              name: t(`projects:detail.rules.fields.${definition.id}`),
-              description: t(`projects:detail.rules.fieldDescriptions.${definition.id}`),
-              group: definition.group,
-            }));
-            const unaryOperator = isProjectRuleUnaryOperator(condition.operator);
-            const valueTypeChoices: readonly ProjectRuleConditionValueType[] =
-              !unaryOperator && valueFieldOptions.length > 0
-                ? (['literal', 'field'] as const)
-                : (['literal'] as const);
-            const fieldError = errors[`field-${index}`];
-            const operatorError = errors[`operator-${index}`];
-            const valueError = errors[`value-${index}`];
+              t,
+            );
+            const {
+              booleanValueOptions,
+              enumValueOptions,
+              fieldDefinition,
+              fieldError,
+              operatorError,
+              operatorOptions,
+              unaryOperator,
+              valueError,
+              valueFieldOptions,
+              valueType,
+              valueTypeChoices,
+            } = row;
             return (
               <div key={condition.uid} className={`${CONDITION_GRID_CLASSNAME} p-3`}>
                 <Field data-invalid={!!fieldError}>
@@ -1174,6 +1235,59 @@ type ProjectRuleFormModalSessionProps = ProjectRuleFormModalProps & {
   initialField: string;
 };
 
+const ProjectRuleNameField: React.FC<{
+  name: string;
+  error?: string;
+  submitting: boolean;
+  dispatch: React.Dispatch<ProjectRuleFormAction>;
+}> = ({ name, error, submitting, dispatch }) => {
+  const { t } = useTranslation(['projects']);
+  return (
+    <Field data-invalid={!!error}>
+      <FieldLabel htmlFor="project-rule-name" required>
+        {t('projects:detail.rules.form.name')}
+      </FieldLabel>
+      <Input
+        id="project-rule-name"
+        value={name}
+        maxLength={PROJECT_RULE_NAME_MAX_LENGTH}
+        onChange={(event) => dispatch({ type: 'setName', name: event.target.value })}
+        disabled={submitting}
+        aria-invalid={!!error}
+        placeholder={t('projects:detail.rules.form.namePlaceholder')}
+      />
+      <FieldError>{error}</FieldError>
+    </Field>
+  );
+};
+
+const ProjectRuleEnabledField: React.FC<{
+  isEnabled: boolean;
+  submitting: boolean;
+  dispatch: React.Dispatch<ProjectRuleFormAction>;
+}> = ({ isEnabled, submitting, dispatch }) => {
+  const { t } = useTranslation(['projects']);
+
+  return (
+    <Field className="flex-row items-center justify-between rounded-md border border-border p-3">
+      <div className="space-y-1">
+        <FieldLabel htmlFor="project-rule-enabled">
+          {t('projects:detail.rules.form.enabled')}
+        </FieldLabel>
+        <p className="text-sm text-muted-foreground">
+          {t('projects:detail.rules.form.enabledDescription')}
+        </p>
+      </div>
+      <Switch
+        id="project-rule-enabled"
+        checked={isEnabled}
+        onCheckedChange={(nextEnabled) => dispatch({ type: 'setEnabled', isEnabled: nextEnabled })}
+        disabled={submitting}
+      />
+    </Field>
+  );
+};
+
 const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = ({
   open,
   onOpenChange,
@@ -1397,21 +1511,12 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
         </DialogHeader>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
-          <Field data-invalid={!!errors.name}>
-            <FieldLabel htmlFor="project-rule-name" required>
-              {t('projects:detail.rules.form.name')}
-            </FieldLabel>
-            <Input
-              id="project-rule-name"
-              value={name}
-              maxLength={PROJECT_RULE_NAME_MAX_LENGTH}
-              onChange={(event) => dispatch({ type: 'setName', name: event.target.value })}
-              disabled={submitting}
-              aria-invalid={!!errors.name}
-              placeholder={t('projects:detail.rules.form.namePlaceholder')}
-            />
-            <FieldError>{errors.name}</FieldError>
-          </Field>
+          <ProjectRuleNameField
+            name={name}
+            error={errors.name}
+            submitting={submitting}
+            dispatch={dispatch}
+          />
 
           <ProjectRuleEvaluationEditor
             evaluationMode={evaluationMode}
@@ -1453,22 +1558,11 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
             dispatch={dispatch}
           />
 
-          <Field className="flex-row items-center justify-between rounded-md border border-border p-3">
-            <div className="space-y-1">
-              <FieldLabel htmlFor="project-rule-enabled">
-                {t('projects:detail.rules.form.enabled')}
-              </FieldLabel>
-              <p className="text-sm text-muted-foreground">
-                {t('projects:detail.rules.form.enabledDescription')}
-              </p>
-            </div>
-            <Switch
-              id="project-rule-enabled"
-              checked={isEnabled}
-              onCheckedChange={(isEnabled) => dispatch({ type: 'setEnabled', isEnabled })}
-              disabled={submitting}
-            />
-          </Field>
+          <ProjectRuleEnabledField
+            isEnabled={isEnabled}
+            submitting={submitting}
+            dispatch={dispatch}
+          />
 
           <DialogFooter>
             <Button

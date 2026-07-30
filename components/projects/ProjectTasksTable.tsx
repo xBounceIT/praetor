@@ -18,10 +18,12 @@ export interface ProjectTasksTableProps {
   projectId: string;
   tasks: ProjectTask[];
   currency: string;
-  canCreate: boolean;
-  canUpdate: boolean;
-  canDelete: boolean;
-  canViewAssignments: boolean;
+  capabilities: {
+    create: boolean;
+    update: boolean;
+    delete: boolean;
+    viewAssignments: boolean;
+  };
   onAddTask: () => void | Promise<void>;
   onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
   onRequestDeleteTask: (task: ProjectTask) => void;
@@ -364,16 +366,19 @@ const ProjectTasksTable: React.FC<ProjectTasksTableProps> = ({
   projectId,
   tasks,
   currency,
-  canCreate,
-  canUpdate,
-  canDelete,
-  canViewAssignments,
+  capabilities,
   onAddTask,
   onUpdateTask,
   onRequestDeleteTask,
   onManageMembers,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
+  const {
+    create: canCreate,
+    delete: canDelete,
+    update: canUpdate,
+    viewAssignments: canViewAssignments,
+  } = capabilities;
 
   const [taskEdits, setTaskEdits] = useState<Record<string, Record<string, string>>>({});
   const [hoursState, setHoursState] = useState<ProjectTaskHoursState>(INITIAL_TASK_HOURS_STATE);

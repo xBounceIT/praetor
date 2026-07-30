@@ -796,13 +796,10 @@ export const generateRecurringEntries = async (
 
   const { inserted, skippedExistingCount } = await withSerializableWriteTransaction(async (tx) => {
     await usersRepo.lockById(targetUserId, tx);
-    const lockedCostPeriods = await userHourlyCostPeriodsRepo.listInputsForUser(targetUserId, tx);
-    const existingKeys = await entriesRepo.findExistingRecurringKeys(
-      targetUserId,
-      fromDate,
-      toDate,
-      tx,
-    );
+    const [lockedCostPeriods, existingKeys] = await Promise.all([
+      userHourlyCostPeriodsRepo.listInputsForUser(targetUserId, tx),
+      entriesRepo.findExistingRecurringKeys(targetUserId, fromDate, toDate, tx),
+    ]);
     const pending = candidates.reduce<PendingEntry[]>((entries, candidate) => {
       if (!existingKeys.has(candidate.key)) {
         entries.push({

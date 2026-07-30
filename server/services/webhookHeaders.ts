@@ -94,6 +94,7 @@ export const migrateLegacyWebhookHeaders = async (): Promise<number> => {
     for (const webhook of batch) {
       const result = encryptLegacyValues(webhook.customHeaders);
       if (!result.changed) continue;
+      // react-doctor-disable-next-line react-doctor/async-await-in-loop -- This startup backfill intentionally serializes compare-and-swap writes to bound database load and fail at the first conflicting legacy value.
       const replaced = await webhooksRepo.replaceCustomHeadersIfUnchanged(
         webhook.id,
         webhook.customHeaders,

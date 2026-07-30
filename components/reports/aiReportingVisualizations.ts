@@ -355,13 +355,13 @@ export const aiReportingVisualizationToMarkdown = (visualization: AiReportingVis
 
 export const getAiReportingAssistantCopyText = (parsed: AiReportingVisualizationParseResult) => {
   return parsed.blocks
-    .map((block) => {
-      if (block.type === 'markdown') return block.markdown;
+    .flatMap((block) => {
+      if (block.type === 'markdown') return block.markdown ? [block.markdown] : [];
       if (block.type === 'visualization') {
-        return aiReportingVisualizationToMarkdown(block.visualization);
+        const markdown = aiReportingVisualizationToMarkdown(block.visualization);
+        return markdown ? [markdown] : [];
       }
-      return '';
+      return [];
     })
-    .filter(Boolean)
     .join('\n\n');
 };

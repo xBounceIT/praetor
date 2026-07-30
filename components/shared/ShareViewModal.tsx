@@ -311,7 +311,7 @@ const ShareReadyBody: React.FC<{
         type="button"
         onClick={() => onToggleAvailable(user.id)}
         onDoubleClick={() => onShareUser(user.id)}
-        className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer text-left transition-all ${
+        className={`w-full flex items-center gap-3 p-3 rounded-xl border cursor-pointer text-left transition-colors ${
           isSelected
             ? 'bg-primary/10 border-primary'
             : 'bg-card border-border hover:border-input hover:bg-accent'
@@ -336,7 +336,7 @@ const ShareReadyBody: React.FC<{
     return (
       <div
         key={user.id}
-        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+        className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
           isSelected ? 'bg-primary/10 border-primary' : 'bg-card border-border'
         }`}
       >

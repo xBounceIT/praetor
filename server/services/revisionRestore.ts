@@ -102,7 +102,15 @@ export const restoreQuoteRevision = async (
   if (!restored) return null;
 
   await quoteCandidatesRepo.deleteAllForQuote(quoteId, tx);
+  type RestoredItem = (typeof snapshot.items)[number] & { position: number };
+  const itemsByCandidateId = new Map<string, RestoredItem[]>();
+  for (const item of snapshot.items) {
+    const candidateItems = itemsByCandidateId.get(item.candidateId);
+    if (candidateItems) candidateItems.push({ ...item, position: candidateItems.length });
+    else itemsByCandidateId.set(item.candidateId, [{ ...item, position: 0 }]);
+  }
   for (const candidate of snapshot.candidates) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop -- Each candidate must exist before its dependent items are replaced, and the shared transaction executor serializes these writes on one connection.
     await quoteCandidatesRepo.insert(
       {
         id: candidate.id,
@@ -119,9 +127,7 @@ export const restoreQuoteRevision = async (
       },
       tx,
     );
-    const items = snapshot.items
-      .filter((item) => item.candidateId === candidate.id)
-      .map((item, position) => ({ ...item, position }));
+    const items = itemsByCandidateId.get(candidate.id) ?? [];
     await clientQuotesRepo.replaceItems(quoteId, items, tx, candidate.id);
   }
   return clientQuotesRepo.findById(quoteId, tx);

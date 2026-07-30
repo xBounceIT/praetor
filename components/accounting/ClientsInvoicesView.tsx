@@ -654,7 +654,7 @@ const useClientsInvoicesController = ({
                       confirmDelete(row);
                     }}
                     aria-label={t('common:buttons.delete')}
-                    className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
+                    className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-600"
                   >
                     <i className="fa-solid fa-trash-can"></i>
                   </button>

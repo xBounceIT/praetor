@@ -3,6 +3,7 @@ import type {
   ProjectRuleSchedule,
   ProjectRuleScheduleFrequency,
 } from '../db/schema/projectRules.ts';
+import { getDatePartsFormatter } from './date.ts';
 
 export const PROJECT_RULE_EVALUATION_MODES = ['continuous', 'periodic'] as const;
 export const PROJECT_RULE_SCHEDULE_FREQUENCIES = [
@@ -64,12 +65,7 @@ export const normalizeProjectRuleSchedule = (value: unknown): ProjectRuleSchedul
 };
 
 const datePartsInTimeZone = (now: Date, timeZone: string) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
+  const parts = getDatePartsFormatter(timeZone).formatToParts(now);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     Number(parts.find((candidate) => candidate.type === type)?.value);
   return { year: part('year'), month: part('month'), day: part('day') };

@@ -17,7 +17,6 @@ import type {
   SupplierSaleOrderItem,
   SupplierUnitType,
 } from '../../types';
-import { formatInsertDateTime } from '../../utils/date';
 import { formatDocumentCode } from '../../utils/document-code';
 import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
@@ -674,7 +673,7 @@ const useSupplierOrdersController = ({
                           void onUpdateOrder(row.id, { status: 'sent' });
                         }}
                         aria-label={t('accounting:supplierOrders.markSent')}
-                        className="rounded-lg p-2 text-blue-700 transition-all hover:bg-blue-50 hover:text-blue-600"
+                        className="rounded-lg p-2 text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-600"
                       >
                         <i className="fa-solid fa-paper-plane"></i>
                       </button>
@@ -716,7 +715,7 @@ const useSupplierOrdersController = ({
                           confirmDelete(row);
                         }}
                         aria-label={t('common:buttons.delete')}
-                        className="rounded-lg p-2 text-red-600 transition-all hover:bg-red-50 hover:text-red-600"
+                        className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-600"
                       >
                         <i className="fa-solid fa-trash-can"></i>
                       </button>

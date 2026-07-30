@@ -172,6 +172,19 @@ const useRoleLabel = (currentUser: PraetorUser, roles: Role[]) => {
   }, [currentUser.availableRoles, currentUser.role, roles, t]);
 };
 
+const useLayoutTheme = () => {
+  const resolvedTheme = useResolvedShadcnTheme();
+
+  useLayoutEffect(() => {
+    applyTheme(getTheme());
+  }, []);
+
+  return {
+    resolvedTheme,
+    shadcnThemeClassName: getShadcnThemeClassName(resolvedTheme),
+  };
+};
+
 const Layout: React.FC<LayoutProps> = ({
   children,
   activeView,
@@ -192,12 +205,7 @@ const Layout: React.FC<LayoutProps> = ({
   onOpenRilPreferences,
 }) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
-  const resolvedTheme = useResolvedShadcnTheme();
-  const shadcnThemeClassName = getShadcnThemeClassName(resolvedTheme);
-
-  useLayoutEffect(() => {
-    applyTheme(getTheme());
-  }, []);
+  const { resolvedTheme, shadcnThemeClassName } = useLayoutTheme();
 
   const modules: Module[] = useMemo(() => {
     const commissionsView: View = hasViewAccess(currentUser.permissions, 'projects/manage')

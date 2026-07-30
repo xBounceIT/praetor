@@ -18,21 +18,23 @@ export const sanitizeTimeReportFavorite = (
   const visibleUserIds = new Set(options.users.map((item) => item.id));
   const visibleClientIds = new Set(options.clients.map((item) => item.id));
   const clientId = saved.clientId && visibleClientIds.has(saved.clientId) ? saved.clientId : null;
-  const eligibleProjectIds = new Set(
-    options.projects
-      .filter((project) => clientId === null || project.clientId === clientId)
-      .map((project) => project.id),
-  );
+  const eligibleProjectIds = new Set<string>();
+  for (const project of options.projects) {
+    if (clientId === null || project.clientId === clientId) {
+      eligibleProjectIds.add(project.id);
+    }
+  }
   const projectIds = saved.projectIds.filter((id) => eligibleProjectIds.has(id)).slice(0, 1);
-  const visibleTasks = new Set(
-    options.tasks
-      .filter(
-        (task) =>
-          eligibleProjectIds.has(task.projectId) &&
-          (projectIds.length === 0 || projectIds.includes(task.projectId)),
-      )
-      .map(taskIdentity),
-  );
+  const selectedProjectIds = new Set(projectIds);
+  const visibleTasks = new Set<string>();
+  for (const task of options.tasks) {
+    if (
+      eligibleProjectIds.has(task.projectId) &&
+      (selectedProjectIds.size === 0 || selectedProjectIds.has(task.projectId))
+    ) {
+      visibleTasks.add(taskIdentity(task));
+    }
+  }
   const selectedUsers = visibility.canSelectUsers
     ? saved.userIds.filter((id) => visibleUserIds.has(id))
     : [visibility.currentUserId];

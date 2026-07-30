@@ -37,7 +37,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
         className="peer sr-only"
       />
       <div
-        className={`${sizeClasses} bg-white border-2 border-zinc-300 rounded-md transition-all duration-200 peer-checked:bg-praetor peer-checked:border-praetor ${!disabled ? 'group-hover:border-praetor/50' : ''} peer-focus:ring-2 peer-focus:ring-praetor/20 flex items-center justify-center ${indeterminate && !checked ? 'bg-praetor border-praetor' : ''}`}
+        className={`${sizeClasses} bg-white border-2 border-zinc-300 rounded-md transition-[background-color,border-color,box-shadow] duration-200 peer-checked:bg-praetor peer-checked:border-praetor ${!disabled ? 'group-hover:border-praetor/50' : ''} peer-focus:ring-2 peer-focus:ring-praetor/20 flex items-center justify-center ${indeterminate && !checked ? 'bg-praetor border-praetor' : ''}`}
       >
         {indeterminate && !checked ? (
           <span className={`${indeterminateSizeClasses} bg-white rounded-full`} />

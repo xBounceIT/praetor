@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useReducer, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordHeaderButton } from '@/components/shared/LinkedRecordHeaderButton';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,6 @@ import {
   addMonthsToDateOnly,
   formatDateOnlyForLocale,
   formatInsertDate,
-  formatInsertDateTime,
   getLocalDateString,
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
@@ -1030,7 +1029,7 @@ const useSupplierQuotesController = ({
                         aria-label={t('sales:supplierQuotes.viewOrder', {
                           defaultValue: 'View order',
                         })}
-                        className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                        className="p-2 rounded-lg transition-colors text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                       >
                         <i className="fa-solid fa-link"></i>
                       </button>
@@ -1053,7 +1052,7 @@ const useSupplierQuotesController = ({
                       }}
                       disabled={isEditDisabled}
                       aria-label={editTitle}
-                      className={`p-2 rounded-lg transition-all ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
+                      className={`p-2 rounded-lg transition-colors ${isEditDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                     >
                       <i
                         className={`fa-solid ${isRowReadOnly && !hasOrder ? 'fa-eye' : 'fa-pen-to-square'}`}
@@ -1094,7 +1093,7 @@ const useSupplierQuotesController = ({
                         }}
                         disabled={isCreateOrderDisabled}
                         aria-label={createOrderTitle}
-                        className={`p-2 rounded-lg transition-all ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
+                        className={`p-2 rounded-lg transition-colors ${isCreateOrderDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
                       >
                         <i className="fa-solid fa-cart-shopping"></i>
                       </button>
@@ -1115,7 +1114,7 @@ const useSupplierQuotesController = ({
                           dispatch({ type: 'setIsDeleteConfirmOpen', value: true });
                         }}
                         aria-label={t('common:buttons.delete', { defaultValue: 'Delete' })}
-                        className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                        className="p-2 rounded-lg transition-colors text-red-600 hover:text-red-600 hover:bg-red-50"
                       >
                         <i className="fa-solid fa-trash-can"></i>
                       </button>

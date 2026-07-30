@@ -589,7 +589,7 @@ const TrackerModeToggle: React.FC<{
     <div className="flex justify-center">
       <div className="relative grid grid-cols-2 bg-background border border-border shadow-sm p-1 rounded-full w-full max-w-60">
         <div
-          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-muted rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-muted rounded-full shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
             mode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
           }`}
         ></div>
@@ -896,8 +896,8 @@ const RecurringEntryDeleteModal: React.FC<{
   const { t } = useTranslation('timesheets');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm animate-in fade-in animation-duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 animation-duration-200">
         <div className="p-6 border-b border-zinc-100">
           <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
             <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
@@ -912,7 +912,7 @@ const RecurringEntryDeleteModal: React.FC<{
           <button
             type="button"
             onClick={() => onAction('stop')}
-            className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-praetor/30 hover:bg-praetor/5 transition-all group"
+            className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-praetor/30 hover:bg-praetor/5 transition-colors group"
           >
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-zinc-800 group-hover:text-praetor">
@@ -926,7 +926,7 @@ const RecurringEntryDeleteModal: React.FC<{
           <button
             type="button"
             onClick={() => onAction('delete_future')}
-            className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-red-300 hover:bg-red-50 transition-all group"
+            className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-red-300 hover:bg-red-50 transition-colors group"
           >
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-zinc-800 group-hover:text-red-700">
@@ -942,7 +942,7 @@ const RecurringEntryDeleteModal: React.FC<{
           <button
             type="button"
             onClick={() => onAction('delete_all')}
-            className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
+            className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-colors group"
           >
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-red-700">{t('recurring.deleteAll')}</span>
@@ -4589,6 +4589,7 @@ const ProjectDetailRoute: React.FC<{ controller: AuthenticatedAppContentControll
 
   useEffect(() => {
     if (!selectedProjectId) {
+      // react-doctor-disable-next-line react-doctor/no-prop-callback-in-effect -- This is a route redirect for an absent id, not local state mirrored into the parent.
       setActiveView('projects/manage');
       return;
     }

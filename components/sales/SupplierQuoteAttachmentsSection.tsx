@@ -231,7 +231,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
                   <button
                     type="button"
                     onClick={() => handleDownload(attachment)}
-                    className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                    className="p-2 rounded-lg transition-colors text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     aria-label={t('sales:supplierQuotes.attachments.downloadAction', {
                       defaultValue: 'Download',
                     })}
@@ -242,7 +242,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
                     <button
                       type="button"
                       onClick={() => setPendingDelete(attachment)}
-                      className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50"
+                      className="p-2 rounded-lg transition-colors text-red-600 hover:text-red-600 hover:bg-red-50"
                       aria-label={t('sales:supplierQuotes.attachments.deleteAction', {
                         defaultValue: 'Delete',
                       })}

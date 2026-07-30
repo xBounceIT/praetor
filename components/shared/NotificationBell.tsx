@@ -143,7 +143,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-50 mt-3 w-80 origin-top-right overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute right-0 z-50 mt-3 w-80 origin-top-right overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in zoom-in-95 animation-duration-200">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border bg-popover px-4 py-3">
             <h3 className="text-sm font-semibold text-popover-foreground">
@@ -228,7 +228,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                         <button
                           type="button"
                           onClick={(e) => handleDelete(e, notification.id)}
-                          className="flex size-6 flex-shrink-0 items-center justify-center rounded-full text-destructive opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                          className="flex size-6 flex-shrink-0 items-center justify-center rounded-full text-destructive opacity-0 transition-[color,background-color,opacity] hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                           aria-label={t('notifications.delete', 'Delete notification')}
                         >
                           <i className="fa-solid fa-xmark text-xs"></i>
@@ -263,7 +263,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                     notification.data?.projectNames &&
                     notification.data.projectNames.length > 0 && (
                       <div
-                        className={`ml-11 mt-2 overflow-hidden transition-all duration-200 ${
+                        className={`ml-11 mt-2 overflow-hidden transition-[max-height,opacity] duration-200 ${
                           expandedId === notification.id ? 'max-h-40' : 'max-h-0'
                         }`}
                       >

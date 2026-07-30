@@ -274,7 +274,7 @@ const AssignmentColumn: React.FC<{
           return (
             <label
               key={item.id}
-              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                 selected
                   ? 'bg-accent border-border shadow-sm'
                   : 'bg-card border-border hover:border-input'
@@ -288,9 +288,9 @@ const AssignmentColumn: React.FC<{
                   aria-label={item.name}
                   className="sr-only peer"
                 />
-                <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
+                <div className="size-5 rounded-full border-2 border-border relative transition-[background-color,border-color,box-shadow] peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
                   <div
-                    className={`size-2 rounded-full transition-all duration-200 ${
+                    className={`size-2 rounded-full transition-[background-color,opacity,transform] duration-200 ${
                       selected ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'
                     }`}
                   ></div>
@@ -357,7 +357,7 @@ const EmployeeAssignmentsFooter: React.FC<{
       type="button"
       onClick={onSave}
       disabled={!isDirty || loadFailed}
-      className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
+      className={`px-6 py-2 font-bold rounded-lg transition-[color,background-color,border-color,box-shadow,transform] shadow-sm active:scale-95 text-sm ${
         !isDirty || loadFailed
           ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
           : 'bg-praetor text-white hover:bg-praetor/90'
@@ -714,7 +714,7 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
       zIndex={50}
       backdropClass="bg-zinc-900/50 backdrop-blur-sm"
     >
-      <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 animation-duration-200">
         <EmployeeAssignmentsHeader
           title={t('hr:workforce.manageAccess', { name: user.name })}
           closeLabel={t('common:buttons.close')}

@@ -70,7 +70,7 @@ const AttachmentDropzone: React.FC<AttachmentDropzoneProps> = ({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
       aria-label={uploadButtonLabel}
-      className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-sm transition-all cursor-pointer ${
+      className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-sm transition-colors cursor-pointer ${
         isDragging
           ? 'border-praetor bg-praetor/5'
           : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300'

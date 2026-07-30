@@ -541,8 +541,12 @@ const buildServer = () => {
             canViewExternal: hasPermission(user, 'hr.external.view'),
           });
 
+      const visibleCostUserIds = users.reduce<string[]>((ids, entry) => {
+        if (canViewCostFor(user, entry.id)) ids.push(entry.id);
+        return ids;
+      }, []);
       const currentCosts = await userHourlyCostPeriodsRepo.listCostsForDate(
-        users.filter((entry) => canViewCostFor(user, entry.id)).map((entry) => entry.id),
+        visibleCostUserIds,
         todayLocalDateOnly(),
       );
       const visibleWorkUnits = hasWorkUnitsView

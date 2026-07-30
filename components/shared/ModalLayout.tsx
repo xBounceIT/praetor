@@ -44,7 +44,7 @@ function ModalContentShell({
       data-shadcn-theme-scope
       data-shadcn-theme={resolvedTheme}
       className={cn(
-        'shadcn-theme-bridge flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg animate-in zoom-in-95 duration-200',
+        'shadcn-theme-bridge flex max-h-[90vh] w-full flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg animate-in zoom-in-95 animation-duration-200',
         getShadcnThemeClassName(resolvedTheme),
         modalSizeClassName[size],
         className,

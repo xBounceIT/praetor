@@ -201,7 +201,7 @@ const DailyRepeatControls: React.FC<{
 
   return (
     <div
-      className={`transition-all duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-muted/40 border-border' : 'bg-transparent border-transparent'}`}
+      className={`transition-colors duration-300 border rounded-xl px-2 py-1 ${makeRecurring ? 'bg-muted/40 border-border' : 'bg-transparent border-transparent'}`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -216,7 +216,7 @@ const DailyRepeatControls: React.FC<{
         </Button>
 
         {makeRecurring && (
-          <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
+          <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-left-2 animation-duration-200">
             <Separator orientation="vertical" className="hidden sm:block h-4 mx-1" />
             <SelectControl
               options={[

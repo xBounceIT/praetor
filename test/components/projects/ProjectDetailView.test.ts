@@ -269,7 +269,9 @@ describe('ProjectDetailView wiring', () => {
       /const openProjectAssignments = useCallback\(\(\) => \{\s*if \(!canManageAssignments\) return;[\s\S]*?setManagingTaskId\(null\);[\s\S]*?setIsAssignmentsOpen\(true\);/,
     );
     expect(source).toContain('onClick={openProjectAssignments}');
-    expect(source).toContain('canViewAssignments={canViewAssignments}');
+    expect(source).toMatch(
+      /<ProjectTasksTable[\s\S]*?capabilities=\{\{[\s\S]*?viewAssignments: canViewAssignments,[\s\S]*?\}\}/,
+    );
     expect(source).toContain('onManageMembers={(task) => openTaskAssignments(task.id)}');
     expect(source).toMatch(/tasksApi\.getUsers\(managingTaskId as string,\s*signal\)/);
     expect(source).toMatch(/tasksApi\.updateUsers\(managingTaskId as string,\s*ids\)/);

@@ -351,7 +351,7 @@ const GeneralSettingsTabs: React.FC<{
             type="button"
             onClick={() => onTabChange(id)}
             className={cn(
-              'pb-4 text-sm font-bold transition-all relative inline-flex items-center gap-2',
+              'pb-4 text-sm font-bold transition-colors relative inline-flex items-center gap-2',
               isActive ? 'text-praetor' : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -1033,6 +1033,51 @@ const GeneralSettingsSubmit: React.FC<{
   );
 };
 
+const createRilOptionActions = (dispatch: React.Dispatch<GeneralSettingsAction>) => ({
+  updateNote: (index: number, field: keyof RilNoteOption, value: string) => {
+    dispatch({
+      type: 'setRilNoteOptions',
+      updater: (prev) =>
+        prev.map((option, optionIndex) =>
+          optionIndex === index ? { ...option, [field]: value } : option,
+        ),
+    });
+  },
+  addNote: () => {
+    dispatch({
+      type: 'setRilNoteOptions',
+      updater: (prev) => [...prev, { value: '', label: '', draftId: createRilDraftId('note') }],
+    });
+  },
+  removeNote: (index: number) => {
+    dispatch({
+      type: 'setRilNoteOptions',
+      updater: (prev) =>
+        prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    });
+  },
+  updateTransfer: (index: number, value: string) => {
+    dispatch({
+      type: 'setRilTransferOptions',
+      updater: (prev) =>
+        prev.map((option, optionIndex) => (optionIndex === index ? { ...option, value } : option)),
+    });
+  },
+  addTransfer: () => {
+    dispatch({
+      type: 'setRilTransferOptions',
+      updater: (prev) => [...prev, { value: '', draftId: createRilDraftId('transfer') }],
+    });
+  },
+  removeTransfer: (index: number) => {
+    dispatch({
+      type: 'setRilTransferOptions',
+      updater: (prev) =>
+        prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
+    });
+  },
+});
+
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   settings,
   onUpdate,
@@ -1232,54 +1277,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     isModelMissing() ||
     isModelNotFound ||
     (!hasChanges && !isSaved);
-
-  const updateRilNoteOption = (index: number, field: keyof RilNoteOption, value: string) => {
-    dispatch({
-      type: 'setRilNoteOptions',
-      updater: (prev) =>
-        prev.map((option, optionIndex) =>
-          optionIndex === index ? { ...option, [field]: value } : option,
-        ),
-    });
-  };
-
-  const addRilNoteOption = () => {
-    dispatch({
-      type: 'setRilNoteOptions',
-      updater: (prev) => [...prev, { value: '', label: '', draftId: createRilDraftId('note') }],
-    });
-  };
-
-  const removeRilNoteOption = (index: number) => {
-    dispatch({
-      type: 'setRilNoteOptions',
-      updater: (prev) =>
-        prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
-    });
-  };
-
-  const updateRilTransferOption = (index: number, value: string) => {
-    dispatch({
-      type: 'setRilTransferOptions',
-      updater: (prev) =>
-        prev.map((option, optionIndex) => (optionIndex === index ? { ...option, value } : option)),
-    });
-  };
-
-  const addRilTransferOption = () => {
-    dispatch({
-      type: 'setRilTransferOptions',
-      updater: (prev) => [...prev, { value: '', draftId: createRilDraftId('transfer') }],
-    });
-  };
-
-  const removeRilTransferOption = (index: number) => {
-    dispatch({
-      type: 'setRilTransferOptions',
-      updater: (prev) =>
-        prev.length > 1 ? prev.filter((_, optionIndex) => optionIndex !== index) : prev,
-    });
-  };
+  const rilOptionActions = createRilOptionActions(dispatch);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -1314,12 +1312,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
               rilTransferOptions,
             }}
             dispatch={dispatch}
-            onUpdateNote={updateRilNoteOption}
-            onAddNote={addRilNoteOption}
-            onRemoveNote={removeRilNoteOption}
-            onUpdateTransfer={updateRilTransferOption}
-            onAddTransfer={addRilTransferOption}
-            onRemoveTransfer={removeRilTransferOption}
+            onUpdateNote={rilOptionActions.updateNote}
+            onAddNote={rilOptionActions.addNote}
+            onRemoveNote={rilOptionActions.removeNote}
+            onUpdateTransfer={rilOptionActions.updateTransfer}
+            onAddTransfer={rilOptionActions.addTransfer}
+            onRemoveTransfer={rilOptionActions.removeTransfer}
           />
         )}
 

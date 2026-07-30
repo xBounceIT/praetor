@@ -882,7 +882,7 @@ const useClientOffersController = ({
                         onViewQuote(row.linkedQuoteId);
                       }}
                       aria-label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
-                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                      className="p-2 rounded-lg transition-colors text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -903,7 +903,7 @@ const useClientOffersController = ({
                       openEditModal(row);
                     }}
                     aria-label={t('common:buttons.edit')}
-                    className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                    className="p-2 rounded-lg transition-colors text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -926,7 +926,7 @@ const useClientOffersController = ({
                       aria-label={t('sales:clientOffers.markSent', {
                         defaultValue: 'Mark as sent',
                       })}
-                      className={`p-2 rounded-lg transition-all text-blue-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-blue-600 hover:bg-blue-50'}`}
+                      className={`p-2 rounded-lg transition-colors text-blue-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -955,7 +955,7 @@ const useClientOffersController = ({
                         aria-label={t('sales:clientOffers.markAccepted', {
                           defaultValue: 'Mark as accepted',
                         })}
-                        className={`p-2 rounded-lg transition-all text-emerald-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
+                        className={`p-2 rounded-lg transition-colors text-emerald-700 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-emerald-600 hover:bg-emerald-50'}`}
                       >
                         <i className="fa-solid fa-check"></i>
                       </button>
@@ -983,7 +983,7 @@ const useClientOffersController = ({
                         aria-label={t('sales:clientOffers.markDenied', {
                           defaultValue: 'Mark as denied',
                         })}
-                        className={`p-2 rounded-lg transition-all text-red-600 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                        className={`p-2 rounded-lg transition-colors text-red-600 ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
@@ -1046,7 +1046,7 @@ const useClientOffersController = ({
                       aria-label={t('sales:clientOffers.createOrder', {
                         defaultValue: 'Create sale order',
                       })}
-                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                      className="p-2 rounded-lg transition-colors text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-cart-plus"></i>
                     </button>
@@ -1105,7 +1105,7 @@ const useClientOffersController = ({
                       }}
                       disabled={expired}
                       aria-label={deleteTitle}
-                      className={`p-2 text-red-600 rounded-lg transition-all ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 text-red-600 rounded-lg transition-colors ${expired ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
