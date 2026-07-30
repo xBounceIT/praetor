@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usersApi } from '../../services/api/users';
 import type {
@@ -16,20 +15,11 @@ import { formatDecimal } from '../../utils/numbers';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
-import Modal from '../shared/Modal';
-import {
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalTitle,
-} from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { TABLE_ROW_AVATAR_CLASSNAME } from '../shared/tableControlStyles';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
-import EmployeeHrFields from './EmployeeHrFields';
+import EmployeeEditorModal from './EmployeeEditorModal';
 import {
   getEmployeeContactValue,
   LEGACY_CONTACT_COLUMN_ID,
@@ -73,6 +63,20 @@ const getSurname = (user: User): string => {
   const parts = user.name.trim().split(' ');
   return parts.length > 1 ? parts[parts.length - 1] : user.name;
 };
+
+const getVisibleInternalEmployees = (users: User[]) =>
+  users
+    .filter(
+      (user) =>
+        !user.isDisabled &&
+        !user.isAdminOnly &&
+        (user.employeeType === 'internal' ||
+          user.employeeType === 'app_user' ||
+          !user.employeeType),
+    )
+    .sort((first, second) =>
+      getSurname(first).toLowerCase().localeCompare(getSurname(second).toLowerCase()),
+    );
 
 interface EmptyStateProps {
   title: string;
@@ -451,21 +455,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   } = state;
   const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
 
-  // Combine and sort all employees by surname ascending
-  const allEmployees = useMemo(() => {
-    const filtered = users.filter(
-      (u) =>
-        !u.isDisabled &&
-        !u.isAdminOnly &&
-        (u.employeeType === 'internal' || u.employeeType === 'app_user' || !u.employeeType),
-    );
-
-    return filtered.sort((a, b) => {
-      const surnameA = getSurname(a).toLowerCase();
-      const surnameB = getSurname(b).toLowerCase();
-      return surnameA.localeCompare(surnameB);
-    });
-  }, [users]);
+  const allEmployees = useMemo(() => getVisibleInternalEmployees(users), [users]);
 
   const openAddModal = () => {
     if (!canCreateEmployees) return;
@@ -579,77 +569,46 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={closeEmployeeModal}>
-        <ModalContent size="2xl">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingEmployee ? 'fa-pen-to-square' : 'fa-plus'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingEmployee
-                  ? t('internalEmployees.editEmployee')
-                  : t('internalEmployees.addEmployee')}
-              </ModalTitle>
-              <ModalCloseButton onClick={closeEmployeeModal} />
-            </ModalHeader>
-
-            <ModalBody className="space-y-6">
-              {errors.submit && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                  {errors.submit}
-                </div>
-              )}
-
-              <EmployeeHrFields
-                prefix="internal-employee"
-                formData={formData}
-                errors={errors}
-                setFormData={setFormData}
-                currency={currency}
-                hourlyCostPeriods={hourlyCostPeriods}
-                setHourlyCostPeriods={setHourlyCostPeriods}
-                isHourlyCostPeriodsLoading={isHourlyCostPeriodsLoading}
-                hourlyCostPeriodsLoadError={hourlyCostPeriodsLoadError}
-                canViewCosts={canViewCosts}
-                canUpdateCosts={canUpdateCosts}
-                identityReadOnly={identityReadOnly}
-                canEditHrDetails={canUpdateEmployees}
-                canEditFullName={editingEmployee ? canUpdateEmployees : canCreateEmployees}
-                departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
-                responsibleUserOptions={responsibleUserOptions}
-                currentEmployeeId={editingEmployee?.id ?? null}
-              />
-            </ModalBody>
-
-            <ModalFooter>
-              <Button type="button" variant="outline" onClick={closeEmployeeModal}>
-                {t('common:buttons.cancel')}
-              </Button>
-              {(!editingEmployee || canUpdateEmployees || canEditCosts) && (
-                <Button
-                  type="submit"
-                  disabled={
-                    isSubmitting ||
-                    (canEditCosts &&
-                      (isHourlyCostPeriodsLoading || Boolean(hourlyCostPeriodsLoadError)))
-                  }
-                >
-                  {isSubmitting ? (
-                    <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                  ) : (
-                    t('internalEmployees.saveChanges')
-                  )}
-                </Button>
-              )}
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
+      <EmployeeEditorModal
+        prefix="internal-employee"
+        copy={{
+          title: t(
+            editingEmployee ? 'internalEmployees.editEmployee' : 'internalEmployees.addEmployee',
+          ),
+          cancel: t('common:buttons.cancel'),
+          save: t('internalEmployees.saveChanges'),
+        }}
+        model={{
+          isOpen: isModalOpen,
+          editingEmployee,
+          formData,
+          errors,
+          hourlyCostPeriods,
+          hourlyCostStatus: {
+            loading: isHourlyCostPeriodsLoading,
+            error: hourlyCostPeriodsLoadError,
+          },
+          departmentValue: getEmployeeDepartmentDisplay(editingEmployee, workUnits),
+          responsibleUserOptions,
+          currency,
+          isSubmitting,
+        }}
+        access={{
+          showSave: !editingEmployee || canUpdateEmployees || canEditCosts,
+          editCosts: canEditCosts,
+          viewCosts: canViewCosts,
+          updateCosts: canUpdateCosts,
+          identityReadOnly,
+          editHrDetails: canUpdateEmployees,
+          editFullName: editingEmployee ? canUpdateEmployees : canCreateEmployees,
+        }}
+        actions={{
+          close: closeEmployeeModal,
+          submit: handleSubmit,
+          setFormData,
+          setHourlyCostPeriods,
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal

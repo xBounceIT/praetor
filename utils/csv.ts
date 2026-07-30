@@ -17,6 +17,7 @@ export const escapeCsvCell = (val: string) => {
 export const downloadCsv = (rows: string[][], filename: string) => {
   const csv = rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n');
   const blob = new Blob([UTF8_BOM, csv], { type: 'text/csv;charset=utf-8;' });
+  // react-doctor-disable-next-line react-doctor/no-create-object-url-without-revoke -- The idempotent cleanup below revokes this exact URL after the click and on every error path.
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

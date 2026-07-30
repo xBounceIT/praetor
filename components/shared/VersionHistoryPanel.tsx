@@ -64,6 +64,112 @@ const INLINE_LIST_HEIGHT_CLASS = 'h-[calc(3*3.75rem+0.75rem)]';
 const SEARCH_HEADER_HEIGHT = 'h-8';
 const SEARCH_HEADER_FADE = 'transition-opacity duration-200 ease-in-out';
 
+interface VersionHistoryInlineHeaderProps {
+  labels: VersionHistoryPanelLabels;
+  rowCount: number;
+  state: {
+    searchOpen: boolean;
+    searchQuery: string;
+  };
+  refs: {
+    header: React.RefObject<HTMLDivElement | null>;
+    searchInput: React.RefObject<HTMLInputElement | null>;
+  };
+  actions: {
+    openSearch: () => void;
+    closeSearch: () => void;
+    setSearchQuery: (query: string) => void;
+    handleSearchBlur: (event: React.FocusEvent<HTMLInputElement>) => void;
+  };
+}
+
+const VersionHistoryInlineHeader: React.FC<VersionHistoryInlineHeaderProps> = ({
+  labels,
+  rowCount,
+  state,
+  refs,
+  actions,
+}) => (
+  <div
+    ref={refs.header}
+    data-testid="version-history-inline-header"
+    data-search-open={state.searchOpen ? 'true' : 'false'}
+    className={cn('relative w-full', SEARCH_HEADER_HEIGHT)}
+  >
+    <div
+      data-testid="version-history-header-resting"
+      aria-hidden={state.searchOpen}
+      inert={state.searchOpen ? true : undefined}
+      className={cn(
+        'absolute inset-0 flex items-center gap-2',
+        SEARCH_HEADER_FADE,
+        state.searchOpen ? 'pointer-events-none opacity-0' : 'opacity-100',
+      )}
+    >
+      <h4 className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+        <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+        <span className="truncate">{labels.title}</span>
+        {labels.infoTooltip ? <FieldTooltip description={labels.infoTooltip} icon="info" /> : null}
+      </h4>
+
+      <span
+        data-testid="version-history-count-badge"
+        className="inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
+      >
+        {rowCount}
+      </span>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        data-testid="version-history-search-toggle"
+        className="size-7 shrink-0 text-muted-foreground"
+        aria-label={labels.searchAriaLabel}
+        tabIndex={state.searchOpen ? -1 : undefined}
+        onClick={actions.openSearch}
+      >
+        <Search data-testid="version-history-search-icon" className="size-4" />
+      </Button>
+    </div>
+
+    <div
+      data-testid="version-history-header-search"
+      aria-hidden={!state.searchOpen}
+      inert={!state.searchOpen ? true : undefined}
+      className={cn(
+        'absolute inset-0 flex items-center gap-2',
+        SEARCH_HEADER_FADE,
+        state.searchOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+      )}
+    >
+      <Input
+        ref={refs.searchInput}
+        value={state.searchQuery}
+        onChange={(event) => actions.setSearchQuery(event.target.value)}
+        onBlur={actions.handleSearchBlur}
+        placeholder={labels.searchPlaceholder}
+        aria-label={labels.searchAriaLabel}
+        tabIndex={state.searchOpen ? 0 : -1}
+        className="h-8 min-w-0 flex-1 text-xs"
+      />
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        data-testid="version-history-close-toggle"
+        className="size-7 shrink-0 bg-muted text-foreground"
+        aria-label="Close"
+        tabIndex={state.searchOpen ? undefined : -1}
+        onClick={actions.closeSearch}
+      >
+        <XIcon data-testid="version-history-close-icon" className="size-4" />
+      </Button>
+    </div>
+  </div>
+);
+
 export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   rows,
   selectedVersionId,
@@ -154,89 +260,14 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     />
   ));
 
-  // Two complete header layers crossfade in sync — no grid-column morphing or stacked icons.
   const inlineHeaderRow = (
-    <div
-      ref={headerRef}
-      data-testid="version-history-inline-header"
-      data-search-open={searchOpen ? 'true' : 'false'}
-      className={cn('relative w-full', SEARCH_HEADER_HEIGHT)}
-    >
-      <div
-        data-testid="version-history-header-resting"
-        aria-hidden={searchOpen}
-        // Keep the faded-out layer out of keyboard focus (aria-hidden alone is not enough).
-        inert={searchOpen ? true : undefined}
-        className={cn(
-          'absolute inset-0 flex items-center gap-2',
-          SEARCH_HEADER_FADE,
-          searchOpen ? 'pointer-events-none opacity-0' : 'opacity-100',
-        )}
-      >
-        <h4 className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-          <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-          <span className="truncate">{labels.title}</span>
-          {labels.infoTooltip ? (
-            <FieldTooltip description={labels.infoTooltip} icon="info" />
-          ) : null}
-        </h4>
-
-        <span
-          data-testid="version-history-count-badge"
-          className="inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
-        >
-          {rows.length}
-        </span>
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          data-testid="version-history-search-toggle"
-          className="size-7 shrink-0 text-muted-foreground"
-          aria-label={labels.searchAriaLabel}
-          tabIndex={searchOpen ? -1 : undefined}
-          onClick={openSearch}
-        >
-          <Search data-testid="version-history-search-icon" className="size-4" />
-        </Button>
-      </div>
-
-      <div
-        data-testid="version-history-header-search"
-        aria-hidden={!searchOpen}
-        inert={!searchOpen ? true : undefined}
-        className={cn(
-          'absolute inset-0 flex items-center gap-2',
-          SEARCH_HEADER_FADE,
-          searchOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
-        )}
-      >
-        <Input
-          ref={searchInputRef}
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          onBlur={handleSearchBlur}
-          placeholder={labels.searchPlaceholder}
-          aria-label={labels.searchAriaLabel}
-          tabIndex={searchOpen ? 0 : -1}
-          className="h-8 min-w-0 flex-1 text-xs"
-        />
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          data-testid="version-history-close-toggle"
-          className="size-7 shrink-0 bg-muted text-foreground"
-          aria-label="Close"
-          tabIndex={searchOpen ? undefined : -1}
-          onClick={closeSearch}
-        >
-          <XIcon data-testid="version-history-close-icon" className="size-4" />
-        </Button>
-      </div>
-    </div>
+    <VersionHistoryInlineHeader
+      labels={labels}
+      rowCount={rows.length}
+      state={{ searchOpen, searchQuery }}
+      refs={{ header: headerRef, searchInput: searchInputRef }}
+      actions={{ openSearch, closeSearch, setSearchQuery, handleSearchBlur }}
+    />
   );
 
   const panelBody = (

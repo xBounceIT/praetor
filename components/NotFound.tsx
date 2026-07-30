@@ -20,7 +20,7 @@ const NotFound: React.FC<NotFoundProps> = ({ onReturn }) => {
   const { t } = useTranslation('common');
 
   return (
-    <Empty className="min-h-[70vh] border-none animate-in fade-in zoom-in duration-500">
+    <Empty className="min-h-[70vh] border-none animate-in fade-in zoom-in animation-duration-500">
       <div className="relative flex select-none items-center justify-center">
         <span className="text-[8rem] font-black leading-none tracking-tighter text-muted-foreground/20 sm:text-[10rem]">
           404
@@ -29,7 +29,10 @@ const NotFound: React.FC<NotFoundProps> = ({ onReturn }) => {
           variant="icon"
           className="absolute size-16 rounded-2xl bg-primary/10 text-primary"
         >
-          <Compass aria-hidden="true" className="size-8 animate-in fade-in zoom-in duration-500" />
+          <Compass
+            aria-hidden="true"
+            className="size-8 animate-in fade-in zoom-in animation-duration-500"
+          />
         </EmptyMedia>
       </div>
 

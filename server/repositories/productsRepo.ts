@@ -515,8 +515,10 @@ export const deleteProductTypeIfUnused = (
     const type = await lockProductTypeById(id, tx);
     if (!type) return { status: 'not_found' };
 
-    const productCount = await countProductsForType(type.name, tx);
-    const categoryCount = await countCategoriesForType(type.name, tx);
+    const [productCount, categoryCount] = await Promise.all([
+      countProductsForType(type.name, tx),
+      countCategoriesForType(type.name, tx),
+    ]);
     if (productCount > 0 || categoryCount > 0) {
       return { status: 'in_use', type, productCount, categoryCount };
     }

@@ -104,6 +104,19 @@ const buildChartConfig = (visualization: AiReportingVisualizationDefinition): Ch
     ]),
   );
 
+const buildVisualizationDatumRows = (visualization: AiReportingVisualizationDefinition) => {
+  const fingerprintCounts = new Map<string, number>();
+  return visualization.data.map((datum) => {
+    const fingerprint = JSON.stringify([
+      datum[visualization.xKey],
+      ...visualization.series.map((series) => datum[series.key]),
+    ]);
+    const occurrence = fingerprintCounts.get(fingerprint) ?? 0;
+    fingerprintCounts.set(fingerprint, occurrence + 1);
+    return { datum, key: `${fingerprint}:${occurrence}` };
+  });
+};
+
 interface VisualizationTooltipProps {
   visualization: AiReportingVisualizationDefinition;
   circular?: boolean;
@@ -271,12 +284,11 @@ interface CircularVisualizationProps extends VisualizationTooltipProps {
 
 const CircularVisualization = ({ visualization, config }: CircularVisualizationProps) => {
   const series = visualization.series[0];
-  const pieData: Array<Record<string, number | string>> = visualization.data.map(
-    (datum, index) => ({
-      ...datum,
-      fill: CHART_COLORS[index % CHART_COLORS.length],
-    }),
-  );
+  const rows = buildVisualizationDatumRows(visualization);
+  const pieData: Array<Record<string, number | string>> = rows.map(({ datum }, index) => ({
+    ...datum,
+    fill: CHART_COLORS[index % CHART_COLORS.length],
+  }));
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_13rem] lg:items-center">
@@ -299,15 +311,12 @@ const CircularVisualization = ({ visualization, config }: CircularVisualizationP
         </PieChart>
       </ChartContainer>
       <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
-        {pieData.map((datum, index) => (
-          <div
-            key={`${String(datum[visualization.xKey])}-${index}`}
-            className="flex items-center justify-between gap-3 text-xs"
-          >
+        {rows.map(({ datum, key }, index) => (
+          <div key={key} className="flex items-center justify-between gap-3 text-xs">
             <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
               <span
                 className="size-2.5 shrink-0 rounded-sm"
-                style={{ backgroundColor: String(datum.fill) }}
+                style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                 aria-hidden="true"
               />
               <span className="truncate">{String(datum[visualization.xKey])}</span>
@@ -340,8 +349,8 @@ const VisualizationDataTable = ({ visualization, label }: VisualizationDataTable
         </TableRow>
       </TableHeader>
       <TableBody>
-        {visualization.data.map((datum, index) => (
-          <TableRow key={`${String(datum[visualization.xKey])}-${index}`}>
+        {buildVisualizationDatumRows(visualization).map(({ datum, key }) => (
+          <TableRow key={key}>
             <TableCell className="font-medium">{String(datum[visualization.xKey])}</TableCell>
             {visualization.series.map((series) => (
               <TableCell key={series.key} className="text-right font-mono tabular-nums">

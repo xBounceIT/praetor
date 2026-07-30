@@ -61,7 +61,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
     !isAllSelected && filteredOptions.some((opt) => selectedValueSet.has(opt));
 
   return (
-    <div className="w-56 bg-white rounded-2xl shadow-xl border border-zinc-200 flex flex-col text-left font-normal animate-in fade-in zoom-in-95 duration-200">
+    <div className="w-56 bg-white rounded-2xl shadow-xl border border-zinc-200 flex flex-col text-left font-normal animate-in fade-in zoom-in-95 animation-duration-200">
       {/* Header */}
       <div className="p-2 border-b border-zinc-100 flex items-center justify-between">
         <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
@@ -163,7 +163,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
           onClick={() => {
             onFilterChange([]);
           }}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-50 px-3 py-1.5 text-[11px] font-semibold text-red-700 transition-all hover:bg-red-500 hover:text-white"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-50 px-3 py-1.5 text-[11px] font-semibold text-red-700 transition-colors hover:bg-red-500 hover:text-white"
         >
           <i className="fa-solid fa-filter-circle-xmark"></i>
           <span>{t('table.clearFilter')}</span>

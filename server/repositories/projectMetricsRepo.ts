@@ -6,6 +6,7 @@ import {
   DEFAULT_BILLING_FREQUENCY,
   DEFAULT_BILLING_TYPE,
 } from '../utils/billing.ts';
+import { getDatePartsFormatter } from '../utils/date.ts';
 import { roundCurrency } from '../utils/invoice-math.ts';
 import { parseNullableDbNumber } from '../utils/parse.ts';
 import type { ProjectRuleField } from '../utils/projectRuleFields.ts';
@@ -101,12 +102,7 @@ const MS_PER_DAY = 86_400_000;
 
 const isoDateInTimeZone = (now: Date, timeZone?: string): string => {
   if (!timeZone) return now.toISOString().slice(0, 10);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
+  const parts = getDatePartsFormatter(timeZone).formatToParts(now);
   const value = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? '';
   return `${value('year')}-${value('month')}-${value('day')}`;

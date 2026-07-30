@@ -162,7 +162,11 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
 
   // The window listeners read the live layout / grid units / callbacks from here
   // so they stay correct without re-subscribing on every pointer move.
-  const gridRef = useLatestRef({ layout, unitX, unitY, defsById, onMove, onResize });
+  const gridState = useMemo(
+    () => ({ layout, unitX, unitY, defsById, onMove, onResize }),
+    [layout, unitX, unitY, defsById, onMove, onResize],
+  );
+  const gridRef = useLatestRef(gridState);
 
   const rectStyle = (s: DashboardWidgetState): React.CSSProperties => ({
     position: 'absolute',
@@ -445,7 +449,7 @@ const DashboardSnapTarget: React.FC<{
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute z-0 rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 transition-all"
+      className="pointer-events-none absolute z-0 rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 transition-[left,top,width,height,transform]"
       style={rectStyle(target)}
     />
   );
@@ -493,7 +497,10 @@ const DashboardGridPlacedItem: React.FC<DashboardGridPlacedItemProps> = ({
   }
 
   return (
-    <div className={cn('flex flex-col', !isMoving && 'transition-all')} style={style}>
+    <div
+      className={cn('flex flex-col', !isMoving && 'transition-[left,top,width,height,transform]')}
+      style={style}
+    >
       <div
         className={cn(
           'flex h-full flex-col overflow-hidden rounded-xl ring-2',

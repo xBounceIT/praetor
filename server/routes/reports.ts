@@ -452,16 +452,18 @@ const openaiTextFromResponse = (payload: unknown): AiTextResult => {
   const outputText = typeof response.output_text === 'string' ? response.output_text.trim() : '';
   if (outputText) return { text: outputText, usage };
 
-  const text = (response.output || [])
-    .filter((item) => item.type === 'message')
-    .flatMap((item) => item.content || [])
-    .map((part) => {
-      if (part.type === 'output_text' && typeof part.text === 'string') return part.text;
-      if (part.type === 'refusal' && typeof part.refusal === 'string') return part.refusal;
-      return '';
-    })
-    .join('')
-    .trim();
+  const textParts: string[] = [];
+  for (const item of response.output ?? []) {
+    if (item.type !== 'message') continue;
+    for (const part of item.content ?? []) {
+      if (part.type === 'output_text' && typeof part.text === 'string') {
+        textParts.push(part.text);
+      } else if (part.type === 'refusal' && typeof part.refusal === 'string') {
+        textParts.push(part.refusal);
+      }
+    }
+  }
+  const text = textParts.join('').trim();
   return { text, usage };
 };
 

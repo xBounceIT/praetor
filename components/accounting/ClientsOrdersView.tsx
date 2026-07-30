@@ -23,7 +23,6 @@ import {
   addDaysToDateOnly,
   formatDateOnlyForLocale,
   formatInsertDate,
-  formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
 import {
@@ -883,7 +882,7 @@ const useClientsOrdersController = ({
                           void handleStatusUpdate(row.id, { status: 'confirmed' });
                         }}
                         aria-label={t('accounting:clientsOrders.markAsConfirmed')}
-                        className="p-2 text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                        className="p-2 text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                       >
                         <i className="fa-solid fa-check"></i>
                       </button>
@@ -901,7 +900,7 @@ const useClientsOrdersController = ({
                           void handleStatusUpdate(row.id, { status: 'denied' });
                         }}
                         aria-label={t('accounting:clientsOrders.markAsDenied')}
-                        className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <i className="fa-solid fa-xmark"></i>
                       </button>
@@ -919,7 +918,7 @@ const useClientsOrdersController = ({
                           confirmDelete(row);
                         }}
                         aria-label={t('accounting:clientsOrders.deleteOrder')}
-                        className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <i className="fa-solid fa-trash-can"></i>
                       </button>

@@ -2041,7 +2041,7 @@ const UserAssignmentsModal: React.FC<{ controller: UserManagementController }> =
     zIndex={50}
     backdropClass="bg-zinc-900/50 backdrop-blur-sm"
   >
-    <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 animation-duration-200">
       <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/50">
         <h3 className="font-semibold text-lg text-foreground">
           {controller.t('hr:workforce.manageAccess', { name: controller.managingUser?.name })}
@@ -2079,7 +2079,7 @@ const UserAssignmentsModal: React.FC<{ controller: UserManagementController }> =
             JSON.stringify(controller.state.assignments) ===
             JSON.stringify(controller.state.initialAssignments)
           }
-          className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
+          className={`px-6 py-2 font-bold rounded-lg transition-[color,background-color,border-color,box-shadow,transform] shadow-sm active:scale-95 text-sm ${
             JSON.stringify(controller.state.assignments) ===
             JSON.stringify(controller.state.initialAssignments)
               ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
@@ -2225,7 +2225,7 @@ const UserAssignmentColumn: React.FC<{
       {items.map((item) => (
         <label
           key={item.id}
-          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
             item.selected
               ? 'bg-accent border-border shadow-sm'
               : 'bg-card border-border hover:border-input'
@@ -2239,9 +2239,9 @@ const UserAssignmentColumn: React.FC<{
               aria-label={item.name}
               className="sr-only peer"
             />
-            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
+            <div className="size-5 rounded-full border-2 border-border relative transition-[background-color,border-color,box-shadow] peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
               <div
-                className={`size-2 rounded-full transition-all duration-200 ${
+                className={`size-2 rounded-full transition-[background-color,opacity,transform] duration-200 ${
                   item.selected ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'
                 }`}
               ></div>

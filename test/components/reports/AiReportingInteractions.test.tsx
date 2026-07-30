@@ -982,6 +982,57 @@ describe('<AiReportingView /> interactions', () => {
     expect(within(table).getByText('12% pts')).toBeInTheDocument();
   });
 
+  test('renders duplicate visualization categories without React key collisions', async () => {
+    const chartDefinition = {
+      version: 1,
+      type: 'bar',
+      title: 'Revenue by repeated category',
+      xKey: 'category',
+      series: [{ key: 'revenue', label: 'Revenue', format: 'number' }],
+      data: [
+        { category: 'Services', revenue: 1200 },
+        { category: 'Services', revenue: 1500 },
+      ],
+    };
+    getSessionMessagesMock.mockResolvedValueOnce([
+      messages[0],
+      {
+        ...messages[1],
+        content: [
+          'Repeated categories are valid.',
+          '```praetor-visualization',
+          JSON.stringify(chartDefinition),
+          '```',
+        ].join('\n'),
+      },
+    ]);
+
+    const errors: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(args);
+    };
+    try {
+      renderView();
+      expect(
+        await screen.findByRole('figure', { name: 'Revenue by repeated category' }),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
+      const table = await screen.findByRole('table', {
+        name: 'Data used for Revenue by repeated category',
+      });
+      expect(within(table).getAllByText('Services')).toHaveLength(2);
+
+      const keyWarnings = errors.filter((args) => {
+        const message = typeof args[0] === 'string' ? args[0] : '';
+        return message.includes('unique "key"') || message.includes('same key');
+      });
+      expect(keyWarnings).toEqual([]);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
   test('reveals streamed visualizations progressively in narrative order', async () => {
     const firstChartDefinition = {
       version: 1,

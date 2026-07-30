@@ -404,6 +404,7 @@ const useProjectsController = ({
       : 'tasks';
   const shouldLoadProjectHours = selectedTab === 'commissions' && canViewCommissions;
 
+  // react-doctor-disable-next-line react-doctor/no-set-state-after-await-in-effect -- Both success and error writes are gated by a generation token, and cleanup aborts the obsolete request.
   useEffect(() => {
     if (!shouldLoadProjectHours) return;
     if (!projectIdsKey) return;
@@ -1025,7 +1026,7 @@ const useProjectsController = ({
           <div className="flex items-center gap-2">
             <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                className={`h-full rounded-full transition-[width,background-color] ${overBudget ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                 style={{ width: `${Math.min(pct, 100)}%` }}
               />
             </div>
@@ -1083,7 +1084,7 @@ const useProjectsController = ({
                         openAssignments(row.id);
                       }}
                       aria-label={t('projects:projects.manageMembers')}
-                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                      className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-users"></i>
                     </button>
@@ -1123,7 +1124,7 @@ const useProjectsController = ({
                           onUpdateProject(row.id, { isDisabled: true });
                         }}
                         aria-label={t('projects:projects.disableProject')}
-                        className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                        className="p-2 text-amber-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                       >
                         <i className="fa-solid fa-ban"></i>
                       </button>
@@ -1143,7 +1144,7 @@ const useProjectsController = ({
                         promptDelete(row);
                       }}
                       aria-label={t('common:buttons.delete')}
-                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>

@@ -2131,7 +2131,7 @@ const useClientQuotesController = ({
                     }}
                     disabled={!canOpen}
                     aria-label={t('sales:clientQuotes.editQuote')}
-                    className={`p-2 rounded-lg transition-all ${canOpen ? 'text-zinc-400 hover:text-praetor hover:bg-zinc-100' : 'cursor-not-allowed opacity-50 text-zinc-400'}`}
+                    className={`p-2 rounded-lg transition-colors ${canOpen ? 'text-zinc-400 hover:text-praetor hover:bg-zinc-100' : 'cursor-not-allowed opacity-50 text-zinc-400'}`}
                   >
                     <i className="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -2175,7 +2175,7 @@ const useClientQuotesController = ({
                         onViewOffer(row.linkedOfferId!);
                       }}
                       aria-label={t('sales:clientQuotes.viewOffer', { defaultValue: 'View offer' })}
-                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                      className="p-2 rounded-lg transition-colors text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-link"></i>
                     </button>
@@ -2199,7 +2199,7 @@ const useClientQuotesController = ({
                       aria-label={t('sales:clientQuotes.convertToOffer', {
                         defaultValue: 'Convert to offer',
                       })}
-                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                      className="p-2 rounded-lg transition-colors text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-file-signature"></i>
                     </button>
@@ -2225,7 +2225,7 @@ const useClientQuotesController = ({
                       }}
                       disabled={sendDisabled}
                       aria-label={t('sales:clientQuotes.markAsSent')}
-                      className={`p-2 rounded-lg transition-all ${sendDisabled ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
+                      className={`p-2 rounded-lg transition-colors ${sendDisabled ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -2255,7 +2255,7 @@ const useClientQuotesController = ({
                       }}
                       disabled={promotionDisabled}
                       aria-label={promotionActionLabel}
-                      className={`p-2 rounded-lg transition-all ${promotionDisabled ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                      className={`p-2 rounded-lg transition-colors ${promotionDisabled ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
                     >
                       <i className="fa-solid fa-file-signature"></i>
                     </button>
@@ -2287,7 +2287,7 @@ const useClientQuotesController = ({
                       }}
                       disabled={denyDisabled}
                       aria-label={t('sales:clientQuotes.markAsDenied')}
-                      className={`p-2 rounded-lg transition-all ${denyDisabled ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 rounded-lg transition-colors ${denyDisabled ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-xmark"></i>
                     </button>
@@ -2315,7 +2315,7 @@ const useClientQuotesController = ({
                       }}
                       disabled={isDeleteDisabled}
                       aria-label={deleteTitle}
-                      className={`p-2 text-red-600 rounded-lg transition-all ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 text-red-600 rounded-lg transition-colors ${isDeleteDisabled ? 'cursor-not-allowed opacity-50' : 'hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-trash-can"></i>
                     </button>
@@ -2344,7 +2344,7 @@ const useClientQuotesController = ({
                         }}
                         disabled={restoreDisabled}
                         aria-label={restoreTitle}
-                        className={`p-2 rounded-lg transition-all ${restoreDisabled ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
+                        className={`p-2 rounded-lg transition-colors ${restoreDisabled ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50'}`}
                       >
                         <i className="fa-solid fa-rotate-left"></i>
                       </button>
@@ -2690,6 +2690,7 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
                               onBlur={finishRename}
                               onFocus={(event) => event.currentTarget.select()}
                               onKeyDown={(event) => {
+                                if (event.nativeEvent.isComposing) return;
                                 if (event.key === 'Enter') {
                                   event.preventDefault();
                                   finishRename();

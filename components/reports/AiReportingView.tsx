@@ -530,7 +530,6 @@ const useAiReportingController = ({
     progressiveVisualizationMessageIdsRef.current.delete(messageId);
   }, []);
 
-  const [pendingRetryAutoSelectGroupId, setPendingRetryAutoSelectGroupId] = useState('');
   const tableRefs = useRef<Record<string, HTMLTableElement | null>>({});
   const [loadedActiveSessionId, setLoadedActiveSessionId] = useState(activeSessionId);
   if (loadedActiveSessionId !== activeSessionId) {
@@ -544,11 +543,6 @@ const useAiReportingController = ({
       !activeAssistantMessageIdRef.current,
   );
 
-  useEffect(() => {
-    void activeSessionId;
-    setPendingRetryAutoSelectGroupId('');
-  }, [activeSessionId]);
-
   const canSend =
     enableAiReporting &&
     hasPermission(permissions, buildPermission('reports.ai_reporting', 'create'));
@@ -559,33 +553,15 @@ const useAiReportingController = ({
   const assistantAttemptGroups = useMemo(() => buildAssistantAttemptGroups(messages), [messages]);
   const selectedAttemptIndexByGroup = useMemo(() => {
     const next: Record<string, number> = {};
-    const pendingGroupId = pendingRetryAutoSelectGroupId;
 
     for (const group of assistantAttemptGroups) {
       const maxIndex = group.assistantAttempts.length - 1;
       if (maxIndex < 0) continue;
-      let index = Math.min(attemptSelectionByGroup[group.id] ?? 0, maxIndex);
-      if (pendingGroupId && pendingGroupId === group.id) {
-        index = maxIndex;
-      }
-      next[group.id] = index;
+      next[group.id] = Math.min(attemptSelectionByGroup[group.id] ?? 0, maxIndex);
     }
 
     return next;
-  }, [assistantAttemptGroups, attemptSelectionByGroup, pendingRetryAutoSelectGroupId]);
-  useEffect(() => {
-    if (!pendingRetryAutoSelectGroupId) return;
-    const group = assistantAttemptGroups.find(
-      (candidate) => candidate.id === pendingRetryAutoSelectGroupId,
-    );
-    if (!group || group.assistantAttempts.length === 0) return;
-    dispatchAttemptSelection({
-      type: 'set',
-      groupId: group.id,
-      index: group.assistantAttempts.length - 1,
-    });
-    setPendingRetryAutoSelectGroupId('');
-  }, [assistantAttemptGroups, pendingRetryAutoSelectGroupId]);
+  }, [assistantAttemptGroups, attemptSelectionByGroup]);
   const assistantGroupByMessageId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const group of assistantAttemptGroups) {
@@ -1571,7 +1547,14 @@ const useAiReportingController = ({
     if (!retryContent) return;
     const attemptGroupId = assistantGroupByMessageId[assistantMessageId];
     if (attemptGroupId) {
-      setPendingRetryAutoSelectGroupId(attemptGroupId);
+      // The reducer stores the intent to follow the newest retry. Rendering clamps this sentinel
+      // to the group's current last index, so it advances automatically when the streamed retry
+      // is appended without a prop-to-state synchronization effect.
+      dispatchAttemptSelection({
+        type: 'set',
+        groupId: attemptGroupId,
+        index: Number.MAX_SAFE_INTEGER,
+      });
     }
     await sendMessage(retryContent, { retryInsertAfterGroupId: attemptGroupId });
   };
@@ -1883,11 +1866,13 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
       t={t}
       sessions={sessions}
       activeSessionId={activeSessionId}
-      isLoadingSessions={isLoadingSessions}
-      isCreatingSession={isCreatingSession}
-      isNewChatDisabled={isNewChatDisabled}
-      canArchive={canArchive}
-      isDeletingSession={isDeletingSession}
+      status={{
+        isLoadingSessions,
+        isCreatingSession,
+        isNewChatDisabled,
+        isDeletingSession,
+      }}
+      capabilities={{ archive: canArchive }}
       onSelectSession={handleSelectSession}
       onConfirmDeleteSession={confirmDeleteSession}
       onRenameSession={handleRenameSession}
@@ -2054,11 +2039,15 @@ interface AiReportingSidebarProps {
   t: TranslationFn;
   sessions: ReportChatSessionSummary[];
   activeSessionId: string;
-  isLoadingSessions: boolean;
-  isCreatingSession: boolean;
-  isNewChatDisabled: boolean;
-  canArchive: boolean;
-  isDeletingSession: boolean;
+  status: {
+    isLoadingSessions: boolean;
+    isCreatingSession: boolean;
+    isNewChatDisabled: boolean;
+    isDeletingSession: boolean;
+  };
+  capabilities: {
+    archive: boolean;
+  };
   onSelectSession: (sessionId: string) => void;
   onConfirmDeleteSession: (session: ReportChatSessionSummary) => void;
   onRenameSession: (sessionId: string, title: string) => Promise<boolean>;
@@ -2082,16 +2071,15 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
   t,
   sessions,
   activeSessionId,
-  isLoadingSessions,
-  isCreatingSession,
-  isNewChatDisabled,
-  canArchive,
-  isDeletingSession,
+  status,
+  capabilities,
   onSelectSession,
   onConfirmDeleteSession,
   onRenameSession,
   onNewChat,
 }) => {
+  const { isCreatingSession, isDeletingSession, isLoadingSessions, isNewChatDisabled } = status;
+  const canArchive = capabilities.archive;
   const [searchQuery, setSearchQuery] = useState('');
   const [editingSessionId, setEditingSessionId] = useState('');
   const [editingTitle, setEditingTitle] = useState('');
@@ -2843,6 +2831,7 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
               })}
               className="resize-none text-sm leading-relaxed"
               onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return;
                 if (event.key === 'Escape') {
                   setEditingMessageId('');
                   setEditingDraft('');

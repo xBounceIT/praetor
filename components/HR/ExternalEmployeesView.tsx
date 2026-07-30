@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usersApi } from '../../services/api/users';
 import type {
@@ -16,20 +15,11 @@ import { formatDecimal } from '../../utils/numbers';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
-import Modal from '../shared/Modal';
-import {
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalTitle,
-} from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { TABLE_ROW_AVATAR_CLASSNAME } from '../shared/tableControlStyles';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
-import EmployeeHrFields from './EmployeeHrFields';
+import EmployeeEditorModal from './EmployeeEditorModal';
 import {
   getEmployeeContactValue,
   LEGACY_CONTACT_COLUMN_ID,
@@ -548,76 +538,45 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={closeEmployeeModal}>
-        <ModalContent size="2xl">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingEmployee ? 'fa-pen-to-square' : 'fa-plus'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingEmployee
-                  ? t('externalEmployees.editEmployee')
-                  : t('externalEmployees.addEmployee')}
-              </ModalTitle>
-              <ModalCloseButton onClick={closeEmployeeModal} />
-            </ModalHeader>
-
-            <ModalBody className="space-y-6">
-              {errors.submit && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                  {errors.submit}
-                </div>
-              )}
-
-              <EmployeeHrFields
-                prefix="external-employee"
-                formData={formData}
-                errors={errors}
-                setFormData={setFormData}
-                currency={currency}
-                hourlyCostPeriods={hourlyCostPeriods}
-                setHourlyCostPeriods={setHourlyCostPeriods}
-                isHourlyCostPeriodsLoading={isHourlyCostPeriodsLoading}
-                hourlyCostPeriodsLoadError={hourlyCostPeriodsLoadError}
-                canViewCosts={canViewCosts}
-                canUpdateCosts={canUpdateCosts}
-                identityReadOnly={identityReadOnly}
-                canEditHrDetails={editingEmployee ? canUpdateEmployees : canCreateEmployees}
-                departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
-                responsibleUserOptions={responsibleUserOptions}
-                currentEmployeeId={editingEmployee?.id ?? null}
-              />
-            </ModalBody>
-
-            <ModalFooter>
-              <Button type="button" variant="outline" onClick={closeEmployeeModal}>
-                {t('common:buttons.cancel')}
-              </Button>
-              {(!editingEmployee || canUpdateEmployees || canEditCosts) && (
-                <Button
-                  type="submit"
-                  disabled={
-                    isSubmitting ||
-                    (canEditCosts &&
-                      (isHourlyCostPeriodsLoading || Boolean(hourlyCostPeriodsLoadError)))
-                  }
-                >
-                  {isSubmitting ? (
-                    <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                  ) : (
-                    t('externalEmployees.saveChanges')
-                  )}
-                </Button>
-              )}
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
+      <EmployeeEditorModal
+        prefix="external-employee"
+        copy={{
+          title: t(
+            editingEmployee ? 'externalEmployees.editEmployee' : 'externalEmployees.addEmployee',
+          ),
+          cancel: t('common:buttons.cancel'),
+          save: t('externalEmployees.saveChanges'),
+        }}
+        model={{
+          isOpen: isModalOpen,
+          editingEmployee,
+          formData,
+          errors,
+          hourlyCostPeriods,
+          hourlyCostStatus: {
+            loading: isHourlyCostPeriodsLoading,
+            error: hourlyCostPeriodsLoadError,
+          },
+          departmentValue: getEmployeeDepartmentDisplay(editingEmployee, workUnits),
+          responsibleUserOptions,
+          currency,
+          isSubmitting,
+        }}
+        access={{
+          showSave: !editingEmployee || canUpdateEmployees || canEditCosts,
+          editCosts: canEditCosts,
+          viewCosts: canViewCosts,
+          updateCosts: canUpdateCosts,
+          identityReadOnly,
+          editHrDetails: editingEmployee ? canUpdateEmployees : canCreateEmployees,
+        }}
+        actions={{
+          close: closeEmployeeModal,
+          submit: handleSubmit,
+          setFormData,
+          setHourlyCostPeriods,
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal

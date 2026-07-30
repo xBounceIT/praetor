@@ -62,6 +62,7 @@ export const makeEntryHandlers = (deps: EntryHandlersDeps) => {
     // creates for the same user trigger Postgres 40001 serialization failures.
     for (const entry of newEntries) {
       try {
+        // react-doctor-disable-next-line react-doctor/async-await-in-loop -- These writes are intentionally serialized to avoid same-user transaction conflicts.
         const createdEntry = await api.entries.create({
           ...entry,
           userId: targetUserId,

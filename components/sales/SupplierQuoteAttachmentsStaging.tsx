@@ -123,7 +123,7 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
                   type="button"
                   onClick={() => onRemove(index)}
                   disabled={disabled}
-                  className="p-2 rounded-lg transition-all text-red-600 hover:text-red-600 hover:bg-red-50 disabled:opacity-60 disabled:pointer-events-none"
+                  className="p-2 rounded-lg transition-colors text-red-600 hover:text-red-600 hover:bg-red-50 disabled:opacity-60 disabled:pointer-events-none"
                   aria-label={t('supplierQuotes.attachments.removeStaged', {
                     defaultValue: 'Remove',
                   })}

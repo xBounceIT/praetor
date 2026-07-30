@@ -2035,10 +2035,12 @@ const ProjectDetailTasksSection: React.FC<{ controller: ProjectDetailController 
         projectId={project.id}
         tasks={projectTasks}
         currency={currency}
-        canCreate={canCreateTasks}
-        canUpdate={canUpdateTasks}
-        canDelete={canDeleteTasks}
-        canViewAssignments={canViewAssignments}
+        capabilities={{
+          create: canCreateTasks,
+          update: canUpdateTasks,
+          delete: canDeleteTasks,
+          viewAssignments: canViewAssignments,
+        }}
         onAddTask={handleAddTask}
         onUpdateTask={onUpdateTask}
         onRequestDeleteTask={(task) => {
@@ -2378,7 +2380,7 @@ const ProjectBudgetBar: React.FC<{ loading: boolean; budgetUsedPct: number | nul
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
       <div
-        className={`h-full rounded-full transition-all ${
+        className={`h-full rounded-full transition-[width,background-color] ${
           budgetUsedPct > 100
             ? 'bg-destructive'
             : budgetUsedPct >= 80
@@ -2440,7 +2442,7 @@ const ProjectTimelineDashboardItem: React.FC<{ controller: ProjectDetailControll
               </div>
               <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
                 <div
-                  className={`h-full transition-all ${
+                  className={`h-full transition-[width,background-color] ${
                     projectTimeline.phase === 'completed' ? 'bg-muted-foreground' : 'bg-emerald-500'
                   }`}
                   style={{ width: `${projectTimeline.pct}%` }}

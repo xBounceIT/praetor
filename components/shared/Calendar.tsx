@@ -129,7 +129,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
       </button>
 
       {isMonthPickerOpen && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[200px] animate-in fade-in zoom-in-95 animation-duration-150 origin-top-left">
           {monthNames.map((mName, idx) => (
             <button
               key={MONTH_KEYS[idx]}
@@ -150,7 +150,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
       )}
 
       {isYearPickerOpen && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 duration-150 origin-top-left">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-popover text-popover-foreground border border-border shadow-xl rounded-lg p-2 grid grid-cols-3 gap-1 min-w-[180px] max-h-[200px] overflow-y-auto animate-in fade-in zoom-in-95 animation-duration-150 origin-top-left">
           {Array.from({ length: 9 }, (_, i) => currentYear - 4 + i).map((y) => (
             <button
               key={y}
@@ -206,6 +206,157 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 
 const EMPTY_DATES: string[] = [];
 
+interface CalendarDaysContext {
+  view: {
+    year: number;
+    month: number;
+    totalDays: number;
+    offset: number;
+    isCompact: boolean;
+    today: string;
+  };
+  selection: {
+    mode: NonNullable<CalendarProps['selectionMode']>;
+    selectedDate?: string;
+    selectedDateSet: Set<string>;
+    startDate?: string;
+    endDate?: string;
+  };
+  availability: {
+    disabledDateSet: Set<string>;
+    allowWeekendSelection: boolean;
+    treatSaturdayAsHoliday: boolean;
+  };
+  activity: {
+    entryDates: Set<string>;
+    dailyTotals: Record<string, number>;
+    dailyGoal: number;
+  };
+  onDateClick: (date: string) => void;
+  t: ReturnType<typeof useTranslation>['t'];
+}
+
+const buildCalendarDays = ({
+  view,
+  selection,
+  availability,
+  activity,
+  onDateClick,
+  t,
+}: CalendarDaysContext): React.ReactNode[] => {
+  const days: React.ReactNode[] = [];
+  for (let index = 0; index < view.offset; index++) {
+    days.push(
+      <div key={`empty-${index}`} className={`${view.isCompact ? 'h-8' : 'h-9'} w-full`} />,
+    );
+  }
+
+  for (let day = 1; day <= view.totalDays; day++) {
+    const dateObject = new Date(view.year, view.month, day);
+    const date = `${view.year}-${String(view.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isRangeStart = selection.mode === 'range' && date === selection.startDate;
+    const isRangeEnd = selection.mode === 'range' && date === selection.endDate;
+    const isSelected =
+      selection.mode === 'single'
+        ? date === selection.selectedDate
+        : selection.mode === 'multiple'
+          ? selection.selectedDateSet.has(date)
+          : isRangeStart || isRangeEnd;
+    const isInRange =
+      selection.mode === 'range' &&
+      Boolean(selection.startDate && selection.endDate) &&
+      date >= (selection.startDate ?? '') &&
+      date <= (selection.endDate ?? '');
+    const isToday = date === view.today;
+    const hasActivity = activity.entryDates.has(date);
+    const isDisabledDate = availability.disabledDateSet.has(date);
+    const dayOfWeek = dateObject.getDay();
+    const holidayName = isItalianHoliday(dateObject);
+    const isSunday = dayOfWeek === 0;
+    const isSaturday = dayOfWeek === 6;
+    const isWeekendOrHoliday =
+      isSunday || (availability.treatSaturdayAsHoliday && isSaturday) || Boolean(holidayName);
+    const isForbidden =
+      isDisabledDate ||
+      (!availability.allowWeekendSelection && selection.mode === 'single' && isWeekendOrHoliday);
+    const holidayLabel =
+      holidayName ||
+      (isSunday
+        ? t('calendar.sunday')
+        : isSaturday && availability.treatSaturdayAsHoliday
+          ? t('calendar.saturday')
+          : '');
+    const reachedGoal =
+      activity.dailyGoal > 0 && activity.dailyTotals[date] >= activity.dailyGoal - 0.01;
+
+    days.push(
+      <Tooltip key={date} disabled={!holidayLabel}>
+        <TooltipTrigger asChild>
+          <span className="inline-flex w-full">
+            <button
+              type="button"
+              disabled={isForbidden}
+              aria-pressed={selection.mode === 'multiple' ? isSelected : undefined}
+              onClick={() => {
+                if (!isForbidden) onDateClick(date);
+              }}
+              className={`relative ${view.isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-[color,background-color,border-color,box-shadow,opacity,transform] border
+              ${
+                isForbidden && isDisabledDate
+                  ? 'opacity-40 cursor-not-allowed border-transparent text-muted-foreground'
+                  : isSelected
+                    ? 'bg-secondary text-secondary-foreground border-secondary shadow-md scale-105 z-10'
+                    : isInRange
+                      ? 'bg-muted text-foreground border-muted'
+                      : isWeekendOrHoliday
+                        ? 'bg-red-50 text-red-500 border-red-100 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
+                        : reachedGoal
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20'
+                          : isToday
+                            ? 'bg-muted text-secondary-foreground border-border'
+                            : 'hover:bg-muted border-transparent text-foreground'
+              }`}
+            >
+              <span
+                className={`${view.isCompact ? 'text-[13px]' : 'text-sm'} font-bold ${
+                  isSelected || isInRange
+                    ? ''
+                    : isWeekendOrHoliday
+                      ? 'text-red-600 dark:text-red-400'
+                      : reachedGoal
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : ''
+                }`}
+              >
+                {day}
+              </span>
+
+              {hasActivity && selection.mode === 'single' && (
+                <span
+                  className={`absolute bottom-1 size-1 rounded-full ${
+                    isSelected
+                      ? 'bg-secondary-foreground'
+                      : isWeekendOrHoliday
+                        ? 'bg-red-300'
+                        : reachedGoal
+                          ? 'bg-emerald-400'
+                          : 'bg-foreground'
+                  }`}
+                />
+              )}
+              {holidayName && selection.mode === 'single' && (
+                <span className="absolute top-0.5 right-0.5 size-1 bg-red-400 rounded-full animate-pulse" />
+              )}
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{holidayLabel}</TooltipContent>
+      </Tooltip>,
+    );
+  }
+  return days;
+};
+
 const Calendar: React.FC<CalendarProps> = ({
   selectedDate,
   onDateSelect,
@@ -256,7 +407,6 @@ const Calendar: React.FC<CalendarProps> = ({
   const currentMonth = currentDate.getMonth();
   const today = getLocalDateString(currentDate);
 
-  const days = [];
   const totalDays = daysInMonth(year, month);
   let offset = firstDayOfMonth(year, month);
 
@@ -327,113 +477,24 @@ const Calendar: React.FC<CalendarProps> = ({
     }
   };
 
-  for (let i = 0; i < offset; i++) {
-    days.push(<div key={`empty-${i}`} className={`${isCompact ? 'h-8' : 'h-9'} w-full`}></div>);
-  }
-
-  for (let d = 1; d <= totalDays; d++) {
-    const dateObj = new Date(year, month, d);
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-
-    // Selection Logic
-    let isSelected = false;
-    let isInRange = false;
-    let isRangeStart = false;
-    let isRangeEnd = false;
-
-    if (selectionMode === 'single') {
-      isSelected = dateStr === selectedDate;
-    } else if (selectionMode === 'multiple') {
-      isSelected = selectedDateSet.has(dateStr);
-    } else {
-      isRangeStart = dateStr === startDate;
-      isRangeEnd = dateStr === endDate;
-      isSelected = isRangeStart || isRangeEnd; // Highlight endpoints clearly
-      if (startDate && endDate) {
-        isInRange = dateStr >= startDate && dateStr <= endDate;
-      }
-    }
-
-    const isToday = dateStr === today;
-    const hasActivity = entryDates.has(dateStr);
-    const isDisabledDate = disabledDateSet.has(dateStr);
-
-    const dayOfWeek = dateObj.getDay();
-    const holidayName = isItalianHoliday(dateObj);
-    const isSunday = dayOfWeek === 0;
-    const isSaturday = dayOfWeek === 6;
-    const isWeekendOrHoliday = isSunday || (treatSaturdayAsHoliday && isSaturday) || !!holidayName;
-    const isForbidden =
-      isDisabledDate ||
-      (!allowWeekendSelection && selectionMode === 'single' && isWeekendOrHoliday);
-    const holidayLabel =
-      holidayName ||
-      (isSunday
-        ? t('calendar.sunday')
-        : isSaturday && treatSaturdayAsHoliday
-          ? t('calendar.saturday')
-          : '');
-
-    days.push(
-      // `dateStr` already encodes year/month/day, so keys stay stable across
-      // month or year changes (bare `d` reused the same key for the same day-
-      // number across different months and confused React reconciliation).
-      <Tooltip key={dateStr} disabled={!holidayLabel}>
-        <TooltipTrigger asChild>
-          <span className="inline-flex w-full">
-            <button
-              type="button"
-              disabled={isForbidden}
-              aria-pressed={selectionMode === 'multiple' ? isSelected : undefined}
-              onClick={() => {
-                if (!isForbidden) handleDateClick(dateStr);
-              }}
-              className={`relative ${isCompact ? 'h-8 rounded-md' : 'h-9 rounded-lg'} w-full flex flex-col items-center justify-center transition-all border
-              ${
-                isForbidden && isDisabledDate
-                  ? 'opacity-40 cursor-not-allowed border-transparent text-muted-foreground'
-                  : isSelected
-                    ? 'bg-secondary text-secondary-foreground border-secondary shadow-md scale-105 z-10'
-                    : isInRange
-                      ? 'bg-muted text-foreground border-muted'
-                      : isWeekendOrHoliday
-                        ? 'bg-red-50 text-red-500 border-red-100 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400'
-                        : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20'
-                          : isToday
-                            ? 'bg-muted text-secondary-foreground border-border'
-                            : 'hover:bg-muted border-transparent text-foreground'
-              }`}
-            >
-              <span
-                className={`${isCompact ? 'text-[13px]' : 'text-sm'} font-bold ${
-                  isSelected || isInRange
-                    ? ''
-                    : isWeekendOrHoliday
-                      ? 'text-red-600 dark:text-red-400'
-                      : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0
-                        ? 'text-emerald-700 dark:text-emerald-400'
-                        : ''
-                }`}
-              >
-                {d}
-              </span>
-
-              {hasActivity && selectionMode === 'single' && (
-                <span
-                  className={`absolute bottom-1 size-1 rounded-full ${isSelected ? 'bg-secondary-foreground' : isWeekendOrHoliday ? 'bg-red-300' : dailyTotals[dateStr] >= dailyGoal - 0.01 && dailyGoal > 0 ? 'bg-emerald-400' : 'bg-foreground'}`}
-                ></span>
-              )}
-              {holidayName && selectionMode === 'single' && (
-                <span className="absolute top-0.5 right-0.5 size-1 bg-red-400 rounded-full animate-pulse"></span>
-              )}
-            </button>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{holidayLabel}</TooltipContent>
-      </Tooltip>,
-    );
-  }
+  const days = buildCalendarDays({
+    view: { year, month, totalDays, offset, isCompact, today },
+    selection: {
+      mode: selectionMode,
+      selectedDate,
+      selectedDateSet,
+      startDate,
+      endDate,
+    },
+    availability: {
+      disabledDateSet,
+      allowWeekendSelection,
+      treatSaturdayAsHoliday,
+    },
+    activity: { entryDates, dailyTotals, dailyGoal },
+    onDateClick: handleDateClick,
+    t,
+  });
 
   const handleTodayClick = () => {
     const now = new Date();

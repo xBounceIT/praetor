@@ -1478,6 +1478,7 @@ export const runDemoSeedRefresh = async ({
     // together. Passing an existing executor also prevents the repository from opening a nested
     // transaction on the shared pool.
     for (const userId of DEMO_TOP_MANAGER_USER_IDS) {
+      // react-doctor-disable-next-line react-doctor/async-await-in-loop -- A single PostgreSQL transaction client executes these deterministic assignment writes in order.
       await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, transactionDb);
     }
 

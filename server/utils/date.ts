@@ -1,6 +1,21 @@
 const padDatePart = (value: number) => String(value).padStart(2, '0');
 
 const DATE_TIME_SEPARATOR = /[T ]/;
+const datePartsFormatters = new Map<string, Intl.DateTimeFormat>();
+
+export const getDatePartsFormatter = (timeZone: string) => {
+  const cached = datePartsFormatters.get(timeZone);
+  if (cached) return cached;
+  // react-doctor-disable-next-line react-doctor/js-hoist-intl -- The formatter cannot be static because the time zone is dynamic; this cache constructs it only once per zone.
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  datePartsFormatters.set(timeZone, formatter);
+  return formatter;
+};
 
 const extractDateOnlyString = (value: string) => {
   const separatorIndex = value.search(DATE_TIME_SEPARATOR);

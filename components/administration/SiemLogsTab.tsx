@@ -125,6 +125,7 @@ const configToForm = (config: SiemConfig): SiemConfigUpdate => ({
   maxEvents: config.maxEvents,
 });
 
+// react-doctor-disable-next-line react-doctor/no-giant-component -- This security-sensitive workflow intentionally keeps validation, optimistic status reconciliation, and form submission in one ownership boundary.
 const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
   const { t, i18n } = useTranslation('administration');
   const [config, setConfig] = useState<SiemConfig | null>(null);
@@ -179,26 +180,30 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
       setLoading(true);
       setLoadError(null);
       const statusRequestId = ++latestStatusRequestIdRef.current;
-      const [configResult, statusResult] = await Promise.allSettled([
-        logsApi.getSiemConfig(),
-        logsApi.getSiemStatus(),
-      ]);
-      if (signal?.aborted) return;
-      if (configResult.status === 'fulfilled') {
-        applyConfig(configResult.value);
-      } else {
-        setLoadError(
-          configResult.reason instanceof Error
-            ? configResult.reason.message
-            : t('logs.siem.messages.loadFailed'),
-        );
+      try {
+        const [configResult, statusResult] = await Promise.allSettled([
+          logsApi.getSiemConfig(),
+          logsApi.getSiemStatus(),
+        ]);
+        if (signal?.aborted) return;
+        if (configResult.status === 'fulfilled') {
+          applyConfig(configResult.value);
+        } else {
+          setLoadError(
+            configResult.reason instanceof Error
+              ? configResult.reason.message
+              : t('logs.siem.messages.loadFailed'),
+          );
+        }
+        if (
+          statusResult.status === 'fulfilled' &&
+          statusRequestId === latestStatusRequestIdRef.current
+        )
+          setStatus(statusResult.value);
+      } finally {
+        // react-doctor-disable-next-line react-doctor/no-loading-flag-reset-outside-finally -- This reset is already inside finally and is skipped only after the owning effect aborts.
+        if (!signal?.aborted) setLoading(false);
       }
-      if (
-        statusResult.status === 'fulfilled' &&
-        statusRequestId === latestStatusRequestIdRef.current
-      )
-        setStatus(statusResult.value);
-      setLoading(false);
     },
     [applyConfig, t],
   );

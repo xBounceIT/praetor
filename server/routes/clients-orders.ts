@@ -669,23 +669,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   }> => {
     // Supplier-backed lines adopt the live supplier item's product below, so only validate a
     // snapshot product id when that product is the one restore will actually persist.
-    const productIds = Array.from(
-      new Set(
-        snapshot.items
-          .filter((item) => !normalizeNullableString(item.supplierQuoteItemId))
-          .map((item) => item.productId)
-          .filter((id): id is string => typeof id === 'string' && id.length > 0),
-      ),
-    );
+    const productIds = new Set<string>();
+    const supplierQuoteItemIds: string[] = [];
+    for (const item of snapshot.items) {
+      const supplierQuoteItemId = normalizeNullableString(item.supplierQuoteItemId);
+      if (supplierQuoteItemId) {
+        supplierQuoteItemIds.push(supplierQuoteItemId);
+      } else if (item.productId) {
+        productIds.add(item.productId);
+      }
+    }
     const supplierReferencedItems = snapshot.items.filter((item) =>
       normalizeNullableString(item.supplierQuoteItemId),
     );
-    const supplierQuoteItemIds = supplierReferencedItems
-      .map((item) => normalizeNullableString(item.supplierQuoteItemId))
-      .filter((id): id is string => id !== null);
     const [clientExists, products, supplierQuoteItems] = await Promise.all([
       clientsRepo.existsById(snapshot.order.clientId),
-      productIds.length > 0 ? productsRepo.getSnapshots(productIds) : Promise.resolve(new Map()),
+      productIds.size > 0 ? productsRepo.getSnapshots([...productIds]) : Promise.resolve(new Map()),
       supplierQuoteItemIds.length > 0
         ? supplierQuotesRepo.getQuoteItemSnapshots(supplierQuoteItemIds)
         : Promise.resolve(new Map<string, supplierQuotesRepo.QuoteItemSnapshot>()),
@@ -696,7 +695,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         supplierQuoteItems,
       };
     }
-    const missingProductId = productIds.find((id) => !products.has(id));
+    let missingProductId: string | undefined;
+    for (const id of productIds) {
+      if (!products.has(id)) {
+        missingProductId = id;
+        break;
+      }
+    }
     if (missingProductId) {
       return {
         error: `Snapshot product "${missingProductId}" no longer exists`,

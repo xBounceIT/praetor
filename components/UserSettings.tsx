@@ -1236,7 +1236,7 @@ const UserSettingsTabButton: React.FC<{
     <button
       type="button"
       onClick={() => controller.handleTabChange(tab)}
-      className={`pb-4 text-sm font-bold transition-all relative ${
+      className={`pb-4 text-sm font-bold transition-colors relative ${
         isActive ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'
       }`}
     >

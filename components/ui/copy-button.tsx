@@ -24,7 +24,10 @@ export type CopyButtonProps = Omit<
 };
 
 const copyIconState = (visible: boolean) =>
-  cn('absolute inset-0 transition-all', visible ? 'scale-100 opacity-100' : 'scale-0 opacity-0');
+  cn(
+    'absolute inset-0 transition-[opacity,transform]',
+    visible ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
+  );
 
 function CopyButton({
   value,

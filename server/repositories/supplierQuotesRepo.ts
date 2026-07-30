@@ -536,19 +536,15 @@ export const lockClientDocumentSupplierReferences = async (
     const initialQuoteByItem = new Map(initialItems.map((item) => [item.id, item.quoteId]));
     if (initialQuoteByItem.size !== itemIds.length) throw supplierReferenceConflict();
 
-    const quoteIds = [
-      ...new Set(
-        references
-          .flatMap((reference) => {
-            const explicitId = reference.supplierQuoteId;
-            const itemQuoteId = reference.supplierQuoteItemId
-              ? initialQuoteByItem.get(reference.supplierQuoteItemId)
-              : undefined;
-            return [explicitId, itemQuoteId];
-          })
-          .filter((id): id is string => typeof id === 'string' && id.length > 0),
-      ),
-    ].sort();
+    const quoteIdSet = new Set<string>();
+    for (const reference of references) {
+      if (reference.supplierQuoteId) quoteIdSet.add(reference.supplierQuoteId);
+      const itemQuoteId = reference.supplierQuoteItemId
+        ? initialQuoteByItem.get(reference.supplierQuoteItemId)
+        : undefined;
+      if (itemQuoteId) quoteIdSet.add(itemQuoteId);
+    }
+    const quoteIds = [...quoteIdSet].sort();
     if (quoteIds.length === 0) return;
 
     const lockedQuotes = await tx

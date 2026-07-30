@@ -31,6 +31,7 @@ export const lockSupplierRevisionStates = async (
 ): Promise<SupplierRevisionState> => {
   const states = new Map<string, string>();
   for (const id of [...new Set(supplierQuoteIds)].sort()) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop -- Sorted sequential row locks establish a deterministic lock order and prevent cross-quote deadlocks.
     const locked = await supplierQuotesRepo.lockEffectiveStatusById(id, exec);
     if (locked) states.set(id, effectiveLockedSupplierStatus(locked));
   }
@@ -44,6 +45,7 @@ export const createDerivedSupplierRevisions = async (
 ): Promise<void> => {
   for (const [quoteId, previousStatus] of previousStates) {
     if (previousStatus !== 'draft') continue;
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop -- Each revision re-locks and evaluates the quote in the shared transaction; preserving quote order avoids lock inversions.
     const current = await supplierQuotesRepo.lockEffectiveStatusById(quoteId, exec);
     if (current && effectiveLockedSupplierStatus(current) === 'sent') {
       await createSupplierQuoteRevisionIfChanged(quoteId, createdByUserId, exec);

@@ -30,19 +30,22 @@ export function useVersionHistoryDialogOpen(
   selectedVersionId: string | null,
   onClearVersionPreview: () => void,
 ) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
   const openRef = useRef(false);
-  openRef.current = open;
+
+  const setOpen = useCallback((next: boolean) => {
+    openRef.current = next;
+    setOpenState(next);
+  }, []);
 
   const onOpenChange = useCallback(
     (next: boolean) => {
       setOpen(next);
-      openRef.current = next;
       if (!next && selectedVersionId) {
         onClearVersionPreview();
       }
     },
-    [onClearVersionPreview, selectedVersionId],
+    [onClearVersionPreview, selectedVersionId, setOpen],
   );
 
   const bindPreview = useCallback(<T,>(onPreview: (value: T) => void) => {

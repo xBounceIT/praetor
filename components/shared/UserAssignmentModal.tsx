@@ -193,7 +193,7 @@ const UserRow: React.FC<{
       type="button"
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
-      className={`flex w-full items-center gap-3 p-3 rounded-xl border text-left cursor-pointer transition-all ${
+      className={`flex w-full items-center gap-3 p-3 rounded-xl border text-left cursor-pointer transition-colors ${
         isSelected
           ? 'bg-primary/10 border-primary'
           : 'bg-card border-border hover:border-input hover:bg-accent'
