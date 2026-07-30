@@ -10,13 +10,13 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { toastError, toastSuccess, toastWarning } from '@/utils/toast';
 import { timeReportsApi } from '../../services/api/timeReports';
 import { usersApi } from '../../services/api/users';
 import { type SavedViewDto, viewsApi } from '../../services/api/views';
@@ -341,7 +341,7 @@ const TimeReportView = ({
         const message =
           generateError instanceof Error ? generateError.message : t('timeReport.errors.generate');
         setError(message);
-        toast.error(message);
+        toastError(message);
       } finally {
         setIsGenerating(false);
       }
@@ -365,7 +365,7 @@ const TimeReportView = ({
       saved.periodPreset === 'custom' ? null : periodRange(saved.periodPreset, startOfWeek),
     );
     setDefinition(finalized);
-    if (wasSanitized) toast.warning(t('timeReport.favorites.sanitized'));
+    if (wasSanitized) toastWarning(t('timeReport.favorites.sanitized'));
   };
 
   const saveFavorite = async () => {
@@ -381,9 +381,9 @@ const TimeReportView = ({
       });
       setFavoriteName('');
       await loadFavorites();
-      toast.success(t('timeReport.favorites.saved'));
+      toastSuccess(t('timeReport.favorites.saved'));
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : t('timeReport.errors.favorite'));
+      toastError(saveError instanceof Error ? saveError.message : t('timeReport.errors.favorite'));
     } finally {
       setIsSavingFavorite(false);
     }
@@ -397,9 +397,9 @@ const TimeReportView = ({
       if (selectedFavoriteId === favoriteToDelete.id) setSelectedFavoriteId('');
       setFavoriteToDelete(null);
       await loadFavorites();
-      toast.success(t('timeReport.favorites.deleted'));
+      toastSuccess(t('timeReport.favorites.deleted'));
     } catch (deleteError) {
-      toast.error(
+      toastError(
         deleteError instanceof Error ? deleteError.message : t('timeReport.errors.favorite'),
       );
     } finally {
@@ -420,7 +420,7 @@ const TimeReportView = ({
         blob,
       );
     } catch (exportError) {
-      toast.error(
+      toastError(
         exportError instanceof Error ? exportError.message : t('timeReport.errors.export'),
       );
     } finally {
@@ -441,7 +441,7 @@ const TimeReportView = ({
         setEditingCatalogs(catalogs);
         setEditingEntry(entry);
       } catch (catalogError) {
-        toast.error(
+        toastError(
           catalogError instanceof Error
             ? catalogError.message
             : t('timeReport.errors.editCatalogs'),

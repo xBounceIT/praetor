@@ -11,7 +11,6 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import {
   logsApi,
   type SiemConfig,
@@ -19,6 +18,7 @@ import {
   type SiemStatus,
 } from '../../services/api/logs';
 import { formatNumber } from '../../utils/numbers';
+import { toastError, toastSuccess } from '../../utils/toast';
 import SecretField from '../shared/SecretField';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -251,7 +251,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
     if (!firstInvalidField) return false;
 
     const message = next[firstInvalidField];
-    if (message) toast.error(message);
+    if (message) toastError(message);
     const selector = FIELD_FOCUS_SELECTORS[firstInvalidField];
     if (selector) {
       window.requestAnimationFrame(() => {
@@ -315,14 +315,14 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
       const next = await logsApi.updateSiemConfig(form);
       applyConfig(next, true);
       refreshStatusBestEffort();
-      toast.success(t('logs.siem.messages.saved'));
+      toastSuccess(t('logs.siem.messages.saved'));
     } catch (error) {
       const errorCode =
         error instanceof Error
           ? ((error as Error & { errorCode?: string }).errorCode ?? error.message)
           : '';
       if (!showServerValidationError(errorCode)) {
-        toast.error(error instanceof Error ? error.message : t('logs.siem.messages.saveFailed'));
+        toastError(error instanceof Error ? error.message : t('logs.siem.messages.saveFailed'));
       }
     } finally {
       setBusy(null);
@@ -337,9 +337,9 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
       const nextConfig = await logsApi.getSiemConfig().catch(() => null);
       if (nextConfig) applyConfig(nextConfig, true);
       refreshStatusBestEffort();
-      if (result.success) toast.success(t('logs.siem.messages.testSucceeded'));
+      if (result.success) toastSuccess(t('logs.siem.messages.testSucceeded'));
       else if (!result.error || !showServerValidationError(result.error)) {
-        toast.error(result.error || t('logs.siem.messages.testFailed'));
+        toastError(result.error || t('logs.siem.messages.testFailed'));
       }
     } catch (error) {
       const errorCode =
@@ -347,7 +347,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
           ? ((error as Error & { errorCode?: string }).errorCode ?? error.message)
           : '';
       if (!showServerValidationError(errorCode)) {
-        toast.error(error instanceof Error ? error.message : t('logs.siem.messages.testFailed'));
+        toastError(error instanceof Error ? error.message : t('logs.siem.messages.testFailed'));
       }
     } finally {
       setBusy(null);
@@ -361,9 +361,9 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
       const next = enabled ? await logsApi.enableSiem() : await logsApi.disableSiem();
       applyConfig(next, true);
       refreshStatusBestEffort();
-      toast.success(t(next.enabled ? 'logs.siem.messages.enabled' : 'logs.siem.messages.disabled'));
+      toastSuccess(t(next.enabled ? 'logs.siem.messages.enabled' : 'logs.siem.messages.disabled'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('logs.siem.messages.toggleFailed'));
+      toastError(error instanceof Error ? error.message : t('logs.siem.messages.toggleFailed'));
     } finally {
       setBusy(null);
     }

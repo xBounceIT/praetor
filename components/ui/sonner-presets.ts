@@ -17,12 +17,74 @@ export const resolveOfferCreatedToastAction = <T>(
   action: T,
 ): T | undefined => (canViewClientOffers ? action : undefined);
 
-export const offerCreatedToastClassNames = {
-  toast: 'rounded-lg! border-primary! bg-primary! pr-12! text-primary-foreground! shadow-lg',
+const toastLayout = 'rounded-lg! pr-12! shadow-lg';
+const closeButtonLayout =
+  'top-2! right-2! left-auto! size-6! transform-none! rounded-md! border-0! bg-transparent! focus-visible:ring-[3px] [&_svg]:size-4!';
+
+const buildVariantClassNames = ({
+  surface,
+  description,
+  icon,
+  actionButton,
+  closeTone,
+}: {
+  surface: string;
+  description: string;
+  icon: string;
+  actionButton: string;
+  closeTone: string;
+}): ToastClassnames => ({
+  toast: `${toastLayout} ${surface}`,
+  description,
+  icon,
+  actionButton,
+  closeButton: `${closeButtonLayout} ${closeTone}`,
+});
+
+/** Primary-themed success toast — same look as quote→offer conversion. */
+export const appSuccessToastClassNames = buildVariantClassNames({
+  surface: 'border-primary! bg-primary! text-primary-foreground!',
   description: 'text-primary-foreground/70!',
   icon: 'text-primary-foreground!',
   actionButton:
     'rounded-md! bg-primary-foreground! text-primary! hover:bg-primary-foreground/90! focus-visible:ring-[3px] focus-visible:ring-primary-foreground/50',
-  closeButton:
-    'top-2! right-2! left-auto! size-6! transform-none! rounded-md! border-0! bg-transparent! text-primary-foreground! hover:bg-primary-foreground/10! focus-visible:ring-[3px] focus-visible:ring-primary-foreground/50 [&_svg]:size-4!',
-} satisfies ToastClassnames;
+  closeTone:
+    'text-primary-foreground! hover:bg-primary-foreground/10! focus-visible:ring-primary-foreground/50',
+});
+
+export const appErrorToastClassNames = buildVariantClassNames({
+  surface: 'border-toast-destructive! bg-toast-destructive! text-toast-destructive-foreground!',
+  description: 'text-toast-destructive-foreground/70!',
+  icon: 'text-toast-destructive-foreground!',
+  actionButton:
+    'rounded-md! bg-toast-destructive-foreground! text-toast-destructive! hover:bg-toast-destructive-foreground/90! focus-visible:ring-[3px] focus-visible:ring-toast-destructive-foreground/50',
+  closeTone:
+    'text-toast-destructive-foreground! hover:bg-toast-destructive-foreground/10! focus-visible:ring-toast-destructive-foreground/50',
+});
+
+export const appWarningToastClassNames = buildVariantClassNames({
+  surface: 'border-warning! bg-warning! text-warning-foreground!',
+  description: 'text-warning-foreground/70!',
+  icon: 'text-warning-foreground!',
+  actionButton:
+    'rounded-md! bg-warning-foreground! text-warning! hover:bg-warning-foreground/90! focus-visible:ring-[3px] focus-visible:ring-warning-foreground/50',
+  closeTone:
+    'text-warning-foreground! hover:bg-warning-foreground/10! focus-visible:ring-warning-foreground/50',
+});
+
+/** Alias kept for offer-created call sites; identical to `appSuccessToastClassNames`. */
+export const offerCreatedToastClassNames = appSuccessToastClassNames;
+
+export const mergeToastClassNames = (
+  base: ToastClassnames,
+  override?: ToastClassnames,
+): ToastClassnames => {
+  if (!override) return base;
+  const merged: ToastClassnames = { ...base };
+  for (const key of Object.keys(override) as Array<keyof ToastClassnames>) {
+    const overrideValue = override[key];
+    if (!overrideValue) continue;
+    merged[key] = [base[key], overrideValue].filter(Boolean).join(' ');
+  }
+  return merged;
+};
