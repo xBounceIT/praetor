@@ -16,8 +16,16 @@ import {
   canViewProjectRule,
   getProjectRuleFieldDefinition,
   isProjectRuleConditionValueType,
+  isProjectRuleUnaryOperator,
   validateProjectRuleCondition,
 } from '../utils/projectRuleFields.ts';
+import {
+  DEFAULT_PROJECT_RULE_SCHEDULE,
+  isProjectRuleEvaluationMode,
+  isProjectRuleScheduleFrequency,
+  normalizeProjectRuleSchedule,
+  PROJECT_RULE_SCHEDULE_FREQUENCY_PATTERN,
+} from '../utils/projectRuleSchedule.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
@@ -42,6 +50,9 @@ const projectRuleIdParamSchema = {
   },
   required: ['projectId', 'ruleId'],
 } as const;
+
+const PROJECT_RULE_NAME_MAX_LENGTH = 255;
+const PROJECT_RULE_MAX_SCHEDULE_FILTER_IDS = 2_000;
 
 const projectRuleActionSchema = {
   type: 'object',
@@ -80,12 +91,36 @@ const actionConfigInputSchema = {
 const projectRuleConditionSchema = {
   type: 'object',
   properties: {
-    field: { type: 'string' },
-    operator: { type: 'string' },
+    field: { type: 'string', maxLength: 50 },
+    operator: { type: 'string', maxLength: 30 },
     value: { type: 'string' },
     valueType: { type: 'string', enum: ['literal', 'field'] },
   },
   required: ['field', 'operator', 'value'],
+  additionalProperties: false,
+} as const;
+
+const projectRuleScheduleSchema = {
+  type: 'object',
+  properties: {
+    frequency: {
+      type: 'string',
+      description:
+        'Periodic cadence or a custom monthly pattern such as monthly:first:1 for the first Monday.',
+      pattern: PROJECT_RULE_SCHEDULE_FREQUENCY_PATTERN.source,
+    },
+    userIds: {
+      type: 'array',
+      maxItems: PROJECT_RULE_MAX_SCHEDULE_FILTER_IDS,
+      items: { type: 'string', maxLength: 50 },
+    },
+    taskIds: {
+      type: 'array',
+      maxItems: PROJECT_RULE_MAX_SCHEDULE_FILTER_IDS,
+      items: { type: 'string', maxLength: 50 },
+    },
+  },
+  required: ['frequency', 'userIds', 'taskIds'],
   additionalProperties: false,
 } as const;
 
@@ -94,7 +129,7 @@ const projectRuleSchema = {
   properties: {
     id: { type: 'string' },
     projectId: { type: 'string' },
-    name: { type: 'string' },
+    name: { type: 'string', maxLength: PROJECT_RULE_NAME_MAX_LENGTH },
     field: { type: 'string' },
     operator: { type: 'string' },
     value: { type: 'string' },
@@ -110,9 +145,12 @@ const projectRuleSchema = {
       description:
         'Webhook IDs and actions are omitted unless the caller has administration.webhooks.view.',
     },
+    evaluationMode: { type: 'string', enum: ['continuous', 'periodic'] },
+    schedule: projectRuleScheduleSchema,
     isEnabled: { type: 'boolean' },
     conditionMet: { type: 'boolean' },
     lastTriggeredAt: { type: ['number', 'null'] },
+    lastEvaluatedPeriod: { type: ['string', 'null'] },
     createdBy: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
@@ -128,9 +166,12 @@ const projectRuleSchema = {
     'conditions',
     'actionType',
     'actionConfig',
+    'evaluationMode',
+    'schedule',
     'isEnabled',
     'conditionMet',
     'lastTriggeredAt',
+    'lastEvaluatedPeriod',
     'createdBy',
     'createdAt',
     'updatedAt',
@@ -177,21 +218,55 @@ const recipientOptionsSchema = {
         required: ['id', 'name'],
       },
     },
+    filters: {
+      type: 'object',
+      properties: {
+        users: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              username: { type: 'string' },
+              avatarInitials: { type: 'string' },
+              isDisabled: { type: 'boolean' },
+            },
+            required: ['id', 'name', 'username', 'avatarInitials', 'isDisabled'],
+          },
+        },
+        tasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              isDisabled: { type: 'boolean' },
+            },
+            required: ['id', 'name', 'isDisabled'],
+          },
+        },
+      },
+      required: ['users', 'tasks'],
+    },
   },
-  required: ['users', 'roles', 'webhooks'],
+  required: ['users', 'roles', 'webhooks', 'filters'],
 } as const;
 
 const projectRuleCreateBodySchema = {
   type: 'object',
   properties: {
-    name: { type: 'string' },
-    field: { type: 'string' },
-    operator: { type: 'string' },
+    name: { type: 'string', maxLength: PROJECT_RULE_NAME_MAX_LENGTH },
+    field: { type: 'string', maxLength: 50 },
+    operator: { type: 'string', maxLength: 30 },
     value: { type: 'string' },
     conditionLogic: { type: 'string', enum: ['and', 'or'] },
     conditions: { type: 'array', items: projectRuleConditionSchema },
     actionType: { type: 'string' },
     actionConfig: actionConfigInputSchema,
+    evaluationMode: { type: 'string', enum: ['continuous', 'periodic'] },
+    schedule: projectRuleScheduleSchema,
     isEnabled: { type: 'boolean' },
   },
   required: ['name', 'actionConfig'],
@@ -370,6 +445,49 @@ const parseConditionLogic = (
   return { ok: true, value: result.value };
 };
 
+const parseEvaluationMode = (
+  value: unknown,
+  fallback: projectRulesRepo.ProjectRuleEvaluationMode = 'continuous',
+):
+  | { ok: true; value: projectRulesRepo.ProjectRuleEvaluationMode }
+  | { ok: false; message: string } => {
+  if (value === undefined) return { ok: true, value: fallback };
+  if (!isProjectRuleEvaluationMode(value)) {
+    return { ok: false, message: 'evaluationMode must be continuous or periodic' };
+  }
+  return { ok: true, value };
+};
+
+const parseSchedule = (
+  value: unknown,
+  fallback: projectRulesRepo.ProjectRuleSchedule = DEFAULT_PROJECT_RULE_SCHEDULE,
+): { ok: true; value: projectRulesRepo.ProjectRuleSchedule } | { ok: false; message: string } => {
+  if (value === undefined) return { ok: true, value: normalizeProjectRuleSchedule(fallback) };
+  if (!value || typeof value !== 'object') {
+    return { ok: false, message: 'schedule must be an object' };
+  }
+  const raw = value as ProjectRuleBody;
+  if (!isProjectRuleScheduleFrequency(raw.frequency)) {
+    return {
+      ok: false,
+      message:
+        'schedule.frequency must be daily, weekly, monthly, quarterly, yearly, or a valid custom monthly pattern',
+    };
+  }
+  const userIds = ensureArrayOfStrings(raw.userIds ?? [], 'schedule.userIds');
+  if (!userIds.ok) return userIds;
+  const taskIds = ensureArrayOfStrings(raw.taskIds ?? [], 'schedule.taskIds');
+  if (!taskIds.ok) return taskIds;
+  return {
+    ok: true,
+    value: normalizeProjectRuleSchedule({
+      frequency: raw.frequency,
+      userIds: userIds.value,
+      taskIds: taskIds.value,
+    }),
+  };
+};
+
 const parseCondition = (
   value: unknown,
   index: number,
@@ -382,8 +500,13 @@ const parseCondition = (
   if (!field.ok) return { ok: false, message: field.message };
   const operator = requireNonEmptyString(raw.operator, `conditions[${index}].operator`);
   if (!operator.ok) return { ok: false, message: operator.message };
-  const conditionValue = requireNonEmptyString(raw.value, `conditions[${index}].value`);
-  if (!conditionValue.ok) return { ok: false, message: conditionValue.message };
+  if (typeof raw.value !== 'string') {
+    return { ok: false, message: `conditions[${index}].value must be a string` };
+  }
+  const conditionValue = raw.value.trim();
+  if (!conditionValue && !isProjectRuleUnaryOperator(operator.value)) {
+    return { ok: false, message: `conditions[${index}].value is required` };
+  }
   const valueTypeResult =
     raw.valueType === undefined
       ? ({ ok: true, value: 'literal' } as const)
@@ -397,7 +520,7 @@ const parseCondition = (
     value: {
       field: field.value,
       operator: operator.value,
-      value: conditionValue.value,
+      value: conditionValue,
       valueType: valueTypeResult.value,
     },
   };
@@ -426,14 +549,19 @@ const parseLegacySingleCondition = (
   if (!field.ok) return { ok: false, message: field.message };
   const operator = requireNonEmptyString(body.operator, 'operator');
   if (!operator.ok) return { ok: false, message: operator.message };
-  const value = requireNonEmptyString(body.value, 'value');
-  if (!value.ok) return { ok: false, message: value.message };
+  if (typeof body.value !== 'string') {
+    return { ok: false, message: 'value must be a string' };
+  }
+  const value = body.value.trim();
+  if (!value && !isProjectRuleUnaryOperator(operator.value)) {
+    return { ok: false, message: 'value is required' };
+  }
   return {
     ok: true,
     value: {
       field: field.value,
       operator: operator.value,
-      value: value.value,
+      value,
       valueType: 'literal',
     },
   };
@@ -461,6 +589,10 @@ const parseCreateBody = (
   const firstActionType = actionConfig.value.actions[0]?.type ?? 'notify';
   const actionTypeResult = parseActionType(body.actionType, firstActionType);
   if (!actionTypeResult.ok) return actionTypeResult;
+  const evaluationMode = parseEvaluationMode(body.evaluationMode);
+  if (!evaluationMode.ok) return evaluationMode;
+  const schedule = parseSchedule(body.schedule);
+  if (!schedule.ok) return schedule;
   const isEnabled = parseBooleanField(body, 'isEnabled');
   if (!isEnabled.ok) return { ok: false, message: isEnabled.message };
 
@@ -475,6 +607,8 @@ const parseCreateBody = (
       conditions: conditions.value,
       actionType: actionTypeResult.value,
       actionConfig: actionConfig.value,
+      evaluationMode: evaluationMode.value,
+      schedule: schedule.value,
       isEnabled: isEnabled.value ?? true,
     },
   };
@@ -500,9 +634,10 @@ const parseUpdateBody = (
     patch.operator = result.value;
   }
   if (Object.hasOwn(body, 'value')) {
-    const result = requireNonEmptyString(body.value, 'value');
-    if (!result.ok) return { ok: false, message: result.message };
-    patch.value = result.value;
+    if (typeof body.value !== 'string') {
+      return { ok: false, message: 'value must be a string' };
+    }
+    patch.value = body.value.trim();
   }
   if (Object.hasOwn(body, 'conditionLogic')) {
     const result = parseConditionLogic(body.conditionLogic);
@@ -531,6 +666,16 @@ const parseUpdateBody = (
       patch.actionType = result.value.actions[0]?.type ?? 'notify';
     }
   }
+  if (Object.hasOwn(body, 'evaluationMode')) {
+    const result = parseEvaluationMode(body.evaluationMode);
+    if (!result.ok) return result;
+    patch.evaluationMode = result.value;
+  }
+  if (Object.hasOwn(body, 'schedule')) {
+    const result = parseSchedule(body.schedule);
+    if (!result.ok) return result;
+    patch.schedule = result.value;
+  }
   const isEnabled = parseBooleanField(body, 'isEnabled');
   if (!isEnabled.ok) return { ok: false, message: isEnabled.message };
   if (isEnabled.value !== undefined) patch.isEnabled = isEnabled.value;
@@ -550,17 +695,21 @@ const validateFinalRule = async ({
   allowedWebhookIdsWithoutPermission,
   allowedDisabledWebhookIds,
   allowedUnassignedRoleIds,
+  allowedScheduleUserIds,
+  allowedScheduleTaskIds,
 }: {
   projectId: string;
   rule: Pick<
     projectRulesRepo.ProjectRule,
-    'conditions' | 'conditionLogic' | 'actionType' | 'actionConfig'
+    'conditions' | 'conditionLogic' | 'actionType' | 'actionConfig' | 'evaluationMode' | 'schedule'
   >;
   permissions: readonly string[];
   exec?: DbExecutor;
   allowedWebhookIdsWithoutPermission?: readonly string[];
   allowedDisabledWebhookIds?: readonly string[];
   allowedUnassignedRoleIds?: readonly string[];
+  allowedScheduleUserIds?: readonly string[];
+  allowedScheduleTaskIds?: readonly string[];
 }) => {
   if (rule.actionType !== 'notify' && rule.actionType !== 'webhook') {
     throw new RecipientValidationError('actionType must be notify or webhook');
@@ -584,6 +733,7 @@ const validateFinalRule = async ({
       value: conditionInput.value,
       valueType: conditionInput.valueType,
       permissions,
+      evaluationMode: rule.evaluationMode,
     });
     if (!condition.ok) throw new RecipientValidationError(condition.message);
     if (definition?.requiresPermission && !permissionSet.has(definition.requiresPermission)) {
@@ -613,6 +763,18 @@ const validateFinalRule = async ({
     invalidRecipients.webhookIds.length > 0
   ) {
     throw new RecipientValidationError('actionConfig contains invalid recipients or webhooks');
+  }
+
+  if (rule.evaluationMode === 'periodic') {
+    const invalidFilters = await projectRuleRecipientsRepo.findInvalidScheduleFilterIds(
+      projectId,
+      rule.schedule,
+      exec,
+      { userIds: allowedScheduleUserIds, taskIds: allowedScheduleTaskIds },
+    );
+    if (invalidFilters.userIds.length > 0 || invalidFilters.taskIds.length > 0) {
+      throw new RecipientValidationError('schedule contains users or tasks outside the project');
+    }
   }
 };
 
@@ -648,6 +810,32 @@ const mergeRuleConditions = (
   };
   return [first, ...existingConditions.slice(1)];
 };
+
+const areRuleConditionsEqual = (
+  left: readonly projectRulesRepo.ProjectRuleCondition[],
+  right: readonly projectRulesRepo.ProjectRuleCondition[],
+): boolean =>
+  left.length === right.length &&
+  left.every((condition, index) => {
+    const candidate = right[index];
+    return (
+      candidate !== undefined &&
+      condition.field === candidate.field &&
+      condition.operator === candidate.operator &&
+      condition.value === candidate.value &&
+      condition.valueType === candidate.valueType
+    );
+  });
+
+const areRuleSchedulesEqual = (
+  left: projectRulesRepo.ProjectRuleSchedule,
+  right: projectRulesRepo.ProjectRuleSchedule,
+): boolean =>
+  left.frequency === right.frequency &&
+  left.userIds.length === right.userIds.length &&
+  left.userIds.every((id, index) => id === right.userIds[index]) &&
+  left.taskIds.length === right.taskIds.length &&
+  left.taskIds.every((id, index) => id === right.taskIds[index]);
 
 const ensureProjectAccess = async (
   request: FastifyRequest,
@@ -841,7 +1029,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ) {
         return;
       }
-      const parsed = parseUpdateBody(request.body as ProjectRuleBody);
+      const requestBody = request.body as ProjectRuleBody;
+      const parsed = parseUpdateBody(requestBody);
       if (!parsed.ok) return badRequest(reply, parsed.message);
       const permissions = request.user?.permissions ?? [];
       const mayUseRuleWebhooks = canUseRuleWebhooks(permissions);
@@ -856,6 +1045,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ]);
           if (!project) throw new NotFoundError('Project');
           if (!existing) throw new NotFoundError('Project rule');
+          if (!canViewProjectRule(existing, permissions)) {
+            throw new NotFoundError('Project rule');
+          }
           if (!mayUseRuleWebhooks && parsed.value.actionConfig?.webhookIds.length) {
             throw new RecipientValidationError(
               'actionConfig contains invalid recipients or webhooks',
@@ -912,14 +1104,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               !reEnabled && !finalRule.isEnabled ? existingActionConfig.webhookIds : [],
             allowedUnassignedRoleIds:
               !reEnabled && !finalRule.isEnabled ? existingActionConfig.recipientRoleIds : [],
+            allowedScheduleUserIds:
+              !reEnabled && !finalRule.isEnabled ? existing.schedule.userIds : [],
+            allowedScheduleTaskIds:
+              !reEnabled && !finalRule.isEnabled ? existing.schedule.taskIds : [],
           });
 
           const conditionChanged =
-            parsed.value.field !== undefined ||
-            parsed.value.operator !== undefined ||
-            parsed.value.value !== undefined ||
-            parsed.value.conditions !== undefined ||
-            parsed.value.conditionLogic !== undefined;
+            !areRuleConditionsEqual(existing.conditions, finalConditions) ||
+            existing.conditionLogic !== finalConditionLogic ||
+            existing.evaluationMode !== finalRule.evaluationMode ||
+            !areRuleSchedulesEqual(existing.schedule, finalRule.schedule);
           projectName = project.name;
           const result = await projectRulesRepo.update(
             projectIdResult.value,
@@ -1015,6 +1210,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             tx,
           );
           if (!existing) throw new NotFoundError('Project rule');
+          if (!canViewProjectRule(existing, request.user?.permissions ?? [])) {
+            throw new NotFoundError('Project rule');
+          }
           const ok = await projectRulesRepo.deleteByProjectAndId(
             projectIdResult.value,
             ruleIdResult.value,

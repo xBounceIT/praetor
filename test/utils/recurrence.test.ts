@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatRecurrencePattern, WEEKDAY_NAMES } from '../../utils/recurrence';
+import { formatRecurrencePattern } from '../../utils/recurrence';
 
 // Stub TFunction: returns the key plus any interpolation values so we can
 // assert which keys/args the helper requested without booting i18next.
@@ -28,13 +28,25 @@ describe('formatRecurrencePattern', () => {
 
   test('humanizes monthly:occurrence:dayIdx into "every<Occurrence>" with day name', () => {
     expect(formatRecurrencePattern('monthly:first:1', stubT)).toBe(
-      'timesheets:entry.recurrencePatterns.everyFirst|day=Monday',
+      'timesheets:entry.recurrencePatterns.everyFirst|day=timesheets:recurring.dayNames.monday',
     );
     expect(formatRecurrencePattern('monthly:last:0', stubT)).toBe(
-      'timesheets:entry.recurrencePatterns.everyLast|day=Sunday',
+      'timesheets:entry.recurrencePatterns.everyLast|day=timesheets:recurring.dayNames.sunday',
     );
     expect(formatRecurrencePattern('monthly:third:6', stubT)).toBe(
-      'timesheets:entry.recurrencePatterns.everyThird|day=Saturday',
+      'timesheets:entry.recurrencePatterns.everyThird|day=timesheets:recurring.dayNames.saturday',
+    );
+  });
+
+  test('resolves custom recurrence weekdays through localized day-name keys', () => {
+    const italianT = ((key: string, options?: Record<string, unknown>) => {
+      if (key === 'timesheets:recurring.dayNames.friday') return 'Venerdì';
+      if (options?.day) return `${key}|day=${options.day}`;
+      return key;
+    }) as unknown as Parameters<typeof formatRecurrencePattern>[1];
+
+    expect(formatRecurrencePattern('monthly:last:5', italianT)).toBe(
+      'timesheets:entry.recurrencePatterns.everyLast|day=Venerdì',
     );
   });
 
@@ -45,12 +57,8 @@ describe('formatRecurrencePattern', () => {
     expect(formatRecurrencePattern('monthly:first:1:extra', stubT)).toBe(
       'timesheets:entry.recurrencePatterns.custom',
     );
-  });
-
-  test('WEEKDAY_NAMES indexes match JavaScript Date.getDay() (0=Sunday)', () => {
-    expect(WEEKDAY_NAMES[0]).toBe('Sunday');
-    expect(WEEKDAY_NAMES[1]).toBe('Monday');
-    expect(WEEKDAY_NAMES[6]).toBe('Saturday');
-    expect(WEEKDAY_NAMES).toHaveLength(7);
+    expect(formatRecurrencePattern('monthly:first:', stubT)).toBe(
+      'timesheets:entry.recurrencePatterns.custom',
+    );
   });
 });

@@ -27,9 +27,13 @@ const ruleRow = (overrides: Record<number, unknown> = {}) =>
       [{ field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' }],
       'notify',
       { recipientUserIds: ['u1'], recipientRoleIds: ['manager'] },
+      'continuous',
+      { frequency: 'monthly', userIds: [], taskIds: [] },
       true,
       false,
       lastTriggeredAt,
+      null,
+      3,
       'u-admin',
       createdAt,
       updatedAt,
@@ -65,14 +69,53 @@ describe('projectRulesRepo', () => {
             { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
           ],
         },
+        evaluationMode: 'continuous',
+        schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
         isEnabled: true,
         conditionMet: false,
         lastTriggeredAt: 1700000050000,
+        lastEvaluatedPeriod: null,
+        configVersion: 3,
         createdBy: 'u-admin',
         createdAt: 1700000000000,
         updatedAt: 1700000100000,
       },
     ]);
+  });
+
+  test('canonicalizes legacy unary conditions with ignored field targets', async () => {
+    exec.enqueue({
+      rows: [
+        ruleRow({
+          3: 'is_disabled',
+          4: 'is_false',
+          5: 'cost_to_date',
+          7: [
+            {
+              field: 'is_disabled',
+              operator: 'is_false',
+              value: 'cost_to_date',
+              valueType: 'field',
+            },
+            {
+              field: 'description',
+              operator: 'eq',
+              value: ' ',
+              valueType: 'literal',
+            },
+          ],
+        }),
+      ],
+    });
+
+    const result = await projectRulesRepo.listByProject('p1', testDb);
+
+    expect(result[0]).toMatchObject({
+      field: 'is_disabled',
+      operator: 'is_false',
+      value: '',
+      conditions: [{ field: 'is_disabled', operator: 'is_false', value: '', valueType: 'literal' }],
+    });
   });
 
   test('create normalizes recipient config before insert', async () => {
@@ -102,6 +145,8 @@ describe('projectRulesRepo', () => {
             { type: 'webhook', webhookId: 'webhook-2' },
           ],
         },
+        evaluationMode: 'continuous',
+        schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
         isEnabled: true,
         createdBy: 'u-admin',
       },
@@ -124,7 +169,7 @@ describe('projectRulesRepo', () => {
   });
 
   test('update scopes by project and rule id, and can reset condition state', async () => {
-    exec.enqueue({ rows: [ruleRow({ 2: 'Updated warning', 11: false, 12: null })] });
+    exec.enqueue({ rows: [ruleRow({ 2: 'Updated warning', 13: false, 14: null })] });
 
     const result = await projectRulesRepo.update(
       'p1',
@@ -164,20 +209,46 @@ describe('projectRulesRepo', () => {
     const result = await projectRulesRepo.markTriggeredOnRisingEdge(
       'pr-1',
       new Date('2026-05-31T12:00:00'),
+      3,
       testDb,
     );
 
     expect(result).toBe(true);
     expect(exec.calls[0].sql).toContain('"condition_met" = $');
+    expect(exec.calls[0].sql).toContain('"config_version" = $');
+    expect(exec.calls[0].sql).toContain('"is_enabled" = $');
+    expect(exec.calls[0].sql).toContain('"evaluation_mode" = $');
     expect(exec.calls[0].params).toContain(false);
+    expect(exec.calls[0].params).toContain(3);
   });
 
   test('markConditionNotMet only resets previously met rules', async () => {
     exec.enqueue({ rows: [], rowCount: 1 });
 
-    const result = await projectRulesRepo.markConditionNotMet('pr-1', testDb);
+    const result = await projectRulesRepo.markConditionNotMet('pr-1', 3, testDb);
 
     expect(result).toBe(true);
     expect(exec.calls[0].params).toContain(true);
+    expect(exec.calls[0].params).toContain(3);
+  });
+
+  test('claims a periodic evaluation only once per period', async () => {
+    exec.enqueue({ rows: [['pr-1']] });
+
+    const result = await projectRulesRepo.markPeriodicEvaluation(
+      'pr-1',
+      'monthly:UTC:2026-05-01:2026-06-01',
+      true,
+      new Date('2026-06-01T00:15:00Z'),
+      3,
+      testDb,
+    );
+
+    expect(result).toBe(true);
+    expect(exec.calls[0].sql).toContain('"last_evaluated_period"');
+    expect(exec.calls[0].sql).toContain('"evaluation_mode"');
+    expect(exec.calls[0].sql).toContain('"config_version"');
+    expect(exec.calls[0].params).toContain('periodic');
+    expect(exec.calls[0].params).toContain(3);
   });
 });

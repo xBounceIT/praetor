@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, or } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import {
   type ProjectRuleAction,
@@ -7,10 +7,24 @@ import {
   type ProjectRuleCondition,
   type ProjectRuleConditionLogic,
   type ProjectRuleConditionValueType,
+  type ProjectRuleEvaluationMode,
+  type ProjectRuleSchedule,
   projectRules,
 } from '../db/schema/projectRules.ts';
+import { isProjectRuleUnaryOperator } from '../utils/projectRuleFields.ts';
+import {
+  DEFAULT_PROJECT_RULE_SCHEDULE,
+  isProjectRuleEvaluationMode,
+  normalizeProjectRuleSchedule,
+} from '../utils/projectRuleSchedule.ts';
 
-export type { ProjectRuleCondition, ProjectRuleConditionLogic, ProjectRuleConditionValueType };
+export type {
+  ProjectRuleCondition,
+  ProjectRuleConditionLogic,
+  ProjectRuleConditionValueType,
+  ProjectRuleEvaluationMode,
+  ProjectRuleSchedule,
+};
 
 export type ProjectRule = {
   id: string;
@@ -23,9 +37,13 @@ export type ProjectRule = {
   conditions: ProjectRuleCondition[];
   actionType: ProjectRuleActionType;
   actionConfig: ProjectRuleActionConfig;
+  evaluationMode: ProjectRuleEvaluationMode;
+  schedule: ProjectRuleSchedule;
   isEnabled: boolean;
   conditionMet: boolean;
   lastTriggeredAt: number | null;
+  lastEvaluatedPeriod: string | null;
+  configVersion: number;
   createdBy: string | null;
   createdAt: number;
   updatedAt: number;
@@ -42,6 +60,8 @@ export type NewProjectRule = {
   conditions: ProjectRuleCondition[];
   actionType: ProjectRuleActionType;
   actionConfig: ProjectRuleActionConfig;
+  evaluationMode: ProjectRuleEvaluationMode;
+  schedule: ProjectRuleSchedule;
   isEnabled: boolean;
   createdBy: string;
 };
@@ -57,6 +77,8 @@ export type ProjectRuleUpdate = Partial<
     | 'conditions'
     | 'actionType'
     | 'actionConfig'
+    | 'evaluationMode'
+    | 'schedule'
     | 'isEnabled'
   >
 > & {
@@ -147,13 +169,20 @@ export const normalizeProjectRuleConditionValueType = (
   value: unknown,
 ): ProjectRuleConditionValueType => (value === 'field' ? 'field' : 'literal');
 
+export const normalizeProjectRuleEvaluationMode = (value: unknown): ProjectRuleEvaluationMode =>
+  isProjectRuleEvaluationMode(value) ? value : 'continuous';
+
 const normalizeCondition = (value: unknown): ProjectRuleCondition | null => {
   if (!value || typeof value !== 'object') return null;
   const raw = value as Record<string, unknown>;
   const field = typeof raw.field === 'string' ? raw.field.trim() : '';
   const operator = typeof raw.operator === 'string' ? raw.operator.trim() : '';
   const conditionValue = typeof raw.value === 'string' ? raw.value.trim() : '';
-  if (!field || !operator || !conditionValue) return null;
+  if (!field || !operator) return null;
+  if (isProjectRuleUnaryOperator(operator)) {
+    return { field, operator, value: '', valueType: 'literal' };
+  }
+  if (!conditionValue) return null;
   return {
     field,
     operator,
@@ -197,9 +226,13 @@ const mapRow = (row: typeof projectRules.$inferSelect): ProjectRule => {
     conditions,
     actionType: normalizeProjectRuleActionType(row.actionType),
     actionConfig: normalizeProjectRuleActionConfig(row.actionConfig ?? EMPTY_ACTION_CONFIG),
+    evaluationMode: normalizeProjectRuleEvaluationMode(row.evaluationMode),
+    schedule: normalizeProjectRuleSchedule(row.schedule ?? DEFAULT_PROJECT_RULE_SCHEDULE),
     isEnabled: row.isEnabled,
     conditionMet: row.conditionMet,
     lastTriggeredAt: row.lastTriggeredAt?.getTime() ?? null,
+    lastEvaluatedPeriod: row.lastEvaluatedPeriod,
+    configVersion: row.configVersion,
     createdBy: row.createdBy,
     createdAt: row.createdAt?.getTime() ?? 0,
     updatedAt: row.updatedAt?.getTime() ?? 0,
@@ -256,9 +289,12 @@ export const create = async (rule: NewProjectRule, exec: DbExecutor = db): Promi
       conditions,
       actionType: normalizeProjectRuleActionType(rule.actionType),
       actionConfig: normalizeProjectRuleActionConfig(rule.actionConfig),
+      evaluationMode: normalizeProjectRuleEvaluationMode(rule.evaluationMode),
+      schedule: normalizeProjectRuleSchedule(rule.schedule),
       isEnabled: rule.isEnabled,
       conditionMet: false,
       lastTriggeredAt: null,
+      lastEvaluatedPeriod: null,
       createdBy: rule.createdBy,
     })
     .returning();
@@ -297,10 +333,15 @@ export const update = async (
   if (patch.actionConfig !== undefined) {
     set.actionConfig = normalizeProjectRuleActionConfig(patch.actionConfig);
   }
+  if (patch.evaluationMode !== undefined) {
+    set.evaluationMode = normalizeProjectRuleEvaluationMode(patch.evaluationMode);
+  }
+  if (patch.schedule !== undefined) set.schedule = normalizeProjectRuleSchedule(patch.schedule);
   if (patch.isEnabled !== undefined) set.isEnabled = patch.isEnabled;
   if (patch.resetCondition) {
     set.conditionMet = false;
     set.lastTriggeredAt = null;
+    set.lastEvaluatedPeriod = null;
   }
 
   const rows = await exec
@@ -324,18 +365,27 @@ export const deleteByProjectAndId = async (
 
 export const markConditionNotMet = async (
   ruleId: string,
+  expectedConfigVersion: number,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
   const result = await exec
     .update(projectRules)
     .set({ conditionMet: false, updatedAt: new Date() })
-    .where(and(eq(projectRules.id, ruleId), eq(projectRules.conditionMet, true)));
+    .where(
+      and(
+        eq(projectRules.id, ruleId),
+        eq(projectRules.configVersion, expectedConfigVersion),
+        eq(projectRules.isEnabled, true),
+        eq(projectRules.conditionMet, true),
+      ),
+    );
   return (result.rowCount ?? 0) > 0;
 };
 
 export const markTriggeredOnRisingEdge = async (
   ruleId: string,
   now: Date,
+  expectedConfigVersion: number,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
   const rows = await exec
@@ -345,7 +395,48 @@ export const markTriggeredOnRisingEdge = async (
       lastTriggeredAt: now,
       updatedAt: new Date(),
     })
-    .where(and(eq(projectRules.id, ruleId), eq(projectRules.conditionMet, false)))
+    .where(
+      and(
+        eq(projectRules.id, ruleId),
+        eq(projectRules.configVersion, expectedConfigVersion),
+        eq(projectRules.isEnabled, true),
+        eq(projectRules.evaluationMode, 'continuous'),
+        eq(projectRules.conditionMet, false),
+      ),
+    )
+    .returning({ id: projectRules.id });
+  return rows.length > 0;
+};
+
+export const markPeriodicEvaluation = async (
+  ruleId: string,
+  periodKey: string,
+  conditionMet: boolean,
+  now: Date,
+  expectedConfigVersion: number,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const set: Record<string, unknown> = {
+    conditionMet,
+    lastEvaluatedPeriod: periodKey,
+    updatedAt: new Date(),
+  };
+  if (conditionMet) set.lastTriggeredAt = now;
+  const rows = await exec
+    .update(projectRules)
+    .set(set)
+    .where(
+      and(
+        eq(projectRules.id, ruleId),
+        eq(projectRules.configVersion, expectedConfigVersion),
+        eq(projectRules.isEnabled, true),
+        eq(projectRules.evaluationMode, 'periodic'),
+        or(
+          isNull(projectRules.lastEvaluatedPeriod),
+          ne(projectRules.lastEvaluatedPeriod, periodKey),
+        ),
+      ),
+    )
     .returning({ id: projectRules.id });
   return rows.length > 0;
 };

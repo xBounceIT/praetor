@@ -19,10 +19,24 @@ export type ProjectRuleWebhookOption = {
   name: string;
 };
 
+export type ProjectRuleFilterUserOption = ProjectRuleUserRecipientOption & {
+  isDisabled: boolean;
+};
+
+export type ProjectRuleFilterTaskOption = {
+  id: string;
+  name: string;
+  isDisabled: boolean;
+};
+
 export type ProjectRuleRecipientOptions = {
   users: ProjectRuleUserRecipientOption[];
   roles: ProjectRuleRoleRecipientOption[];
   webhooks: ProjectRuleWebhookOption[];
+  filters: {
+    users: ProjectRuleFilterUserOption[];
+    tasks: ProjectRuleFilterTaskOption[];
+  };
 };
 
 export type ProjectRuleRecipientValidationOptions = {
@@ -35,6 +49,16 @@ type UserRecipientRow = {
   name: string;
   username: string;
   avatarInitials: string | null;
+};
+
+type FilterUserRow = UserRecipientRow & {
+  isDisabled: boolean | null;
+};
+
+type FilterTaskRow = {
+  id: string;
+  name: string;
+  isDisabled: boolean | null;
 };
 
 type RoleRecipientRow = {
@@ -63,6 +87,11 @@ const mapUserRow = (row: UserRecipientRow): ProjectRuleUserRecipientOption => ({
   avatarInitials: row.avatarInitials ?? '',
 });
 
+const mapFilterUserRow = (row: FilterUserRow): ProjectRuleFilterUserOption => ({
+  ...mapUserRow(row),
+  isDisabled: row.isDisabled ?? false,
+});
+
 const roleHasEnabledProjectAssignee = (projectId: string) => sql`
   EXISTS (
     SELECT 1
@@ -79,7 +108,7 @@ export const listRecipientOptions = async (
   projectId: string,
   exec: DbExecutor = db,
 ): Promise<ProjectRuleRecipientOptions> => {
-  const [userRows, roleRows, webhookRows] = await Promise.all([
+  const [userRows, roleRows, webhookRows, filterUserRows, filterTaskRows] = await Promise.all([
     executeRows<UserRecipientRow>(
       exec,
       sql`
@@ -109,12 +138,117 @@ export const listRecipientOptions = async (
         ORDER BY name
       `,
     ),
+    executeRows<FilterUserRow>(
+      exec,
+      sql`
+        SELECT
+          u.id,
+          u.name,
+          u.username,
+          u.avatar_initials AS "avatarInitials",
+          u.is_disabled AS "isDisabled"
+        FROM users u
+        WHERE EXISTS (
+          SELECT 1
+          FROM user_projects up
+          WHERE up.project_id = ${projectId}
+            AND up.user_id = u.id
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM time_entries te
+          WHERE te.project_id = ${projectId}
+            AND te.user_id = u.id
+        )
+        ORDER BY u.name
+      `,
+    ),
+    executeRows<FilterTaskRow>(
+      exec,
+      sql`
+        SELECT t.id, t.name, t.is_disabled AS "isDisabled"
+        FROM tasks t
+        WHERE t.project_id = ${projectId}
+        ORDER BY t.name
+      `,
+    ),
   ]);
 
   return {
     users: userRows.map(mapUserRow),
     roles: roleRows,
     webhooks: webhookRows,
+    filters: {
+      users: filterUserRows.map(mapFilterUserRow),
+      tasks: filterTaskRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        isDisabled: row.isDisabled ?? false,
+      })),
+    },
+  };
+};
+
+export const findInvalidScheduleFilterIds = async (
+  projectId: string,
+  filters: { userIds: readonly string[]; taskIds: readonly string[] },
+  exec: DbExecutor = db,
+  allowed: { userIds?: readonly string[]; taskIds?: readonly string[] } = {},
+): Promise<{ userIds: string[]; taskIds: string[] }> => {
+  const userIds = uniqueStrings(filters.userIds);
+  const taskIds = uniqueStrings(filters.taskIds);
+  const allowedUserIds = uniqueStrings(allowed.userIds ?? []);
+  const allowedTaskIds = uniqueStrings(allowed.taskIds ?? []);
+  const [validUsers, validTasks] = await Promise.all([
+    userIds.length === 0
+      ? Promise.resolve([])
+      : executeRows<{ id: string }>(
+          exec,
+          sql`
+            SELECT u.id
+            FROM users u
+            WHERE u.id = ANY(${sql.param(userIds)}::text[])
+              AND (
+                EXISTS (
+                  SELECT 1 FROM user_projects up
+                  WHERE up.project_id = ${projectId}
+                    AND up.user_id = u.id
+                )
+                OR EXISTS (
+                  SELECT 1 FROM time_entries te
+                  WHERE te.project_id = ${projectId}
+                    AND te.user_id = u.id
+                )
+                OR (
+                  ${allowedUserIds.length > 0}
+                  AND u.id = ANY(${sql.param(allowedUserIds)}::text[])
+                )
+              )
+          `,
+        ),
+    taskIds.length === 0
+      ? Promise.resolve([])
+      : executeRows<{ id: string }>(
+          exec,
+          sql`
+            SELECT t.id
+            FROM tasks t
+            WHERE t.id = ANY(${sql.param(taskIds)}::text[])
+              AND (
+                t.project_id = ${projectId}
+                OR (
+                  ${allowedTaskIds.length > 0}
+                  AND t.id = ANY(${sql.param(allowedTaskIds)}::text[])
+                )
+              )
+          `,
+        ),
+  ]);
+  const validUserIds = new Set([...validUsers.map((row) => row.id), ...allowedUserIds]);
+  const validTaskIds = new Set([...validTasks.map((row) => row.id), ...allowedTaskIds]);
+  return {
+    userIds: userIds.filter((id) => !validUserIds.has(id)),
+    taskIds: taskIds.filter((id) => !validTaskIds.has(id)),
   };
 };
 

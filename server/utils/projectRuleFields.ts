@@ -1,26 +1,86 @@
+import { BILLING_FREQUENCIES, BILLING_TYPES } from './billing.ts';
 import { PROJECT_STATUSES } from './projectStatus.ts';
+import { PROJECT_TIPOS } from './projectTipo.ts';
 
-export const PROJECT_RULE_NUMBER_OPERATORS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
+export const PROJECT_RULE_NUMBER_OPERATORS = [
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'eq',
+  'neq',
+  'is_empty',
+  'is_not_empty',
+] as const;
 export const PROJECT_RULE_ENUM_OPERATORS = ['eq', 'neq'] as const;
+export const PROJECT_RULE_TEXT_OPERATORS = [
+  'eq',
+  'neq',
+  'contains',
+  'not_contains',
+  'starts_with',
+  'ends_with',
+  'is_empty',
+  'is_not_empty',
+] as const;
+export const PROJECT_RULE_DATE_OPERATORS = [
+  'before',
+  'before_or_on',
+  'after',
+  'after_or_on',
+  'eq',
+  'neq',
+  'is_empty',
+  'is_not_empty',
+] as const;
+export const PROJECT_RULE_BOOLEAN_OPERATORS = ['is_true', 'is_false', 'eq', 'neq'] as const;
 export const PROJECT_RULE_CONDITION_VALUE_TYPES = ['literal', 'field'] as const;
 
 export type ProjectRuleNumberOperator = (typeof PROJECT_RULE_NUMBER_OPERATORS)[number];
 export type ProjectRuleEnumOperator = (typeof PROJECT_RULE_ENUM_OPERATORS)[number];
-export type ProjectRuleOperator = ProjectRuleNumberOperator | ProjectRuleEnumOperator;
+export type ProjectRuleTextOperator = (typeof PROJECT_RULE_TEXT_OPERATORS)[number];
+export type ProjectRuleDateOperator = (typeof PROJECT_RULE_DATE_OPERATORS)[number];
+export type ProjectRuleBooleanOperator = (typeof PROJECT_RULE_BOOLEAN_OPERATORS)[number];
+export type ProjectRuleOperator =
+  | ProjectRuleNumberOperator
+  | ProjectRuleEnumOperator
+  | ProjectRuleTextOperator
+  | ProjectRuleDateOperator
+  | ProjectRuleBooleanOperator;
 export type ProjectRuleConditionValueType = (typeof PROJECT_RULE_CONDITION_VALUE_TYPES)[number];
 
 export const PROJECT_RULE_FIELD_IDS = [
+  'project_name',
+  'description',
+  'is_disabled',
+  'start_date',
+  'end_date',
   'revenue',
+  'billing_type',
+  'billing_frequency',
+  'status',
+  'tipo',
+  'tipo_confirmed',
   'cost_to_date',
   'budget_used_pct',
   'hours_to_date',
   'days_until_deadline',
-  'billing_type',
-  'status',
+  'days_until_start',
+  'days_since_start',
+  'tasks_count',
+  'enabled_tasks_count',
+  'planned_effort_hours',
+  'monthly_effort_hours',
+  'period_hours',
+  'period_entry_count',
+  'period_active_users',
+  'period_active_tasks',
+  'period_cost',
 ] as const;
 
 export type ProjectRuleField = (typeof PROJECT_RULE_FIELD_IDS)[number];
-export type ProjectRuleFieldKind = 'number' | 'enum';
+export type ProjectRuleFieldKind = 'number' | 'enum' | 'text' | 'date' | 'boolean';
+export type ProjectRuleFieldGroup = 'project' | 'computed' | 'period';
 
 export type ProjectRuleFieldDefinition = {
   id: ProjectRuleField;
@@ -28,35 +88,158 @@ export type ProjectRuleFieldDefinition = {
   operators: readonly ProjectRuleOperator[];
   enumValues?: readonly string[];
   requiresPermission?: string;
+  group: ProjectRuleFieldGroup;
+  periodOnly?: boolean;
 };
 
 export const PROJECT_RULE_FIELD_DEFINITIONS: readonly ProjectRuleFieldDefinition[] = [
-  { id: 'revenue', kind: 'number', operators: PROJECT_RULE_NUMBER_OPERATORS },
   {
-    id: 'cost_to_date',
-    kind: 'number',
-    operators: PROJECT_RULE_NUMBER_OPERATORS,
-    requiresPermission: 'reports.cost.view',
+    id: 'project_name',
+    kind: 'text',
+    operators: PROJECT_RULE_TEXT_OPERATORS,
+    group: 'project',
   },
+  { id: 'description', kind: 'text', operators: PROJECT_RULE_TEXT_OPERATORS, group: 'project' },
   {
-    id: 'budget_used_pct',
-    kind: 'number',
-    operators: PROJECT_RULE_NUMBER_OPERATORS,
-    requiresPermission: 'reports.cost.view',
+    id: 'is_disabled',
+    kind: 'boolean',
+    operators: PROJECT_RULE_BOOLEAN_OPERATORS,
+    group: 'project',
   },
-  { id: 'hours_to_date', kind: 'number', operators: PROJECT_RULE_NUMBER_OPERATORS },
-  { id: 'days_until_deadline', kind: 'number', operators: PROJECT_RULE_NUMBER_OPERATORS },
+  { id: 'start_date', kind: 'date', operators: PROJECT_RULE_DATE_OPERATORS, group: 'project' },
+  { id: 'end_date', kind: 'date', operators: PROJECT_RULE_DATE_OPERATORS, group: 'project' },
+  { id: 'revenue', kind: 'number', operators: PROJECT_RULE_NUMBER_OPERATORS, group: 'project' },
   {
     id: 'billing_type',
     kind: 'enum',
     operators: PROJECT_RULE_ENUM_OPERATORS,
-    enumValues: ['time_and_materials', 'retainer'],
+    enumValues: BILLING_TYPES,
+    group: 'project',
+  },
+  {
+    id: 'billing_frequency',
+    kind: 'enum',
+    operators: PROJECT_RULE_ENUM_OPERATORS,
+    enumValues: BILLING_FREQUENCIES,
+    group: 'project',
   },
   {
     id: 'status',
     kind: 'enum',
     operators: PROJECT_RULE_ENUM_OPERATORS,
     enumValues: PROJECT_STATUSES,
+    group: 'project',
+  },
+  {
+    id: 'tipo',
+    kind: 'enum',
+    operators: PROJECT_RULE_ENUM_OPERATORS,
+    enumValues: PROJECT_TIPOS,
+    group: 'project',
+  },
+  {
+    id: 'tipo_confirmed',
+    kind: 'boolean',
+    operators: PROJECT_RULE_BOOLEAN_OPERATORS,
+    group: 'project',
+  },
+  {
+    id: 'cost_to_date',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    requiresPermission: 'reports.cost.view',
+    group: 'computed',
+  },
+  {
+    id: 'budget_used_pct',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    requiresPermission: 'reports.cost.view',
+    group: 'computed',
+  },
+  {
+    id: 'hours_to_date',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'days_until_deadline',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'days_until_start',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'days_since_start',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'tasks_count',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'enabled_tasks_count',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'planned_effort_hours',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'monthly_effort_hours',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'computed',
+  },
+  {
+    id: 'period_hours',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'period',
+    periodOnly: true,
+  },
+  {
+    id: 'period_entry_count',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'period',
+    periodOnly: true,
+  },
+  {
+    id: 'period_active_users',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'period',
+    periodOnly: true,
+  },
+  {
+    id: 'period_active_tasks',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    group: 'period',
+    periodOnly: true,
+  },
+  {
+    id: 'period_cost',
+    kind: 'number',
+    operators: PROJECT_RULE_NUMBER_OPERATORS,
+    requiresPermission: 'reports.cost.view',
+    group: 'period',
+    periodOnly: true,
   },
 ];
 
@@ -72,15 +255,25 @@ export const isProjectRuleField = (field: string): field is ProjectRuleField =>
 
 export const isProjectRuleOperator = (operator: string): operator is ProjectRuleOperator =>
   PROJECT_RULE_NUMBER_OPERATORS.includes(operator as ProjectRuleNumberOperator) ||
-  PROJECT_RULE_ENUM_OPERATORS.includes(operator as ProjectRuleEnumOperator);
+  PROJECT_RULE_ENUM_OPERATORS.includes(operator as ProjectRuleEnumOperator) ||
+  PROJECT_RULE_TEXT_OPERATORS.includes(operator as ProjectRuleTextOperator) ||
+  PROJECT_RULE_DATE_OPERATORS.includes(operator as ProjectRuleDateOperator) ||
+  PROJECT_RULE_BOOLEAN_OPERATORS.includes(operator as ProjectRuleBooleanOperator);
 
 export const isProjectRuleConditionValueType = (
   value: string,
 ): value is ProjectRuleConditionValueType =>
   PROJECT_RULE_CONDITION_VALUE_TYPES.includes(value as ProjectRuleConditionValueType);
 
+export const isProjectRuleUnaryOperator = (operator: string): boolean =>
+  operator === 'is_true' ||
+  operator === 'is_false' ||
+  operator === 'is_empty' ||
+  operator === 'is_not_empty';
+
 type ProjectRulePermissionCondition = {
   field: string;
+  operator?: string;
   value: string;
   valueType?: string;
 };
@@ -97,12 +290,12 @@ export const canViewProjectRule = (
   const conditions =
     rule.conditions && rule.conditions.length > 0
       ? rule.conditions
-      : [{ field: rule.field, value: rule.value, valueType: 'literal' }];
+      : [{ field: rule.field, operator: '', value: rule.value, valueType: 'literal' }];
 
   return conditions.every((condition) => {
     const fieldPermission = getProjectRuleFieldDefinition(condition.field)?.requiresPermission;
     const valuePermission =
-      condition.valueType === 'field'
+      condition.valueType === 'field' && !isProjectRuleUnaryOperator(condition.operator ?? '')
         ? getProjectRuleFieldDefinition(condition.value)?.requiresPermission
         : undefined;
     return (
@@ -121,20 +314,15 @@ const enumValuesMatch = (
   rightValues: readonly string[] | undefined,
 ) => {
   if (!leftValues || !rightValues || leftValues.length !== rightValues.length) return false;
-  return (
-    leftValues.length === rightValues.length &&
-    leftValues.every((value, index) => value === rightValues[index])
-  );
+  return leftValues.every((value, index) => value === rightValues[index]);
 };
-
-const runtimeEnumValuesForField = (field: string, definition: ProjectRuleFieldDefinition) =>
-  field === 'billing_type' ? [...(definition.enumValues ?? []), 'mixed'] : definition.enumValues;
 
 export const areProjectRuleFieldsComparable = (leftField: string, rightField: string): boolean => {
   const leftDefinition = getProjectRuleFieldDefinition(leftField);
   const rightDefinition = getProjectRuleFieldDefinition(rightField);
-  if (!leftDefinition || !rightDefinition) return false;
-  if (leftDefinition.kind !== rightDefinition.kind) return false;
+  if (!leftDefinition || !rightDefinition || leftDefinition.kind !== rightDefinition.kind) {
+    return false;
+  }
   if (leftDefinition.kind === 'enum') {
     return enumValuesMatch(leftDefinition.enumValues, rightDefinition.enumValues);
   }
@@ -148,37 +336,51 @@ const normalizeNumericValue = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const normalizeDateValue = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const parsed = new Date(`${trimmed}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === trimmed
+    ? trimmed
+    : null;
+};
+
 export const validateProjectRuleCondition = ({
   field,
   operator,
   value,
   valueType = 'literal',
   permissions,
+  evaluationMode = 'continuous',
 }: {
   field: string;
   operator: string;
   value: string;
   valueType?: ProjectRuleConditionValueType | string;
   permissions?: readonly string[];
+  evaluationMode?: 'continuous' | 'periodic';
 }): { ok: true } | { ok: false; message: string } => {
   const definition = getProjectRuleFieldDefinition(field);
   if (!definition) return { ok: false, message: 'field must be a supported project rule field' };
-
-  if (definition.requiresPermission && !permissions?.includes(definition.requiresPermission)) {
-    return {
-      ok: false,
-      message: `${field} requires ${definition.requiresPermission}`,
-    };
+  if (definition.periodOnly && evaluationMode !== 'periodic') {
+    return { ok: false, message: `${field} requires periodic evaluation` };
   }
-
+  if (definition.requiresPermission && !permissions?.includes(definition.requiresPermission)) {
+    return { ok: false, message: `${field} requires ${definition.requiresPermission}` };
+  }
   if (!definition.operators.includes(operator as ProjectRuleOperator)) {
     return { ok: false, message: 'operator is not valid for field' };
+  }
+  const normalizedValueType = normalizeProjectRuleConditionValueType(valueType);
+  if (isProjectRuleUnaryOperator(operator)) {
+    return normalizedValueType === 'literal'
+      ? { ok: true }
+      : { ok: false, message: 'unary operator cannot compare another field' };
   }
 
   const trimmedValue = value.trim();
   if (trimmedValue.length === 0) return { ok: false, message: 'value is required' };
 
-  const normalizedValueType = normalizeProjectRuleConditionValueType(valueType);
   if (normalizedValueType === 'field') {
     if (trimmedValue === field) {
       return { ok: false, message: 'value field cannot be the same as field' };
@@ -186,6 +388,9 @@ export const validateProjectRuleCondition = ({
     const valueDefinition = getProjectRuleFieldDefinition(trimmedValue);
     if (!valueDefinition) {
       return { ok: false, message: 'value field must be a supported project rule field' };
+    }
+    if (valueDefinition.periodOnly && evaluationMode !== 'periodic') {
+      return { ok: false, message: `${trimmedValue} requires periodic evaluation` };
     }
     if (
       valueDefinition.requiresPermission &&
@@ -196,23 +401,30 @@ export const validateProjectRuleCondition = ({
         message: `${trimmedValue} requires ${valueDefinition.requiresPermission}`,
       };
     }
-    if (!areProjectRuleFieldsComparable(field, trimmedValue)) {
-      return { ok: false, message: 'value field is not compatible with field' };
-    }
-    return { ok: true };
+    return areProjectRuleFieldsComparable(field, trimmedValue)
+      ? { ok: true }
+      : { ok: false, message: 'value field is not compatible with field' };
   }
 
   if (definition.kind === 'number') {
-    if (normalizeNumericValue(trimmedValue) === null) {
-      return { ok: false, message: 'value must be a valid number' };
-    }
-    return { ok: true };
+    return normalizeNumericValue(trimmedValue) === null
+      ? { ok: false, message: 'value must be a valid number' }
+      : { ok: true };
   }
-
+  if (definition.kind === 'date') {
+    return normalizeDateValue(trimmedValue) === null
+      ? { ok: false, message: 'value must be a valid ISO date' }
+      : { ok: true };
+  }
+  if (definition.kind === 'text') return { ok: true };
+  if (definition.kind === 'boolean') {
+    return trimmedValue === 'true' || trimmedValue === 'false'
+      ? { ok: true }
+      : { ok: false, message: 'value must be true or false' };
+  }
   if (!definition.enumValues?.includes(trimmedValue)) {
     return { ok: false, message: 'value is not valid for field' };
   }
-
   return { ok: true };
 };
 
@@ -228,21 +440,28 @@ export const evaluateProjectRuleCondition = ({
   operator: string;
   expectedValue: string;
   expectedValueType?: ProjectRuleConditionValueType | string;
-  actualValue: string | number | null | undefined;
-  expectedActualValue?: string | number | null | undefined;
+  actualValue: string | number | boolean | null | undefined;
+  expectedActualValue?: string | number | boolean | null | undefined;
 }): boolean => {
+  const definition = getProjectRuleFieldDefinition(field);
+  if (!definition?.operators.includes(operator as ProjectRuleOperator)) return false;
+
+  if (operator === 'is_empty') {
+    return actualValue === null || actualValue === undefined || actualValue === '';
+  }
+  if (operator === 'is_not_empty') {
+    return actualValue !== null && actualValue !== undefined && String(actualValue).length > 0;
+  }
+  if (operator === 'is_true') return actualValue === true || actualValue === 'true';
+  if (operator === 'is_false') return actualValue === false || actualValue === 'false';
   if (actualValue === null || actualValue === undefined) return false;
 
-  const definition = getProjectRuleFieldDefinition(field);
-  if (!definition?.operators.includes(operator as ProjectRuleOperator)) {
+  const normalizedValueType = normalizeProjectRuleConditionValueType(expectedValueType);
+  if (normalizedValueType === 'field' && !areProjectRuleFieldsComparable(field, expectedValue)) {
     return false;
   }
 
   if (definition.kind === 'number') {
-    const normalizedValueType = normalizeProjectRuleConditionValueType(expectedValueType);
-    if (normalizedValueType === 'field' && !areProjectRuleFieldsComparable(field, expectedValue)) {
-      return false;
-    }
     const expected =
       normalizedValueType === 'field'
         ? typeof expectedActualValue === 'number'
@@ -254,7 +473,6 @@ export const evaluateProjectRuleCondition = ({
     const actual =
       typeof actualValue === 'number' ? actualValue : normalizeNumericValue(String(actualValue));
     if (expected === null || actual === null) return false;
-
     switch (operator) {
       case 'gt':
         return actual > expected;
@@ -273,29 +491,74 @@ export const evaluateProjectRuleCondition = ({
     }
   }
 
-  const actual = String(actualValue);
-  if (normalizeProjectRuleConditionValueType(expectedValueType) === 'field') {
-    if (!areProjectRuleFieldsComparable(field, expectedValue)) return false;
-    if (expectedActualValue === null || expectedActualValue === undefined) return false;
-    const expected = String(expectedActualValue);
-    const actualEnumValues = runtimeEnumValuesForField(field, definition);
-    const expectedDefinition = getProjectRuleFieldDefinition(expectedValue);
-    const expectedEnumValues = expectedDefinition
-      ? runtimeEnumValuesForField(expectedValue, expectedDefinition)
-      : undefined;
-    if (!actualEnumValues?.includes(actual) || !expectedEnumValues?.includes(expected)) {
-      return false;
+  const expected =
+    normalizedValueType === 'field'
+      ? expectedActualValue === null || expectedActualValue === undefined
+        ? null
+        : String(expectedActualValue)
+      : expectedValue;
+  if (expected === null) return false;
+
+  if (definition.kind === 'date') {
+    const actualDate = normalizeDateValue(String(actualValue));
+    const expectedDate = normalizeDateValue(expected);
+    if (!actualDate || !expectedDate) return false;
+    switch (operator) {
+      case 'before':
+        return actualDate < expectedDate;
+      case 'before_or_on':
+        return actualDate <= expectedDate;
+      case 'after':
+        return actualDate > expectedDate;
+      case 'after_or_on':
+        return actualDate >= expectedDate;
+      case 'eq':
+        return actualDate === expectedDate;
+      case 'neq':
+        return actualDate !== expectedDate;
+      default:
+        return false;
     }
-    if (operator === 'eq') return actual === expected;
-    if (operator === 'neq') return actual !== expected;
+  }
+
+  if (definition.kind === 'boolean') {
+    const normalizeBoolean = (value: string | number | boolean): boolean | null => {
+      if (value === true || value === 'true') return true;
+      if (value === false || value === 'false') return false;
+      return null;
+    };
+    const actualBoolean = normalizeBoolean(actualValue);
+    const expectedBoolean = normalizeBoolean(expected);
+    if (actualBoolean === null || expectedBoolean === null) return false;
+    if (operator === 'eq') return actualBoolean === expectedBoolean;
+    if (operator === 'neq') return actualBoolean !== expectedBoolean;
     return false;
   }
 
-  const actualEnumValues = runtimeEnumValuesForField(field, definition);
-  if (!definition.enumValues?.includes(expectedValue) || !actualEnumValues?.includes(actual)) {
+  const actual = String(actualValue);
+  if (definition.kind === 'text') {
+    switch (operator) {
+      case 'eq':
+        return actual === expected;
+      case 'neq':
+        return actual !== expected;
+      case 'contains':
+        return actual.includes(expected);
+      case 'not_contains':
+        return !actual.includes(expected);
+      case 'starts_with':
+        return actual.startsWith(expected);
+      case 'ends_with':
+        return actual.endsWith(expected);
+      default:
+        return false;
+    }
+  }
+
+  if (!definition.enumValues?.includes(actual) || !definition.enumValues.includes(expected)) {
     return false;
   }
-  if (operator === 'eq') return actual === expectedValue;
-  if (operator === 'neq') return actual !== expectedValue;
+  if (operator === 'eq') return actual === expected;
+  if (operator === 'neq') return actual !== expected;
   return false;
 };

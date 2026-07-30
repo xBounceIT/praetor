@@ -918,6 +918,20 @@
       "when": 1785186952042,
       "tag": "0130_allow_duplicate_time_entry_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1785345392424,
+      "tag": "0131_extend_project_rules_periodic",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1785345743947,
+      "tag": "0132_project_rules_config_version_trigger",
+      "breakpoints": true
     }
   ]
 }

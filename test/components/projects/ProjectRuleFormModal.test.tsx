@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { FC } from 'react';
 import type { ProjectRuleFormModalProps } from '../../../components/projects/ProjectRuleFormModal';
 import type { ProjectRule, ProjectRuleRecipientOptions } from '../../../types';
@@ -22,6 +23,18 @@ const recipients: ProjectRuleRecipientOptions = {
   users: [{ id: 'u1', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
   roles: [{ id: 'manager', name: 'Manager' }],
   webhooks: [{ id: 'webhook-1', name: 'Slack' }],
+  filters: {
+    users: [
+      {
+        id: 'u1',
+        name: 'Alice',
+        username: 'alice',
+        avatarInitials: 'AL',
+        isDisabled: false,
+      },
+    ],
+    tasks: [{ id: 'task-1', name: 'Analysis', isDisabled: false }],
+  },
 };
 
 const rule: ProjectRule = {
@@ -40,9 +53,12 @@ const rule: ProjectRule = {
     webhookIds: [],
     actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
   },
+  evaluationMode: 'continuous',
+  schedule: { frequency: 'monthly', userIds: [], taskIds: [] },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
+  lastEvaluatedPeriod: null,
   createdBy: 'admin',
   createdAt: 1700000000000,
   updatedAt: 1700000000000,
@@ -95,6 +111,54 @@ describe('<ProjectRuleFormModal />', () => {
     for (const label of document.querySelectorAll('[for^="project-rule-field-"]')) {
       expect(label).toHaveClass('md:sr-only');
     }
+  });
+
+  test('groups project, calculated, and period fields in the selectors', async () => {
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('projects:detail.rules.evaluationModes.periodic.title'));
+    fireEvent.click(document.getElementById('project-rule-field-0') as HTMLButtonElement);
+
+    expect(
+      await screen.findByText('projects:detail.rules.fieldGroups.project'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('projects:detail.rules.fieldGroups.computed')).toBeInTheDocument();
+    expect(screen.getByText('projects:detail.rules.fieldGroups.period')).toBeInTheDocument();
+  });
+
+  test('describes condition fields on hover with the native shadcn tooltip', async () => {
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    await userEvent.click(document.getElementById('project-rule-field-0') as HTMLButtonElement);
+    const option = await screen.findByRole('option', {
+      name: 'projects:detail.rules.fields.revenue',
+    });
+    const tooltipTrigger = option.querySelector('[data-slot="tooltip-trigger"]');
+    expect(tooltipTrigger).not.toBeNull();
+
+    await userEvent.hover(tooltipTrigger as HTMLElement);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'projects:detail.rules.fieldDescriptions.revenue',
+    );
   });
 
   test('renders project rule actions as addable rows', () => {
@@ -180,6 +244,241 @@ describe('<ProjectRuleFormModal />', () => {
     );
   });
 
+  test('opens the recurring-task custom dialog and submits its monthly pattern with filters', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('projects:detail.rules.evaluationModes.periodic.title'));
+    expect(document.getElementById('project-rule-schedule-time-zone')).not.toBeInTheDocument();
+    expect(document.getElementById('project-rule-schedule-monthly-day')).not.toBeInTheDocument();
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.custom',
+      }),
+    );
+    expect(await screen.findByText('recurring.customRepeatTitle')).toBeInTheDocument();
+    const dayOfWeekSelect = screen
+      .getByText('recurring.dayOfWeek')
+      .parentElement?.querySelector('[role="combobox"]');
+    expect(dayOfWeekSelect).not.toBeNull();
+    fireEvent.click(dayOfWeekSelect as HTMLButtonElement);
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'recurring.dayNames.monday',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'recurring.setPattern',
+      }),
+    );
+    expect(document.getElementById('project-rule-schedule-frequency')).toHaveTextContent(
+      'timesheets:entry.recurrencePatterns.everyFirst',
+    );
+    fireEvent.click(document.getElementById('project-rule-schedule-users') as HTMLButtonElement);
+    fireEvent.click(await screen.findByRole('option', { name: 'Alice (alice)' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(document.getElementById('project-rule-schedule-tasks') as HTMLButtonElement);
+    fireEvent.click(await screen.findByRole('option', { name: 'Analysis' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationMode: 'periodic',
+        schedule: {
+          frequency: 'monthly:first:1',
+          userIds: ['u1'],
+          taskIds: ['task-1'],
+        },
+      }),
+    );
+  });
+
+  test('keeps the current frequency unchanged when the custom dialog is cancelled', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={{ ...rule, evaluationMode: 'periodic' }}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.custom',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'recurring.cancel',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schedule: expect.objectContaining({ frequency: 'monthly' }),
+      }),
+    );
+  });
+
+  test('initializes the custom dialog from the saved schedule frequency', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={{
+          ...rule,
+          evaluationMode: 'periodic',
+          schedule: { frequency: 'monthly:last:5', userIds: [], taskIds: [] },
+        }}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.everyLast',
+      }),
+    );
+
+    const occurrenceSelect = screen
+      .getByText('recurring.every')
+      .parentElement?.querySelector('[role="combobox"]');
+    const dayOfWeekSelect = screen
+      .getByText('recurring.dayOfWeek')
+      .parentElement?.querySelector('[role="combobox"]');
+    expect(occurrenceSelect).toHaveTextContent('recurring.occurrences.last');
+    expect(dayOfWeekSelect).toHaveTextContent('recurring.dayNames.friday');
+
+    fireEvent.click(screen.getByRole('button', { name: 'recurring.cancel' }));
+    fireEvent.click(
+      document.getElementById('project-rule-schedule-frequency') as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'timesheets:entry.recurrencePatterns.everyLast',
+      }),
+    );
+    expect(await screen.findByText('recurring.customRepeatTitle')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'recurring.setPattern' }));
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schedule: {
+          frequency: 'monthly:last:5',
+          userIds: [],
+          taskIds: [],
+        },
+      }),
+    );
+  });
+
+  test('clears a period-only target field when switching back to continuous evaluation', () => {
+    const periodicFieldComparisonRule: ProjectRule = {
+      ...rule,
+      evaluationMode: 'periodic',
+      conditions: [
+        {
+          field: 'revenue',
+          operator: 'gt',
+          value: 'period_hours',
+          valueType: 'field',
+        },
+      ],
+    };
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={periodicFieldComparisonRule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('projects:detail.rules.evaluationModes.continuous.title'));
+
+    const valueInput = document.getElementById('project-rule-value-0') as HTMLInputElement;
+    expect(valueInput).toHaveValue('');
+    expect(valueInput).not.toHaveAttribute('role', 'combobox');
+  });
+
+  test('shows and lets users remove unavailable periodic filter selections', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const ruleWithOrphanedFilters: ProjectRule = {
+      ...rule,
+      evaluationMode: 'periodic',
+      schedule: {
+        frequency: 'monthly',
+        userIds: ['deleted-user'],
+        taskIds: ['deleted-task'],
+      },
+    };
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={ruleWithOrphanedFilters}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const deletedUserLabel = 'deleted-user · projects:detail.rules.schedule.unavailable';
+    const deletedTaskLabel = 'deleted-task · projects:detail.rules.schedule.unavailable';
+    expect(screen.getByText(deletedUserLabel)).toBeInTheDocument();
+    expect(screen.getByText(deletedTaskLabel)).toBeInTheDocument();
+
+    fireEvent.click(document.getElementById('project-rule-schedule-users') as HTMLButtonElement);
+    fireEvent.click(await screen.findByRole('option', { name: deletedUserLabel }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(document.getElementById('project-rule-schedule-tasks') as HTMLButtonElement);
+    fireEvent.click(await screen.findByRole('option', { name: deletedTaskLabel }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        schedule: expect.objectContaining({ userIds: [], taskIds: [] }),
+      }),
+    );
+  });
+
   test('preserves localized negative literal thresholds', async () => {
     const onSubmit = mock(() => Promise.resolve());
     render(
@@ -234,6 +533,78 @@ describe('<ProjectRuleFormModal />', () => {
         value: 'hours_to_date',
         conditions: [
           { field: 'revenue', operator: 'gt', value: 'hours_to_date', valueType: 'field' },
+        ],
+      }),
+    );
+  });
+
+  test('submits explicit boolean equality values', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const booleanRule: ProjectRule = {
+      ...rule,
+      field: 'is_disabled',
+      operator: 'eq',
+      value: 'true',
+      conditions: [{ field: 'is_disabled', operator: 'eq', value: 'true', valueType: 'literal' }],
+    };
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={booleanRule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(document.getElementById('project-rule-value-0')).toHaveTextContent(
+      'projects:detail.rules.values.boolean.true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conditions: [{ field: 'is_disabled', operator: 'eq', value: 'true', valueType: 'literal' }],
+      }),
+    );
+  });
+
+  test('repairs legacy unary conditions that carry an ignored field target', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const malformedLegacyRule: ProjectRule = {
+      ...rule,
+      field: 'is_disabled',
+      operator: 'is_false',
+      value: 'cost_to_date',
+      conditions: [
+        {
+          field: 'is_disabled',
+          operator: 'is_false',
+          value: 'cost_to_date',
+          valueType: 'field',
+        },
+      ],
+    };
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={malformedLegacyRule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conditions: [
+          { field: 'is_disabled', operator: 'is_false', value: '', valueType: 'literal' },
         ],
       }),
     );

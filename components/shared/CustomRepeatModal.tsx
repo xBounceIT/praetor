@@ -2,6 +2,10 @@ import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import {
+  type MonthlyRecurrenceOccurrence,
+  parseMonthlyRecurrencePattern,
+} from '../../utils/recurrence';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -15,14 +19,25 @@ import SelectControl from './SelectControl';
 
 export interface CustomRepeatModalProps {
   isOpen: boolean;
+  initialPattern?: string;
   onClose: () => void;
   onSave: (pattern: string) => void;
 }
 
-const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, onSave }) => {
+const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({
+  isOpen,
+  initialPattern,
+  onClose,
+  onSave,
+}) => {
   const { t } = useTranslation('timesheets');
-  const [type, setType] = useState<'first' | 'second' | 'third' | 'fourth' | 'last'>('first');
-  const [dayOfWeek, setDayOfWeek] = useState<number>(1); // 1 = Monday, 7 = Sunday (standard JS getDay is 0=Sun, but usually we map 1-7 for UI)
+  const [selection, setSelection] = useState(
+    () =>
+      parseMonthlyRecurrencePattern(initialPattern) ?? {
+        occurrence: 'first' as const,
+        dayOfWeek: 1,
+      },
+  );
 
   const days = [
     { id: '1', name: t('recurring.dayNames.monday') },
@@ -36,7 +51,7 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
 
   const handleSave = () => {
     // pattern format: monthly:first:1 (First Monday), monthly:last:0 (Last Sunday)
-    onSave(`monthly:${type}:${dayOfWeek}`);
+    onSave(`monthly:${selection.occurrence}:${selection.dayOfWeek}`);
     onClose();
   };
 
@@ -70,8 +85,13 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
               <div className="flex-1">
                 <SelectControl
                   options={occurrenceOptions}
-                  value={type}
-                  onChange={(val) => setType(val as typeof type)}
+                  value={selection.occurrence}
+                  onChange={(val) =>
+                    setSelection((current) => ({
+                      ...current,
+                      occurrence: val as MonthlyRecurrenceOccurrence,
+                    }))
+                  }
                   className="w-full"
                 />
               </div>
@@ -81,8 +101,13 @@ const CustomRepeatModal: React.FC<CustomRepeatModalProps> = ({ isOpen, onClose, 
               <SelectControl
                 label={t('recurring.dayOfWeek')}
                 options={days}
-                value={dayOfWeek.toString()}
-                onChange={(val) => setDayOfWeek(parseInt(val as string, 10))}
+                value={selection.dayOfWeek.toString()}
+                onChange={(val) =>
+                  setSelection((current) => ({
+                    ...current,
+                    dayOfWeek: Number(val),
+                  }))
+                }
                 className="w-full"
               />
             </div>

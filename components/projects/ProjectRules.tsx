@@ -25,9 +25,15 @@ import { cn } from '@/lib/utils';
 import { projectRulesApi } from '../../services/api/projectRules';
 import type { ProjectRule, ProjectRuleRecipientOptions } from '../../types';
 import { hasPermission } from '../../utils/permissions';
+import { formatRecurrencePattern } from '../../utils/recurrence';
 import { toastError, toastSuccess } from '../../utils/toast';
 import ProjectRuleFormModal, { type ProjectRuleFormPayload } from './ProjectRuleFormModal';
-import { canViewProjectRule, getProjectRuleFieldDefinition } from './projectRuleRegistry';
+import {
+  canViewProjectRule,
+  getProjectRuleFieldDefinition,
+  getProjectRuleValueLabelKey,
+  isProjectRuleUnaryOperator,
+} from './projectRuleRegistry';
 
 export interface ProjectRulesProps {
   projectId: string;
@@ -35,7 +41,12 @@ export interface ProjectRulesProps {
   className?: string;
 }
 
-const emptyRecipients: ProjectRuleRecipientOptions = { users: [], roles: [], webhooks: [] };
+const emptyRecipients: ProjectRuleRecipientOptions = {
+  users: [],
+  roles: [],
+  webhooks: [],
+  filters: { users: [], tasks: [] },
+};
 
 type ProjectRulesState = {
   rules: ProjectRule[];
@@ -117,14 +128,6 @@ const projectRulesReducer = (
     default:
       return state;
   }
-};
-
-const enumValueLabelKey = (field: string, value: string) => {
-  if (field === 'billing_type') {
-    if (value === 'time_and_materials') return 'projects:projects.billingTypes.timeAndMaterials';
-    if (value === 'retainer') return 'projects:projects.billingTypes.retainer';
-  }
-  return `projects:detail.rules.values.${field}.${value}`;
 };
 
 type ProjectRuleFormatter = (rule: ProjectRule) => string;
@@ -430,20 +433,28 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
               },
             ];
       const joiner = ` ${t(`projects:detail.rules.joiners.${rule.conditionLogic ?? 'and'}`)} `;
-      return conditions
+      const conditionSummary = conditions
         .map((condition) => {
           const field = t(`projects:detail.rules.fields.${condition.field}`);
           const operator = t(`projects:detail.rules.operators.${condition.operator}`);
           const definition = getProjectRuleFieldDefinition(condition.field);
-          const value =
-            condition.valueType === 'field'
+          const value = isProjectRuleUnaryOperator(condition.operator)
+            ? ''
+            : condition.valueType === 'field'
               ? t(`projects:detail.rules.fields.${condition.value}`)
-              : definition?.kind === 'enum'
-                ? t(enumValueLabelKey(condition.field, condition.value))
+              : definition?.kind === 'enum' || definition?.kind === 'boolean'
+                ? t(getProjectRuleValueLabelKey(condition.field, condition.value))
                 : condition.value;
-          return `${field} ${operator} ${value}`;
+          return `${field} ${operator}${value ? ` ${value}` : ''}`;
         })
         .join(joiner);
+      return rule.evaluationMode === 'periodic'
+        ? `${
+            rule.schedule.frequency.startsWith('monthly:')
+              ? formatRecurrencePattern(rule.schedule.frequency, t)
+              : t(`projects:detail.rules.schedule.frequencies.${rule.schedule.frequency}`)
+          } · ${conditionSummary}`
+        : conditionSummary;
     },
     [t],
   );

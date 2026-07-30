@@ -39,6 +39,7 @@ export interface SelectControlProps {
   options: Option[];
   value: string | string[];
   onChange: (value: string | string[]) => void;
+  allowReselect?: boolean;
   label?: React.ReactNode;
   labelAccessory?: React.ReactNode;
   labelClassName?: string;
@@ -216,6 +217,7 @@ const searchableSelectReducer = (
 };
 
 const PlainSelectControl = ({
+  allowReselect,
   buttonClassName,
   className,
   disabled,
@@ -285,6 +287,11 @@ const PlainSelectControl = ({
                 key={option.id || EMPTY_VALUE_SENTINEL}
                 value={toSelectValue(option.id)}
                 disabled={option.disabled}
+                onClick={() => {
+                  if (allowReselect && option.id === stringValue && !option.disabled) {
+                    onChange(option.id);
+                  }
+                }}
               >
                 <span className="flex items-center gap-2 min-w-0 flex-1">
                   {renderOptionIcon(option.icon)}

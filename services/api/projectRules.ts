@@ -4,7 +4,9 @@ import type {
   ProjectRuleActionType,
   ProjectRuleCondition,
   ProjectRuleConditionLogic,
+  ProjectRuleEvaluationMode,
   ProjectRuleRecipientOptions,
+  ProjectRuleSchedule,
 } from '../../types';
 import { fetchApi } from './client';
 
@@ -17,6 +19,8 @@ export type ProjectRulePayload = {
   conditions?: ProjectRuleCondition[];
   actionType?: ProjectRuleActionType;
   actionConfig: ProjectRuleActionConfig;
+  evaluationMode?: ProjectRuleEvaluationMode;
+  schedule?: ProjectRuleSchedule;
   isEnabled?: boolean;
 };
 

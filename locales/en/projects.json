@@ -263,12 +263,15 @@
         "description": "Choose the condition to watch and the actions to run.",
         "name": "Rule name",
         "namePlaceholder": "e.g. Budget above 80%",
+        "evaluationMode": "When to check",
+        "evaluationModeDescription": "Choose whether to react when a value changes or check a completed period.",
         "field": "Field",
         "operator": "Operator",
         "value": "Value",
         "valuePlaceholder": "Threshold",
         "compareAgainst": "Compare",
         "targetField": "Other field",
+        "noValueRequired": "No value required",
         "conditionLogic": "Combination",
         "actions": "Actions",
         "action": "Action",
@@ -291,6 +294,34 @@
         "enabled": "Enabled",
         "enabledDescription": "Enabled rules are checked by the scheduled evaluator."
       },
+      "evaluationModes": {
+        "continuous": {
+          "title": "Continuous monitoring",
+          "description": "Checks current values and runs when the condition changes from false to true."
+        },
+        "periodic": {
+          "title": "Periodic check",
+          "description": "Checks the completed period once and can run again on every cycle."
+        }
+      },
+      "schedule": {
+        "frequency": "Frequency",
+        "users": "Filter by users",
+        "tasks": "Filter by tasks",
+        "allUsers": "All job users",
+        "allTasks": "All job tasks",
+        "disabled": "disabled",
+        "unavailable": "no longer available",
+        "previousPeriodHint": "Hours, entries, users, and tasks are calculated over the latest completed period. User and task filters are combined.",
+        "monthlyPeriodHint": "Every month runs on the first day; Custom runs on the selected occurrence and weekday. It always analyzes the previous calendar month. User and task filters are combined.",
+        "frequencies": {
+          "daily": "Every day",
+          "weekly": "Every week",
+          "monthly": "Every month",
+          "quarterly": "Every quarter",
+          "yearly": "Every year"
+        }
+      },
       "actionSummary": {
         "users": "{{count}} users",
         "roles": "{{count}} roles",
@@ -310,14 +341,66 @@
         "literal": "Value",
         "field": "Field"
       },
+      "fieldGroups": {
+        "project": "Job fields",
+        "computed": "Calculated metrics",
+        "period": "Period metrics"
+      },
       "fields": {
+        "project_name": "Job name",
+        "description": "Description",
+        "is_disabled": "Job disabled",
+        "start_date": "Start date",
+        "end_date": "End date",
         "revenue": "Revenue",
+        "billing_frequency": "Billing frequency",
         "cost_to_date": "Cost to date",
         "budget_used_pct": "Budget used %",
         "hours_to_date": "Hours to date",
         "days_until_deadline": "Days until deadline",
+        "days_until_start": "Days until start",
+        "days_since_start": "Days since start",
+        "tasks_count": "Task count",
+        "enabled_tasks_count": "Enabled tasks",
+        "planned_effort_hours": "Planned effort",
+        "monthly_effort_hours": "Monthly effort",
+        "period_hours": "Hours in period",
+        "period_entry_count": "Entries in period",
+        "period_active_users": "Active users in period",
+        "period_active_tasks": "Used tasks in period",
+        "period_cost": "Cost in period",
         "billing_type": "Billing",
-        "status": "Status"
+        "status": "Status",
+        "tipo": "Job type",
+        "tipo_confirmed": "Type confirmed"
+      },
+      "fieldDescriptions": {
+        "project_name": "The job's current name.",
+        "description": "The job's text description.",
+        "is_disabled": "Whether the job is currently disabled.",
+        "start_date": "The job's planned start date.",
+        "end_date": "The job's planned end date.",
+        "revenue": "Effective revenue: uses the task total when present, otherwise the job's manual value.",
+        "billing_frequency": "The billing cadence configured for the job.",
+        "cost_to_date": "The sum of hourly costs for all time entries logged against the job.",
+        "budget_used_pct": "The percentage of revenue consumed by cost to date; empty when revenue is not positive.",
+        "hours_to_date": "The total hours logged against the job.",
+        "days_until_deadline": "Calendar days from today to the end date; negative after the deadline.",
+        "days_until_start": "Calendar days from today to the start date; negative after work begins.",
+        "days_since_start": "Calendar days elapsed since the start date; negative before work begins.",
+        "tasks_count": "The total number of job tasks, including disabled tasks.",
+        "enabled_tasks_count": "The number of currently enabled job tasks.",
+        "planned_effort_hours": "The sum of planned effort hours across tasks.",
+        "monthly_effort_hours": "The sum of monthly effort hours configured across tasks.",
+        "period_hours": "Hours logged in the latest completed period after applying optional user and task filters.",
+        "period_entry_count": "The number of time entries in the latest completed period after applying optional filters.",
+        "period_active_users": "The number of distinct users with entries in the latest completed period.",
+        "period_active_tasks": "The number of distinct tasks used by entries in the latest completed period.",
+        "period_cost": "The cost of entries in the latest completed period after applying optional filters.",
+        "billing_type": "The effective billing type; mixed when tasks use different billing types.",
+        "status": "The job's current operational status.",
+        "tipo": "The job's current classification.",
+        "tipo_confirmed": "Whether the job classification has been confirmed."
       },
       "operators": {
         "gt": "Greater than",
@@ -325,12 +408,29 @@
         "lt": "Less than",
         "lte": "Less than or equal to",
         "eq": "Equal to",
-        "neq": "Not equal to"
+        "neq": "Not equal to",
+        "contains": "Contains",
+        "not_contains": "Does not contain",
+        "starts_with": "Starts with",
+        "ends_with": "Ends with",
+        "is_empty": "Is empty",
+        "is_not_empty": "Is not empty",
+        "before": "Before",
+        "before_or_on": "Before or on",
+        "after": "After",
+        "after_or_on": "After or on",
+        "is_true": "Is true",
+        "is_false": "Is false"
       },
       "values": {
+        "boolean": {
+          "true": "True",
+          "false": "False"
+        },
         "billing_type": {
           "time_and_materials": "Time and materials",
-          "retainer": "Retainer"
+          "retainer": "Retainer",
+          "mixed": "Mixed"
         },
         "status": {
           "da_fare": "Da fare",
