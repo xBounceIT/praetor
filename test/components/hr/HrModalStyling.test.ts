@@ -5,12 +5,14 @@ import {
   readComponentSource,
 } from '../modalStylingTestUtils';
 
+const EMPLOYEE_VIEW_SOURCES = [
+  ['internal employees', 'HR/InternalEmployeesView.tsx'],
+  ['external employees', 'HR/ExternalEmployeesView.tsx'],
+] as const;
+
 describe('HR employee modal styling', () => {
-  test.each([
-    ['internal employees', 'HR/InternalEmployeesView.tsx'],
-    ['external employees', 'HR/ExternalEmployeesView.tsx'],
-  ])('%s modal uses shared shadcn layout and primitives', async (_name, path) => {
-    const source = await readComponentSource(path);
+  test('shared employee editor uses shadcn layout and primitives', async () => {
+    const source = await readComponentSource('HR/EmployeeEditorModal.tsx');
 
     expectSourceContainsAll(source, [
       "import { Button } from '@/components/ui/button';",
@@ -21,6 +23,18 @@ describe('HR employee modal styling', () => {
       '<ModalBody className="space-y-6">',
       '<EmployeeHrFields',
       '<ModalFooter>',
+    ]);
+    expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
+  });
+
+  test.each(
+    EMPLOYEE_VIEW_SOURCES,
+  )('%s view uses the shared editor and delete confirmation', async (_name, path) => {
+    const source = await readComponentSource(path);
+
+    expectSourceContainsAll(source, [
+      "import EmployeeEditorModal from './EmployeeEditorModal';",
+      '<EmployeeEditorModal',
       '<DeleteConfirmModal',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
@@ -39,10 +53,9 @@ describe('HR employee modal styling', () => {
     expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);
   });
 
-  test.each([
-    ['internal employees', 'HR/InternalEmployeesView.tsx'],
-    ['external employees', 'HR/ExternalEmployeesView.tsx'],
-  ])('%s table contact columns preserve legacy view aliases', async (_name, path) => {
+  test.each(
+    EMPLOYEE_VIEW_SOURCES,
+  )('%s table contact columns preserve legacy view aliases', async (_name, path) => {
     const source = await readComponentSource(path);
 
     expectSourceContainsAll(source, [
