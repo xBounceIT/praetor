@@ -259,23 +259,10 @@ export const listForProjects = async (
           COUNT(*) AS period_entry_count,
           COUNT(DISTINCT te.user_id) AS period_active_users,
           COUNT(
-            DISTINCT COALESCE(
-              te.task_id,
-              resolved_task.id,
-              'legacy:' || lower(te.task)
-            )
+            DISTINCT COALESCE(te.task_id, 'legacy:' || lower(te.task))
           ) AS period_active_tasks,
           COALESCE(SUM(ROUND((COALESCE(te.duration, 0) * COALESCE(te.hourly_cost, 0))::numeric, 2)), 0) AS period_cost
         FROM time_entries te
-        LEFT JOIN LATERAL (
-          SELECT t_inner.id
-          FROM tasks t_inner
-          WHERE te.task_id IS NULL
-            AND t_inner.project_id = te.project_id
-            AND t_inner.name = te.task
-          ORDER BY t_inner.id
-          LIMIT 1
-        ) resolved_task ON TRUE
         WHERE ${periodScope !== undefined}
           AND te.project_id = ANY(${sql.param(uniqueProjectIds)}::text[])
           AND te.date >= ${periodScope?.startDate ?? '1970-01-01'}::date
@@ -286,7 +273,7 @@ export const listForProjects = async (
           )
           AND (
             ${periodTaskIds.length === 0}
-            OR COALESCE(te.task_id, resolved_task.id) = ANY(${sql.param(periodTaskIds)}::text[])
+            OR te.task_id = ANY(${sql.param(periodTaskIds)}::text[])
           )
         GROUP BY te.project_id
       )

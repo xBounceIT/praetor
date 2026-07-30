@@ -117,7 +117,7 @@ describe('projectMetricsRepo.listForProjects', () => {
     expect(sql).toContain('p.status');
   });
 
-  test('scopes periodic metrics and resolves legacy task names deterministically', async () => {
+  test('keeps legacy task entries separate from current task filters', async () => {
     exec.enqueue({ rows: [] });
 
     await projectMetricsRepo.listForProjects(['p1'], NOW, testDb, {
@@ -140,12 +140,9 @@ describe('projectMetricsRepo.listForProjects', () => {
     expect(call.sql).toContain('te.date >=');
     expect(call.sql).toContain('te.date <');
     expect(call.sql).toContain('te.user_id = ANY');
-    expect(call.sql).toContain('LEFT JOIN LATERAL');
-    expect(call.sql).toContain('te.task_id IS NULL');
-    expect(call.sql).toContain('t_inner.project_id = te.project_id');
-    expect(call.sql).toContain('t_inner.name = te.task');
-    expect(call.sql).toContain('ORDER BY t_inner.id');
-    expect(call.sql).toContain('COALESCE(te.task_id, resolved_task.id) = ANY');
+    expect(call.sql).not.toContain('LEFT JOIN LATERAL');
+    expect(call.sql).not.toContain('resolved_task');
+    expect(call.sql).toContain('OR te.task_id = ANY');
     expect(call.sql).toContain("'legacy:' || lower(te.task)");
     expect(call.params).toContainEqual(['u1']);
     expect(call.params).toContainEqual(['t1']);
