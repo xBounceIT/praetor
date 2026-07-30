@@ -32776,6 +32776,12 @@
                       "revisionCode": {
                         "type": "string"
                       },
+                      "title": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "createdByUserId": {
                         "type": [
                           "null",
@@ -32796,6 +32802,7 @@
                       "id",
                       "revisionNumber",
                       "revisionCode",
+                      "title",
                       "createdAt"
                     ]
                   }
@@ -32991,6 +32998,12 @@
                     "revisionCode": {
                       "type": "string"
                     },
+                    "title": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "createdByUserId": {
                       "type": [
                         "null",
@@ -33015,6 +33028,7 @@
                     "id",
                     "revisionNumber",
                     "revisionCode",
+                    "title",
                     "createdAt",
                     "snapshot"
                   ]
@@ -35582,6 +35596,10 @@
                   },
                   "status": {
                     "type": "string"
+                  },
+                  "revisionTitle": {
+                    "type": "string",
+                    "maxLength": 200
                   },
                   "expirationDate": {
                     "type": "string",
@@ -38878,6 +38896,12 @@
                       "revisionCode": {
                         "type": "string"
                       },
+                      "title": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "createdByUserId": {
                         "type": [
                           "null",
@@ -38898,6 +38922,7 @@
                       "id",
                       "revisionNumber",
                       "revisionCode",
+                      "title",
                       "createdAt"
                     ]
                   }
@@ -39093,6 +39118,12 @@
                     "revisionCode": {
                       "type": "string"
                     },
+                    "title": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "createdByUserId": {
                       "type": [
                         "null",
@@ -39117,6 +39148,7 @@
                     "id",
                     "revisionNumber",
                     "revisionCode",
+                    "title",
                     "createdAt",
                     "snapshot"
                   ]
@@ -40892,6 +40924,10 @@
                   },
                   "status": {
                     "type": "string"
+                  },
+                  "revisionTitle": {
+                    "type": "string",
+                    "maxLength": 200
                   },
                   "deliveryDate": {
                     "type": [
@@ -49455,6 +49491,12 @@
                       "revisionCode": {
                         "type": "string"
                       },
+                      "title": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "createdByUserId": {
                         "type": [
                           "null",
@@ -49475,6 +49517,7 @@
                       "id",
                       "revisionNumber",
                       "revisionCode",
+                      "title",
                       "createdAt"
                     ]
                   }
@@ -49670,6 +49713,12 @@
                     "revisionCode": {
                       "type": "string"
                     },
+                    "title": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "createdByUserId": {
                       "type": [
                         "null",
@@ -49694,6 +49743,7 @@
                     "id",
                     "revisionNumber",
                     "revisionCode",
+                    "title",
                     "createdAt",
                     "snapshot"
                   ]

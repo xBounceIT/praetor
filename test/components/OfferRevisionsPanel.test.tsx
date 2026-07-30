@@ -53,6 +53,7 @@ const REVISION_ROW: RevisionRow = {
   id: 'or-2',
   revisionNumber: 2,
   revisionCode: 'REV2',
+  title: 'Q3 renewal',
   createdByUserId: 'u-1',
   createdByUserName: 'Ada Lovelace',
   createdAt: 1_700_000_000_000,
@@ -62,6 +63,7 @@ const OLDER_REVISION_ROW: RevisionRow = {
   id: 'or-1',
   revisionNumber: 1,
   revisionCode: 'REV1',
+  title: null,
   createdByUserId: 'u-0',
   createdByUserName: 'Grace Hopper',
   createdAt: 1_600_000_000_000,
@@ -143,6 +145,24 @@ describe('<OfferRevisionsPanel />', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'REV1' }));
     await waitFor(() => expect(getRevisionMock).toHaveBeenCalledWith('OFF_26_001', 'or-1'));
     expect(onPreview).toHaveBeenCalledWith(FULL_REVISION);
+  });
+
+  test('shows the revision title instead of the generic snapshot label and searches it', async () => {
+    render(<OfferRevisionsPanel {...baseProps} />);
+
+    await waitFor(() => expect(screen.getByText(/Q3 renewal/)).toBeInTheDocument());
+    expect(screen.getAllByText(/clientOffers\.revisionHistory\.snapshot/)).toHaveLength(1);
+
+    fireEvent.click(screen.getByTestId('version-history-search-toggle'));
+    fireEvent.change(
+      screen.getByRole('textbox', {
+        name: 'clientOffers.revisionHistory.searchAriaLabel',
+      }),
+      { target: { value: 'renewal' } },
+    );
+
+    expect(screen.getByText('REV2')).toBeInTheDocument();
+    expect(screen.queryByText('REV1')).not.toBeInTheDocument();
   });
 
   test('restores the selected revision after confirmation and reloads the rail', async () => {

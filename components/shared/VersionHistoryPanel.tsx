@@ -14,6 +14,7 @@ export interface VersionHistoryPanelRow {
   createdAt: number;
   reason: 'update' | 'restore';
   revisionCode?: string;
+  title?: string | null;
   createdByUserName?: string | null;
 }
 
@@ -308,6 +309,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                 row.reason === 'restore' ? labels.reasonRestore : labels.reasonUpdate;
               const timestamp = formatInsertDateTime(row.createdAt, locale);
               const optionLabel = row.revisionCode ?? timestamp;
+              const rowLabel = row.title?.trim() || reasonLabel || optionLabel;
 
               return (
                 <label
@@ -328,7 +330,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
 
                   <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="truncate text-xs text-muted-foreground">
-                      {reasonLabel || optionLabel}
+                      {rowLabel}
                       {row.createdByUserName ? ` · ${row.createdByUserName}` : ''}
                     </span>
                     {isCurrent ? (

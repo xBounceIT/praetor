@@ -194,6 +194,38 @@ afterEach(() => {
   restoreRevisionMock.mockRejectedValue(new Error('not used'));
 });
 
+describe('<ClientQuotesView /> revision titles', () => {
+  test('asks for a title before a quick draft → sent transition', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        quotes={[buildQuote({ id: 'Q-TITLE' })]}
+        communicationChannels={communicationChannels}
+        onUpdateQuote={onUpdateQuote}
+      />,
+    );
+
+    await openItemActions();
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.markAsSent' }));
+    const titleInput = await screen.findByRole('textbox', {
+      name: 'revisionTitleDialog.fieldLabel',
+    });
+    fireEvent.change(titleInput, { target: { value: 'Q3 renewal' } });
+    fireEvent.click(screen.getByRole('button', { name: 'revisionTitleDialog.confirm' }));
+
+    await waitFor(() =>
+      expect(onUpdateQuote).toHaveBeenCalledWith(
+        'Q-TITLE',
+        expect.objectContaining({
+          status: 'sent',
+          revisionTitle: 'Q3 renewal',
+        }),
+      ),
+    );
+  });
+});
+
 describe('<ClientQuotesView /> candidate version previews', () => {
   test('switches the candidate tabs to the historical family and restores the current family', async () => {
     const currentCandidate = {

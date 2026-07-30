@@ -678,7 +678,7 @@ describe('client-offer immutable revisions', () => {
     coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent' }));
 
-    const res = await putOffer({ status: 'sent' });
+    const res = await putOffer({ status: 'sent', revisionTitle: 'Q3 renewal' });
 
     expect(res.statusCode).toBe(200);
     expect(coLockExistingByIdMock).toHaveBeenCalled();
@@ -686,9 +686,15 @@ describe('client-offer immutable revisions', () => {
       'off-1',
       HAPPY_USER.id,
       expect.anything(),
+      'Q3 renewal',
     );
     expect(lockSupplierRevisionStatesMock).toHaveBeenCalled();
-    expect(createDerivedSupplierRevisionsMock).toHaveBeenCalled();
+    expect(createDerivedSupplierRevisionsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      HAPPY_USER.id,
+      expect.anything(),
+      'Q3 renewal',
+    );
     expect(JSON.parse(res.body).revisionCode).toBe('REV1');
   });
 
@@ -702,13 +708,14 @@ describe('client-offer immutable revisions', () => {
       return { revisionNumber: 1, revisionCode: 'REV1' };
     });
 
-    const res = await putOffer({ status: 'accepted' });
+    const res = await putOffer({ status: 'accepted', revisionTitle: 'Approved proposal' });
 
     expect(res.statusCode).toBe(200);
     expect(createOfferRevisionIfChangedMock).toHaveBeenCalledWith(
       'off-1',
       HAPPY_USER.id,
       expect.anything(),
+      'Approved proposal',
     );
     expect(clientOrderCreateMock).toHaveBeenCalled();
     expect(JSON.parse(res.body).revisionCode).toBe('REV1');

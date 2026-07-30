@@ -37,6 +37,7 @@ const revisionColumns = {
   id: varchar('id', { length: 50 }).primaryKey(),
   revisionNumber: integer('revision_number').notNull(),
   revisionCode: varchar('revision_code', { length: 50 }).notNull(),
+  title: varchar('title', { length: 200 }),
   createdByUserId: varchar('created_by_user_id', { length: 50 }).references(() => users.id, {
     onDelete: 'set null',
   }),

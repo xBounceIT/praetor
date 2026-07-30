@@ -17,11 +17,12 @@ const revisionRowSchema = {
     id: { type: 'string' },
     revisionNumber: { type: 'integer' },
     revisionCode: { type: 'string' },
+    title: { type: ['string', 'null'] },
     createdByUserId: { type: ['string', 'null'] },
     createdByUserName: { type: ['string', 'null'] },
     createdAt: { type: 'number' },
   },
-  required: ['id', 'revisionNumber', 'revisionCode', 'createdAt'],
+  required: ['id', 'revisionNumber', 'revisionCode', 'title', 'createdAt'],
 } as const;
 
 const revisionSchema = {

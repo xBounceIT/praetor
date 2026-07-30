@@ -1604,10 +1604,10 @@ SET revision_number = CASE WHEN status = 'draft' THEN 0 ELSE 1 END,
 WHERE id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'client_quote');
 
 INSERT INTO quote_revisions (
-    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+    id, revision_number, revision_code, title, created_by_user_id, created_at, quote_id, snapshot
 )
 SELECT
-    'dm_qr_' || md5(q.id), 1, 'REV1', NULL, COALESCE(q.updated_at, q.created_at), q.id,
+    'dm_qr_' || md5(q.id), 1, 'REV1', 'Invio iniziale', NULL, COALESCE(q.updated_at, q.created_at), q.id,
     jsonb_build_object(
       'schemaVersion', 2,
       'quote', jsonb_build_object(
@@ -1681,6 +1681,7 @@ WHERE q.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'c
   AND q.status <> 'draft'
 ON CONFLICT (quote_id, revision_number) DO UPDATE SET
     revision_code = EXCLUDED.revision_code,
+    title = EXCLUDED.title,
     created_at = EXCLUDED.created_at,
     snapshot = EXCLUDED.snapshot;
 
@@ -1690,10 +1691,10 @@ SET revision_number = CASE WHEN status = 'draft' THEN 0 ELSE 1 END,
 WHERE id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'client_offer');
 
 INSERT INTO offer_revisions (
-    id, revision_number, revision_code, created_by_user_id, created_at, offer_id, snapshot
+    id, revision_number, revision_code, title, created_by_user_id, created_at, offer_id, snapshot
 )
 SELECT
-    'dm_or_' || md5(o.id), 1, 'REV1', NULL, COALESCE(o.updated_at, o.created_at), o.id,
+    'dm_or_' || md5(o.id), 1, 'REV1', 'Invio iniziale', NULL, COALESCE(o.updated_at, o.created_at), o.id,
     jsonb_build_object(
       'schemaVersion', 1,
       'offer', jsonb_build_object(
@@ -1742,6 +1743,7 @@ WHERE o.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'c
   AND o.status <> 'draft'
 ON CONFLICT (offer_id, revision_number) DO UPDATE SET
     revision_code = EXCLUDED.revision_code,
+    title = EXCLUDED.title,
     created_at = EXCLUDED.created_at,
     snapshot = EXCLUDED.snapshot;
 
@@ -1782,10 +1784,10 @@ FROM (SELECT target.id, progressed.id AS progressed_id
 WHERE sq.id = psq.id;
 
 INSERT INTO supplier_quote_revisions (
-    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+    id, revision_number, revision_code, title, created_by_user_id, created_at, quote_id, snapshot
 )
 SELECT
-    'dm_sqr_' || md5(sq.id), 1, 'REV1', NULL, COALESCE(sq.updated_at, sq.created_at), sq.id,
+    'dm_sqr_' || md5(sq.id), 1, 'REV1', 'Invio iniziale', NULL, COALESCE(sq.updated_at, sq.created_at), sq.id,
     jsonb_build_object(
       'schemaVersion', 1,
       'quote', jsonb_build_object(
@@ -1834,6 +1836,7 @@ WHERE sq.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = '
   AND sq.revision_number = 1
 ON CONFLICT (quote_id, revision_number) DO UPDATE SET
     revision_code = EXCLUDED.revision_code,
+    title = EXCLUDED.title,
     created_at = EXCLUDED.created_at,
     snapshot = EXCLUDED.snapshot;
 
@@ -1896,10 +1899,10 @@ WHERE qr.quote_id = q.id
   AND qr.revision_number = 1;
 
 INSERT INTO quote_revisions (
-    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+    id, revision_number, revision_code, title, created_by_user_id, created_at, quote_id, snapshot
 )
 SELECT
-    'dm_qr2_' || md5(q.id), 2, 'REV2', 'u4', COALESCE(q.updated_at, q.created_at), q.id,
+    'dm_qr2_' || md5(q.id), 2, 'REV2', 'Revisione commerciale', 'u4', COALESCE(q.updated_at, q.created_at), q.id,
     jsonb_build_object(
       'schemaVersion', 2,
       'quote', jsonb_build_object(
@@ -1972,6 +1975,7 @@ FROM quotes q
 WHERE q.id = pg_temp.demo_document_code('client_quote', 2)
 ON CONFLICT (quote_id, revision_number) DO UPDATE SET
     revision_code = EXCLUDED.revision_code,
+    title = EXCLUDED.title,
     created_by_user_id = EXCLUDED.created_by_user_id,
     created_at = EXCLUDED.created_at,
     snapshot = EXCLUDED.snapshot;
@@ -1997,10 +2001,10 @@ WHERE offr.offer_id = o.id
   AND offr.revision_number = 1;
 
 INSERT INTO offer_revisions (
-    id, revision_number, revision_code, created_by_user_id, created_at, offer_id, snapshot
+    id, revision_number, revision_code, title, created_by_user_id, created_at, offer_id, snapshot
 )
 SELECT
-    'dm_or2_' || md5(o.id), 2, 'REV2', 'u4', COALESCE(o.updated_at, o.created_at), o.id,
+    'dm_or2_' || md5(o.id), 2, 'REV2', 'Revisione commerciale', 'u4', COALESCE(o.updated_at, o.created_at), o.id,
     jsonb_build_object(
       'schemaVersion', 1,
       'offer', jsonb_build_object(
@@ -2048,6 +2052,7 @@ FROM customer_offers o
 WHERE o.id = pg_temp.demo_document_code('client_offer', 2)
 ON CONFLICT (offer_id, revision_number) DO UPDATE SET
     revision_code = EXCLUDED.revision_code,
+    title = EXCLUDED.title,
     created_by_user_id = EXCLUDED.created_by_user_id,
     created_at = EXCLUDED.created_at,
     snapshot = EXCLUDED.snapshot;
@@ -2073,10 +2078,10 @@ WHERE sqr.quote_id = sq.id
   AND sqr.revision_number = 1;
 
 INSERT INTO supplier_quote_revisions (
-    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+    id, revision_number, revision_code, title, created_by_user_id, created_at, quote_id, snapshot
 )
 SELECT
-    'dm_sqr2_' || md5(sq.id), 2, 'REV2', 'u4', COALESCE(sq.updated_at, sq.created_at), sq.id,
+    'dm_sqr2_' || md5(sq.id), 2, 'REV2', 'Revisione commerciale', 'u4', COALESCE(sq.updated_at, sq.created_at), sq.id,
     jsonb_build_object(
       'schemaVersion', 1,
       'quote', jsonb_build_object(
@@ -2125,6 +2130,7 @@ WHERE sq.id = pg_temp.demo_document_code('supplier_quote', 2)
   AND sq.revision_number >= 1
 ON CONFLICT (quote_id, revision_number) DO UPDATE SET
     revision_code = EXCLUDED.revision_code,
+    title = EXCLUDED.title,
     created_by_user_id = EXCLUDED.created_by_user_id,
     created_at = EXCLUDED.created_at,
     snapshot = EXCLUDED.snapshot;

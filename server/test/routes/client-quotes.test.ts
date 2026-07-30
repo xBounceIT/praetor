@@ -505,19 +505,26 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent' }));
 
-    const res = await putStatus({ status: 'sent' });
+    const res = await putStatus({ status: 'sent', revisionTitle: 'Q3 renewal' });
     expect(res.statusCode).toBe(200);
     expect(cqLockCurrentByIdMock).toHaveBeenCalled();
     expect(createQuoteRevisionIfChangedMock).toHaveBeenCalledWith(
       'q-1',
       HAPPY_USER.id,
       expect.anything(),
+      'Q3 renewal',
     );
     const body = JSON.parse(res.body);
     expect(body.status).toBe('sent');
     expect(body.effectiveStatus).toBe('sent');
     expect(body).toHaveProperty('linkedSupplierQuoteId');
     expect(body.linkedSupplierQuoteExpired).toBe(false);
+    expect(createDerivedSupplierRevisionsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      HAPPY_USER.id,
+      expect.anything(),
+      'Q3 renewal',
+    );
   });
 
   test('preserves notes when a flat update omits the field', async () => {

@@ -19,6 +19,15 @@
     "statusLabel": "Stato:",
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
+  "revisionTitleDialog": {
+    "title": "Titolo revisione",
+    "description": "Aggiungi un titolo per riconoscere e cercare questa revisione. Puoi anche lasciarlo vuoto.",
+    "fieldLabel": "Titolo",
+    "placeholder": "Es. Proposta finale Q3",
+    "hint": "Apparirà nello storico al posto di “Snapshot inviato”.",
+    "cancel": "Annulla",
+    "confirm": "Invia"
+  },
   "communicationChannels": {
     "fieldLabel": "Canale",
     "placeholder": "Seleziona un canale...",

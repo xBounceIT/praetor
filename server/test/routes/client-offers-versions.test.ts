@@ -237,6 +237,7 @@ const SAMPLE_REVISION_ROW = {
   id: 'or-2',
   revisionNumber: 2,
   revisionCode: 'REV2',
+  title: 'Q3 renewal',
   createdByUserId: 'u1',
   createdByUserName: 'Alice',
   createdAt: 1_700_000_002_000,

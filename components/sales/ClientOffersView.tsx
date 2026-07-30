@@ -14,6 +14,7 @@ import type {
   Client,
   ClientOffer,
   ClientOfferItem,
+  ClientOfferMutation,
   DiscountType,
   DurationUnit,
   OfferVersion,
@@ -103,12 +104,14 @@ import {
 import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import { ModalRestoreToDraftButton } from '../shared/ModalRestoreToDraftButton';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
+import { RevisionTitleDialog } from '../shared/RevisionTitleDialog';
 import SelectControl from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
+import { useRevisionTitlePrompt } from '../shared/useRevisionTitlePrompt';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import { OfferRevisionsPanel } from './OfferRevisionsPanel';
@@ -123,7 +126,7 @@ export interface ClientOffersViewProps {
   supplierQuotes: SupplierQuote[];
   offerIdsWithOrders: ReadonlySet<string>;
   onAddOffer?: (offerData: Partial<ClientOffer>) => void | Promise<void>;
-  onUpdateOffer: (id: string, updates: Partial<ClientOffer>) => void | Promise<void>;
+  onUpdateOffer: (id: string, updates: ClientOfferMutation) => void | Promise<void>;
   onRevertOfferToDraft?: (id: string, reason?: string) => void | Promise<void>;
   onDeleteOffer: (id: string) => void | Promise<void>;
   onOfferRestored?: (offer: ClientOffer) => void;
@@ -312,6 +315,7 @@ const useClientOffersController = ({
   offerFilterId,
 }: ClientOffersViewProps) => {
   const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
+  const revisionTitlePrompt = useRevisionTitlePrompt();
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -607,9 +611,19 @@ const useClientOffersController = ({
     setFormData(offerToFormData(next));
   }, []);
 
-  const handleStatusUpdate = async (id: string, updates: Partial<ClientOffer>) => {
+  const handleStatusUpdate = async (id: string, updates: ClientOfferMutation) => {
     try {
-      await onUpdateOffer(id, updates);
+      const offer = offers.find((entry) => entry.id === id);
+      let submittedUpdates = updates;
+      if (updates.status === 'sent' && offer?.status === 'draft') {
+        const promptResult = await revisionTitlePrompt.requestRevisionTitle();
+        if (!promptResult.confirmed) return;
+        submittedUpdates = {
+          ...updates,
+          revisionTitle: promptResult.title ?? undefined,
+        };
+      }
+      await onUpdateOffer(id, submittedUpdates);
       if (editingOffer?.id === id && updates.status === 'draft') {
         applyOfferDraftLocally(editingOffer);
       }
@@ -1343,7 +1357,7 @@ const useClientOffersController = ({
       return;
     }
 
-    const payload: Partial<ClientOffer> = {
+    const payload: ClientOfferMutation = {
       ...formData,
       id: formData.id?.trim() || undefined,
       discount: Number(formData.discount ?? 0),
@@ -1460,6 +1474,7 @@ const useClientOffersController = ({
     canRevertTerminalStatus,
     onRevertOfferToDraft,
     handleStatusUpdate,
+    revisionTitlePrompt,
     openRevertConfirm,
     closeRevertConfirm,
     handleRevertToDraft,
@@ -1487,6 +1502,11 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = (props) => {
 
 const ClientOffersLayout: React.FC<{ controller: ClientOffersController }> = ({ controller }) => (
   <div className="space-y-6">
+    <RevisionTitleDialog
+      open={controller.revisionTitlePrompt.open}
+      onOpenChange={controller.revisionTitlePrompt.onOpenChange}
+      onConfirm={controller.revisionTitlePrompt.confirm}
+    />
     <ClientOfferFormModal controller={controller} />
     <ClientOfferRevertModal controller={controller} />
     <ClientOfferDeleteDialogs controller={controller} />

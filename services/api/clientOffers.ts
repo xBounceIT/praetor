@@ -1,5 +1,6 @@
 import type {
   ClientOffer,
+  ClientOfferMutation,
   ClientOfferUpdateResult,
   OfferRevision,
   OfferVersion,
@@ -22,7 +23,7 @@ export const clientOffersApi = {
       body: JSON.stringify(offerData),
     }).then(normalizeClientOffer),
 
-  update: (id: string, updates: Partial<ClientOffer>): Promise<ClientOfferUpdateResult> =>
+  update: (id: string, updates: ClientOfferMutation): Promise<ClientOfferUpdateResult> =>
     fetchApi<ClientOfferUpdateResult>(`/sales/client-offers/${encodePathSegment(id)}`, {
       method: 'PUT',
       body: JSON.stringify(updates),

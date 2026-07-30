@@ -932,6 +932,13 @@
       "when": 1785345743947,
       "tag": "0132_project_rules_config_version_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1785418274722,
+      "tag": "0133_add_revision_titles",
+      "breakpoints": true
     }
   ]
 }

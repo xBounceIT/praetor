@@ -869,9 +869,15 @@ export type QuoteCandidateMutation = Pick<
   | 'notes'
 > & { id?: string };
 
-export type QuoteMutation = Partial<Omit<Quote, 'candidates'>> & {
-  candidates?: QuoteCandidateMutation[];
+export type RevisionTitleMutation = {
+  /** Optional label stored only when this mutation creates an immutable revision. */
+  revisionTitle?: string;
 };
+
+export type QuoteMutation = Partial<Omit<Quote, 'candidates'>> &
+  RevisionTitleMutation & {
+    candidates?: QuoteCandidateMutation[];
+  };
 
 export type QuoteVersionReason = 'update' | 'restore';
 
@@ -923,6 +929,7 @@ export interface RevisionRow {
   id: string;
   revisionNumber: number;
   revisionCode: string;
+  title: string | null;
   createdByUserId: string | null;
   createdByUserName: string | null;
   createdAt: number;
@@ -993,6 +1000,8 @@ export interface ClientOffer {
   createdAt: number;
   updatedAt: number;
 }
+
+export type ClientOfferMutation = Partial<ClientOffer> & RevisionTitleMutation;
 
 export interface AutoCreatedSupplierOrder {
   id: string;

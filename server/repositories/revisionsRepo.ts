@@ -14,6 +14,7 @@ export type RevisionRow = {
   id: string;
   revisionNumber: number;
   revisionCode: string;
+  title: string | null;
   createdByUserId: string | null;
   createdByUserName: string | null;
   createdAt: number;
@@ -23,6 +24,7 @@ const mapRow = (row: {
   id: string;
   revisionNumber: number;
   revisionCode: string;
+  title: string | null;
   createdByUserId: string | null;
   createdByUserName: string | null;
   createdAt: Date | null;
@@ -39,6 +41,7 @@ const list = async (
         id: quoteRevisions.id,
         revisionNumber: quoteRevisions.revisionNumber,
         revisionCode: quoteRevisions.revisionCode,
+        title: quoteRevisions.title,
         createdByUserId: quoteRevisions.createdByUserId,
         createdByUserName: users.name,
         createdAt: quoteRevisions.createdAt,
@@ -55,6 +58,7 @@ const list = async (
         id: offerRevisions.id,
         revisionNumber: offerRevisions.revisionNumber,
         revisionCode: offerRevisions.revisionCode,
+        title: offerRevisions.title,
         createdByUserId: offerRevisions.createdByUserId,
         createdByUserName: users.name,
         createdAt: offerRevisions.createdAt,
@@ -70,6 +74,7 @@ const list = async (
       id: supplierQuoteRevisions.id,
       revisionNumber: supplierQuoteRevisions.revisionNumber,
       revisionCode: supplierQuoteRevisions.revisionCode,
+      title: supplierQuoteRevisions.title,
       createdByUserId: supplierQuoteRevisions.createdByUserId,
       createdByUserName: users.name,
       createdAt: supplierQuoteRevisions.createdAt,
@@ -184,6 +189,7 @@ type InsertRevisionInput<T> = {
   objectId: string;
   revisionNumber: number;
   revisionCode: string;
+  title: string | null;
   snapshot: T;
   createdByUserId: string | null;
 };
@@ -197,6 +203,7 @@ export const insertQuoteAndAdvance = async (
     quoteId: input.objectId,
     revisionNumber: input.revisionNumber,
     revisionCode: input.revisionCode,
+    title: input.title,
     snapshot: input.snapshot,
     createdByUserId: input.createdByUserId,
   });
@@ -215,6 +222,7 @@ export const insertOfferAndAdvance = async (
     offerId: input.objectId,
     revisionNumber: input.revisionNumber,
     revisionCode: input.revisionCode,
+    title: input.title,
     snapshot: input.snapshot,
     createdByUserId: input.createdByUserId,
   });
@@ -233,6 +241,7 @@ export const insertSupplierQuoteAndAdvance = async (
     quoteId: input.objectId,
     revisionNumber: input.revisionNumber,
     revisionCode: input.revisionCode,
+    title: input.title,
     snapshot: input.snapshot,
     createdByUserId: input.createdByUserId,
   });

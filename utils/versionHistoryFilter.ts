@@ -5,6 +5,7 @@ export interface VersionHistoryFilterableRow {
   createdAt: number;
   reason: 'update' | 'restore';
   revisionCode?: string;
+  title?: string | null;
   createdByUserName?: string | null;
 }
 
@@ -14,7 +15,7 @@ export interface VersionHistoryFilterLabels {
 }
 
 /**
- * Filters history rows by a free-text query against code, reason label,
+ * Filters history rows by a free-text query against title, code, reason label,
  * formatted date, and author name.
  */
 export function filterVersionHistoryRows<Row extends VersionHistoryFilterableRow>(
@@ -28,6 +29,7 @@ export function filterVersionHistoryRows<Row extends VersionHistoryFilterableRow
 
   return rows.filter((row) => {
     const haystack = [
+      row.title ?? '',
       row.revisionCode ?? '',
       row.createdByUserName ?? '',
       formatInsertDateTime(row.createdAt, locale),
