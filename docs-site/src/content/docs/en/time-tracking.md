@@ -16,6 +16,8 @@ without notes.
 
 Each entry should include period, project, task, description, and location when required.
 
+By default, the system **Top Manager** role has the complete **Tracker (All)** scope (`timesheets.tracker_all.view/create/update/delete`). It can view, create, update, and delete entries for every user, including users outside its competence centers. Custom roles must be granted each global action explicitly.
+
 In the tracker selectors, hover over a project or task to read its description without changing the selection. The tooltip appears only when the item has a description. During keyboard navigation, screen readers also announce the active option's description.
 
 Before saving, verify that dates are correct and that the task belongs to the selected project. This keeps reports, totals, and costs consistent.
