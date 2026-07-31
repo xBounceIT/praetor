@@ -167,6 +167,49 @@ describe('<NotificationBell />', () => {
     expect(container.querySelector('i.fa-bell')).not.toBeNull();
   });
 
+  test('overtime notifications use the localized title with hours and date', () => {
+    const notification: Notification = {
+      id: 'n-overtime',
+      userId: 'u1',
+      type: 'overtime_recorded',
+      title: 'Overtime recorded',
+      isRead: false,
+      createdAt: NOW,
+      data: {
+        userId: 'u1',
+        date: '2026-05-04',
+        hours: 8.5,
+        source: 'tracker',
+        reasons: ['daily_limit'],
+      },
+    };
+
+    render(<NotificationBell {...baseProps} notifications={[notification]} />);
+
+    openDropdown();
+
+    expect(screen.getByText('notifications.overtimeRecorded')).toBeInTheDocument();
+    expect(screen.queryByText('Overtime recorded')).not.toBeInTheDocument();
+    expect(screen.queryByText('8.5h recorded on 2026-05-04')).not.toBeInTheDocument();
+  });
+
+  test('overtime notifications without data fall back to the stored title', () => {
+    const notification: Notification = {
+      id: 'n-overtime-no-data',
+      userId: 'u1',
+      type: 'overtime_recorded',
+      title: 'Overtime recorded',
+      isRead: false,
+      createdAt: NOW,
+    };
+
+    render(<NotificationBell {...baseProps} notifications={[notification]} />);
+
+    openDropdown();
+
+    expect(screen.getByText('Overtime recorded')).toBeInTheDocument();
+  });
+
   test('RIL tip renders localized guidance and opens preferences from its quick action', () => {
     const onOpenRilPreferences = mock(() => {});
     const onMarkAsRead = mock((_id: string) => {});

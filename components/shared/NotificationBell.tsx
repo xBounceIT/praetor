@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Notification } from '../../types';
+import { formatOvertimeHours } from '../../utils/notifications';
 
 export interface NotificationBellProps {
   notifications: Notification[];
@@ -114,6 +115,15 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       return t('notifications.projectRuleTriggered', '{{rule}} triggered for {{project}}', {
         rule: notification.data?.ruleName ?? notification.title,
         project: notification.data?.projectName ?? '',
+      });
+    }
+    if (notification.type === 'overtime_recorded') {
+      const date = typeof notification.data?.date === 'string' ? notification.data.date : '';
+      const hours = formatOvertimeHours(notification.data?.hours);
+      if (!date || !hours) return notification.title;
+      return t('notifications.overtimeRecorded', '{{hours}}h recorded on {{date}}', {
+        hours,
+        date,
       });
     }
     if (notification.type === 'admin_password_warning') {
