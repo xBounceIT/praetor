@@ -113,6 +113,7 @@ const STORAGE_SUFFIX = {
   rows: 'rows',
   fontSize: 'fontsize',
   colWidths: 'colwidths',
+  filters: 'filters',
   customViews: 'customviews',
   activeView: 'activeview',
 } as const;
@@ -774,6 +775,53 @@ const normalizeViewForColumns = <T,>(
   };
 };
 
+const readRawPersistedFilterState = (title: string): FilterState | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.filters));
+    return stored ? parseFilterState(JSON.parse(stored)) : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeFilterStateForColumns = <T,>(
+  filterState: FilterState,
+  columns: Column<T>[] | undefined,
+): FilterState =>
+  normalizeViewForColumns(
+    {
+      id: '',
+      name: '',
+      hiddenColIds: [],
+      columnOrder: [],
+      sortState: null,
+      filterState,
+    },
+    columns,
+  ).filterState;
+
+const readPersistedFilterState = <T,>(
+  title: string,
+  columns: Column<T>[] | undefined,
+): FilterState => {
+  if (columns === undefined) return {};
+  const persisted = readRawPersistedFilterState(title);
+  return persisted ? normalizeFilterStateForColumns(persisted, columns) : {};
+};
+
+const persistFilterState = (title: string, filterState: FilterState) => {
+  if (typeof window === 'undefined') return;
+  const key = getStorageKey(title, STORAGE_SUFFIX.filters);
+  try {
+    if (Object.keys(filterState).length > 0) {
+      localStorage.setItem(key, JSON.stringify(filterState));
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+};
+
 const readStoredActiveViewId = (title: string, skipSavedView: boolean) => {
   if (typeof window === 'undefined' || skipSavedView) return null;
   return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
@@ -926,19 +974,22 @@ const createInitialTableViewState = <T,>({
   title,
   columns,
   initialFilterState,
+  suppressSavedView,
   skipSavedView,
   isServerBacked,
 }: {
   title: string;
   columns: Column<T>[] | undefined;
   initialFilterState: Record<string, string[]> | undefined;
+  suppressSavedView: boolean;
   skipSavedView: boolean;
   isServerBacked: boolean;
 }): TableViewState => {
   const activeViewId = readStoredActiveViewId(title, skipSavedView);
   const baseState: TableViewState = {
     sortState: null,
-    filterState: initialFilterState ?? {},
+    filterState:
+      initialFilterState ?? (suppressSavedView ? {} : readPersistedFilterState(title, columns)),
     hiddenColIds: new Set<string>(),
     columnOrder: getReorderableColumnIds(columns),
     activeViewId,
@@ -1072,6 +1123,7 @@ const useStandardTableController = <T extends object>({
   const { t } = useTranslation('common');
   const storageIdentity = persistenceKey ?? title;
   const isServerBacked = viewKey != null;
+  const hasResolvedColumns = columns !== undefined;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const previousDataLengthRef = useRef(data?.length ?? 0);
   const manualColumnOrderBaselineRef = useRef<ColumnOrderState | null>(null);
@@ -1093,6 +1145,7 @@ const useStandardTableController = <T extends object>({
       title: storageIdentity,
       columns,
       initialFilterState,
+      suppressSavedView,
       skipSavedView,
       isServerBacked,
     }),
@@ -1296,7 +1349,12 @@ const useStandardTableController = <T extends object>({
   // UUID) at the new server id after upload, without becoming a load-effect dependency.
   const activeViewIdRef = useLatestRef(activeViewId);
   const columnsRef = useLatestRef(columns);
-  const hasResolvedColumns = columns !== undefined;
+  const filterPersistenceContextRef = useRef({
+    storageIdentity,
+    hasResolvedColumns,
+    hasTransientFilters: initialFilterState !== undefined || suppressSavedView,
+  });
+  const skipNextFilterPersistenceRef = useRef(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(!isServerBacked);
@@ -1571,6 +1629,53 @@ const useStandardTableController = <T extends object>({
       }
     }
   }, [filterStateRef, initialFilterState, storageIdentity, suppressSavedView]);
+
+  useEffect(() => {
+    const previous = filterPersistenceContextRef.current;
+    const identityChanged = previous.storageIdentity !== storageIdentity;
+    const columnsJustResolved = !previous.hasResolvedColumns && hasResolvedColumns;
+    const hasTransientFilters = initialFilterState !== undefined || suppressSavedView;
+    const transientFiltersEnded = previous.hasTransientFilters && !hasTransientFilters;
+    filterPersistenceContextRef.current = {
+      storageIdentity,
+      hasResolvedColumns,
+      hasTransientFilters,
+    };
+
+    if (
+      !hasResolvedColumns ||
+      (!identityChanged && !columnsJustResolved && !transientFiltersEnded) ||
+      hasTransientFilters
+    )
+      return;
+
+    const next = readPersistedFilterState(storageIdentity, columns);
+    skipNextFilterPersistenceRef.current = true;
+    if (filterStatesEqual(filterStateRef.current, next)) return;
+    dispatchTableView({ type: 'set-filter-state', filterState: next });
+  }, [
+    columns,
+    filterStateRef,
+    hasResolvedColumns,
+    initialFilterState,
+    storageIdentity,
+    suppressSavedView,
+  ]);
+
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      !hasResolvedColumns ||
+      initialFilterState !== undefined ||
+      suppressSavedView
+    )
+      return;
+    if (skipNextFilterPersistenceRef.current) {
+      skipNextFilterPersistenceRef.current = false;
+      return;
+    }
+    persistFilterState(storageIdentity, filterState);
+  }, [filterState, hasResolvedColumns, initialFilterState, storageIdentity, suppressSavedView]);
 
   const getColId = useCallback(getColumnId, []);
 

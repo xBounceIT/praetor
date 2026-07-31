@@ -1095,6 +1095,217 @@ describe('<StandardTable />', () => {
     });
   });
 
+  test('restores active filters after navigating away and back', async () => {
+    const firstRender = render(
+      <StandardTable<Row>
+        title="People"
+        persistenceKey="directory.people"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+
+    await selectFilterValue('Name', 'Alice');
+    firstRender.unmount();
+
+    const directLinkRender = render(
+      <StandardTable<Row>
+        title="Direct link"
+        persistenceKey="directory.people"
+        data={sampleRows}
+        columns={sampleColumns}
+        initialFilterState={{ age: ['25'] }}
+      />,
+    );
+
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+    directLinkRender.unmount();
+
+    const secondRender = render(
+      <StandardTable<Row>
+        title="Persone"
+        persistenceKey="directory.people"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+    expect(screen.queryByText('Charlie')).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'table.clearFilters' }));
+    });
+    secondRender.unmount();
+
+    render(
+      <StandardTable<Row>
+        title="People"
+        persistenceKey="directory.people"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.getByText('Charlie')).toBeInTheDocument();
+  });
+
+  test('restores persisted filters when mounted deep-link mode ends', () => {
+    const storageKey = 'praetor_table_filters_mounted_deep_link';
+    localStorage.setItem(storageKey, JSON.stringify({ name: ['Alice'] }));
+
+    const MountedDeepLinkTable = () => {
+      const [showDeepLink, setShowDeepLink] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setShowDeepLink(false)}>
+            End deep link
+          </button>
+          <StandardTable<Row>
+            title="Mounted deep link"
+            persistenceKey="mounted.deep-link"
+            data={sampleRows}
+            columns={sampleColumns}
+            initialFilterState={showDeepLink ? { age: ['25'] } : undefined}
+          />
+        </>
+      );
+    };
+
+    render(<MountedDeepLinkTable />);
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'End deep link' }));
+    });
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+    expect(localStorage.getItem(storageKey)).toBe(JSON.stringify({ name: ['Alice'] }));
+  });
+
+  test('uses the table title as the filter persistence fallback', () => {
+    localStorage.setItem('praetor_table_filters_people', JSON.stringify({ name: ['Alice'] }));
+
+    render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+  });
+
+  test('keeps persisted filters while asynchronously loaded columns are unresolved', () => {
+    const storageKey = 'praetor_table_filters_lazy_people';
+    localStorage.setItem(storageKey, JSON.stringify({ name: ['Alice'] }));
+
+    const LazyTable = () => {
+      const [loaded, setLoaded] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setLoaded(true)}>
+            Load table
+          </button>
+          <StandardTable<Row>
+            title="Lazy people"
+            persistenceKey="lazy.people"
+            data={loaded ? sampleRows : undefined}
+            columns={loaded ? sampleColumns : undefined}
+          >
+            <div>Loading people</div>
+          </StandardTable>
+        </>
+      );
+    };
+
+    render(<LazyTable />);
+    expect(localStorage.getItem(storageKey)).toBe(JSON.stringify({ name: ['Alice'] }));
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load table' }));
+    });
+
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+  });
+
+  test('normalizes legacy persisted filters after asynchronous columns resolve', async () => {
+    const storageKey = 'praetor_table_filters_lazy_contacts';
+    localStorage.setItem(storageKey, JSON.stringify({ contact: ['alice@example.com 111'] }));
+    const rows: ContactRow[] = [
+      { id: '1', name: 'Alice', age: 30, email: 'alice@example.com', phone: '111' },
+      { id: '2', name: 'Bob', age: 25, email: 'bob@example.com', phone: '222' },
+    ];
+
+    const LazyContactsTable = () => {
+      const [loaded, setLoaded] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setLoaded(true)}>
+            Load contacts
+          </button>
+          <StandardTable<ContactRow>
+            title="Lazy contacts"
+            persistenceKey="lazy.contacts"
+            data={loaded ? rows : undefined}
+            columns={loaded ? contactAliasColumns : undefined}
+          />
+        </>
+      );
+    };
+
+    render(<LazyContactsTable />);
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load contacts' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeInTheDocument();
+      expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+      expect(Object.keys(JSON.parse(localStorage.getItem(storageKey) ?? '{}'))).toEqual(['email']);
+    });
+  });
+
+  test('rehydrates filters when a mounted table changes persistence identity', async () => {
+    localStorage.setItem(
+      'praetor_table_filters_directory_second',
+      JSON.stringify({ name: ['Bob'] }),
+    );
+
+    const SwitchingTable = () => {
+      const [scope, setScope] = useState<'first' | 'second'>('first');
+      return (
+        <>
+          <button type="button" onClick={() => setScope('second')}>
+            Show second table
+          </button>
+          <StandardTable<Row>
+            title="People"
+            persistenceKey={`directory.${scope}`}
+            data={sampleRows}
+            columns={sampleColumns}
+          />
+        </>
+      );
+    };
+
+    render(<SwitchingTable />);
+    const filterUser = await selectFilterValue('Name', 'Alice');
+    await filterUser.keyboard('{Escape}');
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show second table' }));
+    });
+
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+    expect(localStorage.getItem('praetor_table_filters_directory_second')).toBe(
+      JSON.stringify({ name: ['Bob'] }),
+    );
+  });
+
   test('keeps bypassed rows visible while active filters still hide regular non-matches', () => {
     const rows: Row[] = [...sampleRows, { id: 'temp-new', name: '', age: Number.NaN }];
 
