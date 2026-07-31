@@ -108,6 +108,7 @@
     "newProjects": "{{count}} new projects available",
     "newProject": "1 new project available",
     "projectRuleTriggered": "{{rule}} triggered for {{project}}",
+    "overtimeRecorded": "{{hours}}h recorded on {{date}}",
     "adminPasswordWarningTitle": "Change the default admin password",
     "rilPreferencesTipTitle": "Set up your RIL travel preferences",
     "rilPreferencesTipMessage": "Choose the default travel value for each weekday so your RIL is pre-filled correctly.",
