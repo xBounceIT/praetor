@@ -7,6 +7,8 @@ export const MCP_TOKEN_SCOPES: readonly McpTokenScope[] = ['read_only', 'full'] 
 
 export type McpToken = {
   id: string;
+  roleId: string;
+  roleName: string;
   name: string;
   tokenPrefix: string;
   scope: McpTokenScope;

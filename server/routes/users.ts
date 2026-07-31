@@ -29,6 +29,8 @@ import {
 } from '../services/external-auth.ts';
 import { requiresTotpEnrollment } from '../services/totpEnforcement.ts';
 import {
+  canManageAllUsersWithPermissions,
+  canViewUserEmailWithPermissions,
   getUserVisibilityScope,
   HR_DETAIL_FIELDS,
   HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE,
@@ -344,12 +346,8 @@ const authMethodUpdateBodySchema = {
 const isSsoAuthMethod = (authMethod: usersRepo.AuthMethod): authMethod is 'oidc' | 'saml' =>
   authMethod === 'oidc' || authMethod === 'saml';
 
-const canViewUserEmails = (request: FastifyRequest) =>
-  hasPermission(request, 'administration.user_management_all.view') ||
-  hasPermission(request, 'administration.user_management.view');
-
-const canViewAllUsers = (request: FastifyRequest) =>
-  getUserVisibilityScope(request).canViewAllUsers;
+const canManageAllUsers = (request: FastifyRequest) =>
+  canManageAllUsersWithPermissions(request.user?.permissions);
 
 const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserId: string) => {
   if (request.user?.id === targetUserId) return true;
@@ -361,7 +359,7 @@ const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserI
     hasPermission(request, 'hr.employee_assignments.update');
 
   if (!hasAssignmentPermission) return false;
-  if (canViewAllUsers(request)) return true;
+  if (canManageAllUsers(request)) return true;
 
   return usersRepo.canManageUser(targetUserId, request.user?.id ?? '');
 };
@@ -417,7 +415,7 @@ const canUpdateHrDetailsFor = (request: FastifyRequest, employeeType: usersRepo.
   hasPermission(request, HR_UPDATE_PERM_BY_EMPLOYEE_TYPE[employeeType]);
 
 const canViewEmailFor = (request: FastifyRequest, user: usersRepo.UserListRow) =>
-  canViewUserEmails(request) || canViewHrDetailsFor(request, user.employeeType);
+  canViewUserEmailWithPermissions(request.user?.permissions, user.employeeType);
 
 const maskUserForRequest = (request: FastifyRequest, user: usersRepo.UserListRow) =>
   maskUserResponse(user, {
@@ -2227,7 +2225,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (!canViewAllUsers(request) && idResult.value !== request.user?.id) {
+      if (!canManageAllUsers(request) && idResult.value !== request.user?.id) {
         if (!(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))) {
           return replyError(request, reply, {
             statusCode: 403,

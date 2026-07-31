@@ -18,6 +18,7 @@ const getRolePermissionsMock = mock();
 
 let authenticateMcpToken: typeof import('../../middleware/mcpAuth.ts').authenticateMcpToken;
 let __resetMcpIdleTimeoutCacheForTests: typeof import('../../middleware/mcpAuth.ts').__resetMcpIdleTimeoutCacheForTests;
+let authenticateGeneralToken: typeof import('../../middleware/auth.ts').authenticateToken;
 
 beforeAll(async () => {
   mock.module('../../repositories/mcpTokensRepo.ts', () => ({
@@ -42,6 +43,7 @@ beforeAll(async () => {
   const mod = await import('../../middleware/mcpAuth.ts');
   authenticateMcpToken = mod.authenticateMcpToken;
   __resetMcpIdleTimeoutCacheForTests = mod.__resetMcpIdleTimeoutCacheForTests;
+  authenticateGeneralToken = (await import('../../middleware/auth.ts')).authenticateToken;
 });
 
 afterAll(() => {
@@ -67,8 +69,11 @@ const makeReply = () => {
   return reply as FastifyReply & typeof reply;
 };
 
-const makeRequest = (token?: string) =>
+const makeRequest = (token?: string, options: { method?: string; url?: string } = {}) =>
   ({
+    ip: '203.0.113.8',
+    method: options.method ?? 'POST',
+    url: options.url ?? '/api/mcp',
     headers: token ? { authorization: `Bearer ${token}` } : {},
     log: {
       warn: mock(),
@@ -89,6 +94,7 @@ beforeEach(() => {
   findActiveByRawTokenMock.mockResolvedValue({
     id: 'mcp-token-1',
     userId: 'u1',
+    roleId: 'top_manager',
     name: 'Agent',
     scope: 'full',
     createdAt: new Date(),
@@ -99,7 +105,7 @@ beforeEach(() => {
     id: 'u1',
     name: 'Alice',
     username: 'alice',
-    role: 'manager',
+    role: 'user',
     avatarInitials: 'AL',
     isDisabled: false,
     sessionVersion: 1,
@@ -157,6 +163,7 @@ describe('authenticateMcpToken', () => {
     findActiveByRawTokenMock.mockResolvedValue({
       id: 'mcp-token-1',
       userId: 'u1',
+      roleId: 'top_manager',
       name: 'Agent',
       scope: 'full',
       createdAt: new Date(),
@@ -207,11 +214,37 @@ describe('authenticateMcpToken', () => {
       }),
     );
     expect(touchLastUsedMock).toHaveBeenCalledWith('mcp-token-1');
-    expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
-    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'manager', {
+    expect(request.user?.role).toBe('top_manager');
+    expect(getRolePermissionsMock).toHaveBeenCalledWith('top_manager');
+    expect(userHasRoleMock).toHaveBeenCalledWith('u1', 'top_manager', {
       requireEnabledUser: true,
       expectedTokenVersion: 1,
     });
+  });
+
+  test('uses the token-bound Top Manager role instead of the user primary role', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.view',
+      'hr.work_units_all.view',
+    ]);
+    const request = makeRequest('praetor_mcp_token');
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(200);
+    expect(request.user).toEqual(
+      expect.objectContaining({
+        role: 'top_manager',
+        permissions: ['administration.user_management.view', 'hr.work_units_all.view'],
+      }),
+    );
+    expect(getRolePermissionsMock).toHaveBeenCalledWith('top_manager');
+    expect(userHasRoleMock).toHaveBeenCalledWith(
+      'u1',
+      'top_manager',
+      expect.objectContaining({ expectedTokenVersion: 1 }),
+    );
   });
 
   test('403 when final constrained role check fails', async () => {
@@ -223,7 +256,7 @@ describe('authenticateMcpToken', () => {
 
     expect(reply.statusCode).toBe(403);
     expect(reply.body).toEqual({ error: 'Invalid or revoked MCP token' });
-    expect(getRolePermissionsMock).toHaveBeenCalledWith('manager');
+    expect(getRolePermissionsMock).toHaveBeenCalledWith('top_manager');
     expect(touchLastUsedMock).not.toHaveBeenCalled();
   });
 
@@ -260,6 +293,7 @@ describe('authenticateMcpToken', () => {
     findActiveByRawTokenMock.mockResolvedValue({
       id: 'mcp-token-1',
       userId: 'u1',
+      roleId: 'top_manager',
       name: 'Agent',
       scope: 'full',
       createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
@@ -279,6 +313,7 @@ describe('authenticateMcpToken', () => {
     findActiveByRawTokenMock.mockResolvedValue({
       id: 'mcp-token-1',
       userId: 'u1',
+      roleId: 'top_manager',
       name: 'Agent',
       scope: 'full',
       createdAt: null,
@@ -300,6 +335,7 @@ describe('authenticateMcpToken', () => {
     findActiveByRawTokenMock.mockResolvedValue({
       id: 'mcp-token-1',
       userId: 'u1',
+      roleId: 'top_manager',
       name: 'Agent',
       scope: 'full',
       createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
@@ -321,6 +357,7 @@ describe('authenticateMcpToken', () => {
     findActiveByRawTokenMock.mockResolvedValue({
       id: 'mcp-token-1',
       userId: 'u1',
+      roleId: 'top_manager',
       name: 'Agent',
       scope: 'read_only',
       createdAt: new Date(),
@@ -342,18 +379,67 @@ describe('authenticateMcpToken', () => {
 
     expect(reply.statusCode).toBe(200);
     expect(request.user?.permissions).toEqual(['timesheets.tracker.view', 'crm.clients.view']);
+    expect(request.auth).toEqual({
+      userId: 'u1',
+      source: 'mcpToken',
+      tokenScope: 'read_only',
+    });
     expect(request.raw.auth).toEqual(
       expect.objectContaining({
         scopes: ['timesheets.tracker.view', 'crm.clients.view'],
-        extra: expect.objectContaining({ tokenScope: 'read_only' }),
+        extra: expect.objectContaining({ clientIp: '203.0.113.8', tokenScope: 'read_only' }),
       }),
     );
+  });
+
+  test('is accepted by the shared REST authentication middleware', async () => {
+    const request = makeRequest('praetor_mcp_token', {
+      method: 'GET',
+      url: '/api/projects',
+    });
+    const reply = makeReply();
+
+    await authenticateGeneralToken(request, reply);
+
+    expect(reply.statusCode).toBe(200);
+    expect(request.user).toEqual(expect.objectContaining({ id: 'u1' }));
+    expect(request.auth).toEqual({
+      userId: 'u1',
+      source: 'mcpToken',
+      tokenScope: 'full',
+    });
+  });
+
+  test('read_only scope rejects unsafe REST methods even on authenticate-only routes', async () => {
+    findActiveByRawTokenMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      userId: 'u1',
+      roleId: 'top_manager',
+      name: 'Agent',
+      scope: 'read_only',
+      createdAt: new Date(),
+      lastUsedAt: null,
+      tokenVersionAtIssue: 1,
+    });
+    const request = makeRequest('praetor_mcp_token', {
+      method: 'POST',
+      url: '/api/views',
+    });
+    const reply = makeReply();
+
+    await authenticateMcpToken(request, reply);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'MCP token is read-only' });
+    expect(request.user).toBeUndefined();
+    expect(touchLastUsedMock).not.toHaveBeenCalled();
   });
 
   test('full scope passes all role permissions through unchanged', async () => {
     findActiveByRawTokenMock.mockResolvedValue({
       id: 'mcp-token-1',
       userId: 'u1',
+      roleId: 'top_manager',
       name: 'Agent',
       scope: 'full',
       createdAt: new Date(),

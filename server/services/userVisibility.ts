@@ -1,6 +1,9 @@
 import type { FastifyRequest } from 'fastify';
 import type { EmployeeType, ManagerScopeOptions, UserListRow } from '../repositories/usersRepo.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import {
+  requestHasPermission as hasPermission,
+  hasPermission as permissionListHas,
+} from '../utils/permissions.ts';
 
 export type UserVisibilityScope = ManagerScopeOptions & {
   canViewAllUsers: boolean;
@@ -33,10 +36,24 @@ export const HR_DETAIL_FIELDS = [
 
 const HR_RESPONSE_DETAIL_FIELDS = [...HR_DETAIL_FIELDS, 'responsibleUserName'] as const;
 
+export const canManageAllUsersWithPermissions = (permissions: string[] | undefined): boolean =>
+  permissionListHas(permissions, 'administration.user_management_all.view') ||
+  permissionListHas(permissions, 'hr.work_units_all.view');
+
+export const canViewAllUsersWithPermissions = (permissions: string[] | undefined): boolean =>
+  canManageAllUsersWithPermissions(permissions) ||
+  permissionListHas(permissions, 'timesheets.tracker_all.view');
+
+export const canViewUserEmailWithPermissions = (
+  permissions: string[] | undefined,
+  employeeType: EmployeeType,
+): boolean =>
+  permissionListHas(permissions, 'administration.user_management_all.view') ||
+  permissionListHas(permissions, 'administration.user_management.view') ||
+  permissionListHas(permissions, HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE[employeeType]);
+
 export const getUserVisibilityScope = (request: FastifyRequest): UserVisibilityScope => ({
-  canViewAllUsers:
-    hasPermission(request, 'administration.user_management_all.view') ||
-    hasPermission(request, 'hr.work_units_all.view'),
+  canViewAllUsers: canViewAllUsersWithPermissions(request.user?.permissions),
   canViewManagedUsers:
     hasPermission(request, 'timesheets.tracker.view') ||
     hasPermission(request, 'timesheets.tracker_all.view') ||

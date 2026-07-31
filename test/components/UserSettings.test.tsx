@@ -31,6 +31,8 @@ const onListMcpTokens = mock(() =>
   Promise.resolve([
     {
       id: 'mcp-token-1',
+      roleId: 'top_manager',
+      roleName: 'Delivery Lead',
       name: 'Agent',
       tokenPrefix: 'praetor_mcp_abcd',
       scope: 'full' as const,
@@ -43,6 +45,8 @@ const onCreateMcpToken = mock((_name: string, _scope: 'read_only' | 'full' = 'fu
   Promise.resolve({
     token: {
       id: 'mcp-token-2',
+      roleId: 'top_manager',
+      roleName: 'Delivery Lead',
       name: 'External Agent',
       tokenPrefix: 'praetor_mcp_efgh',
       scope: _scope,
@@ -363,6 +367,9 @@ describe('<UserSettings /> MCP tokens', () => {
 
     await waitFor(() => expect(onListMcpTokens).toHaveBeenCalled());
     expect(await screen.findByText('Agent')).toBeInTheDocument();
+    const tokenRole = screen.getByText(/Delivery Lead/);
+    expect(tokenRole).toBeInTheDocument();
+    expect(tokenRole.closest('p')).toHaveTextContent(/mcp\.lastUsed.*mcp\.role: Delivery Lead/);
     expect(screen.getByText(/praetor_mcp_abcd/)).toBeInTheDocument();
   });
 

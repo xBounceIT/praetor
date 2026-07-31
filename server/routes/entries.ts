@@ -16,6 +16,8 @@ import {
   listTimeEntries,
   MAX_DURATION_HOURS,
   MAX_NOTES_LENGTH,
+  type SanitizedTimeEntry,
+  sanitizeTimeEntryCosts,
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
@@ -177,22 +179,11 @@ const actorFromRequest = (request: FastifyRequest) => ({
   permissions: request.user?.permissions ?? [],
 });
 
-type SanitizedEntry = TimeEntry | Omit<TimeEntry, 'cost' | 'hourlyCost'>;
-
-// Strip `cost` / `hourlyCost` from outgoing entry payloads when the caller lacks
-// `reports.cost.view`. Computed cost reveals per-user pay rates, so the API enforces the
-// gate even when the UI happens to hide the column.
-const sanitizeEntry = (entry: TimeEntry, includeCost: boolean): SanitizedEntry => {
-  if (includeCost) return entry;
-  const { cost: _cost, hourlyCost: _hourlyCost, ...rest } = entry;
-  return rest;
-};
-
 const sanitizeListResult = (
   result: { entries: TimeEntry[]; nextCursor: string | null },
   includeCost: boolean,
-): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
-  entries: result.entries.map((e) => sanitizeEntry(e, includeCost)),
+): { entries: SanitizedTimeEntry[]; nextCursor: string | null } => ({
+  entries: result.entries.map((entry) => sanitizeTimeEntryCosts(entry, includeCost)),
   nextCursor: result.nextCursor,
 });
 
@@ -200,7 +191,7 @@ const sanitizeRilListResult = (result: {
   entries: TimeEntry[];
   nextCursor: string | null;
   dailyDurationByOwnerDate?: ReadonlyMap<string, number>;
-}): { entries: SanitizedEntry[]; nextCursor: string | null } => ({
+}): { entries: SanitizedTimeEntry[]; nextCursor: string | null } => ({
   entries: (() => {
     const totalsByOwnerDate =
       result.dailyDurationByOwnerDate ??
@@ -210,7 +201,7 @@ const sanitizeRilListResult = (result: {
         return totals;
       }, new Map<string, number>());
     return result.entries.map((entry) => {
-      const sanitized = sanitizeEntry(entry, false);
+      const sanitized = sanitizeTimeEntryCosts(entry, false);
       const dayTotal =
         totalsByOwnerDate.get(dailyDurationOwnerDateKey(entry.userId, entry.date)) ?? 0;
       const exposesOvertimeTotal = evaluateOvertime(entry.date, dayTotal).isOvertime;
@@ -302,7 +293,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         description:
           'Creates one time entry. Multiple entries for the same user, date, project, and ' +
           'task are allowed. Returns 403 when the selected project is in a status that ' +
-          'blocks time entries, or when it is expired and the role lacks ' +
+          'blocks time entries, or when the entry date is after the project end date and the role lacks ' +
           'timesheets.expired_projects.create.',
         body: entryCreateBodySchema,
         response: {
@@ -318,7 +309,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const created = await createTimeEntry(actorFromRequest(request), request.body ?? {});
         return reply
           .code(201)
-          .send(sanitizeEntry(created, requestHasPermission(request, 'reports.cost.view')));
+          .send(
+            sanitizeTimeEntryCosts(created, requestHasPermission(request, 'reports.cost.view')),
+          );
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }
@@ -349,7 +342,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       try {
         const updated = await updateTimeEntry(actorFromRequest(request), id, request.body ?? {});
-        return sanitizeEntry(updated, requestHasPermission(request, 'reports.cost.view'));
+        return sanitizeTimeEntryCosts(updated, requestHasPermission(request, 'reports.cost.view'));
       } catch (err) {
         return handleTimeEntryServiceError(err, reply);
       }
@@ -403,7 +396,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'authenticated user if `userId` is omitted) and inserts a placeholder time entry ' +
           'for every matching day in `[fromDate, toDate]` that does not already have an ' +
           'entry for the same (date, project, task) tuple. Projects in statuses that block ' +
-          'time entries are always skipped; expired projects are skipped unless the role has ' +
+          'time entries are always skipped; dates after a project end date are skipped unless the role has ' +
           'timesheets.expired_projects.create. Idempotent.',
         body: recurringGenerateBodySchema,
         response: {

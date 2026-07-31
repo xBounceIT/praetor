@@ -108,6 +108,15 @@ export const listAll = async (exec: DbExecutor = db): Promise<Role[]> => {
   return rows.map(mapRole);
 };
 
+export const listByIds = async (
+  ids: string[],
+  exec: DbExecutor = db,
+): Promise<Map<string, Role>> => {
+  if (ids.length === 0) return new Map();
+  const rows = await exec.select(ROLE_PROJECTION).from(roles).where(inArray(roles.id, ids));
+  return new Map(rows.map((row) => [row.id, mapRole(row)]));
+};
+
 export const findById = async (id: string, exec: DbExecutor = db): Promise<Role | null> => {
   const rows = await exec.select(ROLE_PROJECTION).from(roles).where(eq(roles.id, id));
   return rows[0] ? mapRole(rows[0]) : null;

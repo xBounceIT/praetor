@@ -16,13 +16,14 @@ beforeEach(() => {
 describe('createForUser', () => {
   test('captures the user current token_version via subquery, not the column default', async () => {
     // RETURNING row shape — positional, matches mcpTokens schema declaration order:
-    // id, user_id, name, token_prefix, token_hash, scope, created_at, last_used_at,
+    // id, user_id, role_id, name, token_prefix, token_hash, scope, created_at, last_used_at,
     // revoked_at, token_version_at_issue
     exec.enqueue({
       rows: [
         [
           'mcp-token-1',
           'user-1',
+          'top_manager',
           'Agent',
           'praetor_mcp_abcdefghij',
           'h'.repeat(64),
@@ -40,6 +41,7 @@ describe('createForUser', () => {
       {
         id: 'mcp-token-1',
         userId: 'user-1',
+        roleId: 'top_manager',
         name: 'Agent',
         rawToken: `${mcpTokensRepo.MCP_TOKEN_PREFIX}abcdefghijklmnopqrstuvwx`,
         scope: 'full',
@@ -54,5 +56,6 @@ describe('createForUser', () => {
     expect(sql).toContain('"token_version"');
     expect(sql).toContain('"users"');
     expect(exec.calls[0].params).toContain('user-1');
+    expect(exec.calls[0].params).toContain('top_manager');
   });
 });

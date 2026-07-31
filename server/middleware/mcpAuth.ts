@@ -17,6 +17,7 @@ export type McpAuthenticatedUser = {
 };
 
 export type McpAuthInfoExtra = {
+  clientIp: string;
   user: McpAuthenticatedUser;
   tokenId: string;
   tokenName: string;
@@ -47,12 +48,21 @@ const parseBearerToken = (request: FastifyRequest): string | null => {
   return token;
 };
 
+export const isMcpToken = (token: string): boolean =>
+  token.startsWith(mcpTokensRepo.MCP_TOKEN_PREFIX);
+
 const applyScope = (permissions: string[], scope: McpTokenScope): string[] =>
   scope === 'read_only' ? permissions.filter((p) => p.endsWith('.view')) : permissions;
 
+const isMcpProtocolRequest = (request: FastifyRequest): boolean =>
+  request.url.split('?', 1)[0]?.replace(/\/+$/, '') === '/api/mcp';
+
+const isReadOnlyHttpMethod = (method: string): boolean =>
+  ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
+
 export const authenticateMcpToken = async (request: FastifyRequest, reply: FastifyReply) => {
   const rawToken = parseBearerToken(request);
-  if (!rawToken?.startsWith(mcpTokensRepo.MCP_TOKEN_PREFIX)) {
+  if (!rawToken || !isMcpToken(rawToken)) {
     return reply.code(401).send({ error: 'MCP token required' });
   }
 
@@ -84,8 +94,8 @@ export const authenticateMcpToken = async (request: FastifyRequest, reply: Fasti
   // password rotation that commits between the initial user load and this check
   // still revokes the request.
   const [rolePermissions, hasRole] = await Promise.all([
-    getRolePermissions(user.role),
-    rolesRepo.userHasRole(user.id, user.role, {
+    getRolePermissions(token.roleId),
+    rolesRepo.userHasRole(user.id, token.roleId, {
       requireEnabledUser: true,
       expectedTokenVersion: token.tokenVersionAtIssue,
     }),
@@ -94,19 +104,35 @@ export const authenticateMcpToken = async (request: FastifyRequest, reply: Fasti
     return reply.code(403).send({ error: 'Invalid or revoked MCP token' });
   }
 
+  // MCP itself always uses POST, so scope enforcement for tool calls remains in each tool.
+  // When the same credential is forwarded to a REST route by the generic MCP gateway (or used
+  // directly), fail closed for every unsafe HTTP method before an authenticate-only route can
+  // mutate data without a verb-specific permission guard.
+  if (
+    token.scope === 'read_only' &&
+    !isMcpProtocolRequest(request) &&
+    !isReadOnlyHttpMethod(request.method)
+  ) {
+    return reply.code(403).send({ error: 'MCP token is read-only' });
+  }
+
   const permissions = applyScope(rolePermissions, token.scope);
 
   const mcpUser: McpAuthenticatedUser = {
     id: user.id,
     name: user.name,
     username: user.username,
-    role: user.role,
+    role: token.roleId,
     avatarInitials: user.avatarInitials,
     permissions,
   };
 
   request.user = mcpUser;
-  request.auth = { userId: user.id, sessionStart: Date.now() };
+  request.auth = {
+    userId: user.id,
+    source: 'mcpToken',
+    tokenScope: token.scope,
+  };
   try {
     await mcpTokensRepo.touchLastUsed(token.id);
   } catch (err) {
@@ -118,6 +144,7 @@ export const authenticateMcpToken = async (request: FastifyRequest, reply: Fasti
     clientId: user.id,
     scopes: permissions,
     extra: {
+      clientIp: request.ip,
       user: mcpUser,
       tokenId: token.id,
       tokenName: token.name,

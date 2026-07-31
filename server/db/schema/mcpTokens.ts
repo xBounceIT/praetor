@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, pgTable, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import { roles } from './roles.ts';
 import { users } from './users.ts';
 
 export type McpTokenScope = 'read_only' | 'full';
@@ -11,6 +12,9 @@ export const mcpTokens = pgTable(
     userId: varchar('user_id', { length: 50 })
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    roleId: varchar('role_id', { length: 50 })
+      .notNull()
+      .references(() => roles.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 120 }).notNull(),
     tokenPrefix: varchar('token_prefix', { length: 32 }).notNull(),
     tokenHash: varchar('token_hash', { length: 128 }).notNull(),
