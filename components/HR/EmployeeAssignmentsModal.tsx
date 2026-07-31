@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import { cn } from '@/lib/utils';
 import { useLatestRef } from '../../hooks/useLatestRef';
-import { usersApi } from '../../services/api';
+import { usersApi } from '../../services/api/users';
 import type { Client, Project, ProjectTask, User } from '../../types';
 import { toastError } from '../../utils/toast';
 import Modal from '../shared/Modal';
