@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import type { User, WorkUnit } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
@@ -27,7 +27,7 @@ const WORK_UNIT: WorkUnit = {
     { id: 'emanuele', name: 'Emanuele Ciccioli' },
     { id: 'daniel', name: "Daniel D'Angeli" },
   ],
-  members: [],
+  members: [{ id: 'member', name: 'Member User' }],
 };
 
 const noop = mock(async () => {});
@@ -51,6 +51,7 @@ describe('<WorkUnitsView /> manager order', () => {
     });
     const card = managerRegion.closest('[data-slot="card"]');
     expect(card?.querySelector('[data-slot="card-header"]')).toHaveClass('px-4', 'py-3');
+    expect(card?.parentElement).toHaveClass('lg:grid-cols-2', 'xl:grid-cols-3');
     expect(screen.getByRole('heading', { level: 3, name: 'Offensive' })).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 4, name: 'hr:competenceCenters.managers' }),
@@ -58,14 +59,17 @@ describe('<WorkUnitsView /> manager order', () => {
     expect(
       screen.getByRole('heading', { level: 4, name: 'hr:competenceCenters.members' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Emanuele Ciccioli')).toHaveClass('truncate');
-    expect(screen.getByText('EC').closest('[data-slot="avatar"]')).toHaveAttribute(
-      'aria-hidden',
-      'true',
-    );
+    const managerAvatars = within(managerRegion).getAllByRole('img');
+    expect(managerAvatars.map((avatar) => avatar.getAttribute('aria-label'))).toEqual([
+      'Emanuele Ciccioli',
+      "Daniel D'Angeli",
+    ]);
+    const memberRegion = screen.getByRole('region', {
+      name: 'hr:competenceCenters.members: Offensive',
+    });
+    const memberAvatar = within(memberRegion).getByRole('img', { name: 'Member User' });
+    expect(managerAvatars[0].className).toBe(memberAvatar.className);
     expect(screen.getByLabelText('1 hr:competenceCenters.title')).toBeInTheDocument();
-    const cardText = managerRegion.textContent ?? '';
-    expect(cardText.indexOf('Emanuele Ciccioli')).toBeLessThan(cardText.indexOf("Daniel D'Angeli"));
 
     const manageManagers = screen.getByRole('button', {
       name: 'hr:competenceCenters.manageManagers: Offensive',

@@ -10,7 +10,6 @@ import {
 import type React from 'react';
 import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,7 +34,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { workUnitsApi } from '../services/api/workUnits';
 import type { User, WorkUnit, WorkUnitMutationPayload } from '../types';
-import { getInitials } from '../utils/initials';
 import { hasScopedActionPermission } from '../utils/permissions';
 import { toastError } from '../utils/toast';
 import HeaderAddButton from './shared/HeaderAddButton';
@@ -422,20 +420,7 @@ const WorkUnitCard: React.FC<{
           </div>
           <div className="flex min-h-7 flex-wrap items-center gap-1.5">
             {unit.managers.length > 0 ? (
-              unit.managers.map((manager) => (
-                <Badge
-                  key={manager.id}
-                  variant="secondary"
-                  className="max-w-full min-w-0 gap-1.5 rounded-full py-0.5 pr-2 pl-0.5 font-medium text-xs"
-                >
-                  <Avatar size="sm" aria-hidden="true">
-                    <AvatarFallback className="text-[9px] font-semibold">
-                      {getInitials(manager.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="truncate">{manager.name}</span>
-                </Badge>
-              ))
+              <MemberAvatarGroup members={unit.managers} />
             ) : (
               <p className="text-sm text-muted-foreground">
                 {t('hr:competenceCenters.noManagersAssigned')}
@@ -597,7 +582,7 @@ const WorkUnitsGrid: React.FC<{
   onManageManagers,
   onManageMembers,
 }) => (
-  <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
+  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
     {workUnits.map((unit) => (
       <WorkUnitCard
         key={unit.id}

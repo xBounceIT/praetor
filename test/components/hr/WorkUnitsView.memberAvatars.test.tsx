@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import type { User, WorkUnit } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
@@ -64,11 +64,14 @@ describe('<WorkUnitsView /> member preview (issue #761)', () => {
       },
     ]);
 
-    expect(screen.getAllByText('AS').length).toBeGreaterThan(0);
+    const memberRegion = screen.getByRole('region', {
+      name: 'hr:competenceCenters.members: Engineering',
+    });
+    expect(within(memberRegion).getByText('AS')).toBeInTheDocument();
     // Each badge surfaces the member's full name as its accessible label.
-    expect(screen.getByLabelText('Andrea Scognamiglio')).toBeInTheDocument();
+    expect(within(memberRegion).getByLabelText('Andrea Scognamiglio')).toBeInTheDocument();
     // 6 members, inline cap of 5 → one collapses into a "+1" badge.
-    expect(screen.getByText('+1')).toBeInTheDocument();
+    expect(within(memberRegion).getByText('+1')).toBeInTheDocument();
     // The avatar row replaces both the count line and the empty-state text.
     expect(screen.queryByText(/competenceCenters\.users/)).not.toBeInTheDocument();
     expect(screen.queryByText(/competenceCenters\.noMembersAssigned/)).not.toBeInTheDocument();
