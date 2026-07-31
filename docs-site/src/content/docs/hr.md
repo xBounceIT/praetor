@@ -17,6 +17,8 @@ Usa **Dipendenti Interni** per personale aziendale e utenti applicativi. Usa **D
 
 Le tabelle HR espongono i dati principali per lavorare rapidamente: codice dipendente, email e telefono aziendale in colonne separate, ruolo, dipartimento, responsabile e stato HR. Apri una riga per aggiornare il profilo quando hai il permesso di modifica corrispondente.
 
+Per gli utenti applicativi, **Gestisci accesso** permette di assegnare clienti, progetti e attività nello stesso dialog. I tre elenchi sono paginati separatamente con sette elementi per pagina: puoi quindi cambiare pagina in una colonna senza spostare le altre, mentre le selezioni già effettuate restano attive. Le ricerche e i filtri cliente/progetto riportano automaticamente gli elenchi alla prima pagina e il contatore di ogni colonna mostra quante voci sono selezionate.
+
 Il campo **Dipartimento** è in sola lettura nell'anagrafica HR: viene calcolato dai Competence Center attivi a cui la persona appartiene, ordinati alfabeticamente e separati da virgola. Le membership si modificano dalla gestione **Competence Center**, non dal form HR. Il campo **Responsabile** è opzionale e può essere impostato solo scegliendo un utente applicativo attivo diverso dalla persona stessa.
 
 I valori di stato HR descrivono il ciclo di vita della risorsa (**Attivo**, **Onboarding**, **In permesso/assenza**, **Cessato**) e non disabilitano l'accesso all'applicazione. Per bloccare un account applicativo continua a usare lo stato account in **Amministrazione > Utenti**.

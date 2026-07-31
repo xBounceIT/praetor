@@ -17,6 +17,8 @@ Use **Internal Employees** for company personnel and application users. Use **Ex
 
 The HR tables expose the fields needed for quick review: employee code, email and company phone in separate columns, role, department, responsible user, and HR status. Open a row to update the profile when you have the matching update permission.
 
+For application users, **Manage access** assigns clients, jobs, and activities from one dialog. Each of the three lists is paginated independently with seven items per page, so moving through one column does not move the others and existing selections remain active. Searches and client/job filters automatically return the lists to their first page, while each column's counter shows how many items are selected.
+
 The **Department** field is read-only in the HR profile: Praetor derives it from the active competence centers the person belongs to, sorted alphabetically and separated by commas. Change memberships from **Competence Centers**, not from the HR form. **Responsible** is optional and can only point to an active application user other than the employee themselves.
 
 HR status describes the employee lifecycle (**Active**, **Onboarding**, **On leave**, **Terminated**) and does not disable application access. To block an application account, keep using the account status in **Administration > Users**.
