@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import type { User, WorkUnit } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
@@ -35,6 +35,17 @@ const renderView = (workUnits: WorkUnit[]) =>
   );
 
 describe('<WorkUnitsView /> member preview (issue #761)', () => {
+  test('keeps the empty-state title in the page heading hierarchy', () => {
+    renderView([]);
+
+    expect(
+      screen.getByRole('heading', {
+        level: 3,
+        name: 'competenceCenters.noCompetenceCentersAssigned',
+      }),
+    ).toBeInTheDocument();
+  });
+
   test('renders member initials with a +N overflow badge instead of the count', () => {
     renderView([
       {
@@ -53,11 +64,14 @@ describe('<WorkUnitsView /> member preview (issue #761)', () => {
       },
     ]);
 
-    expect(screen.getByText('AS')).toBeInTheDocument();
+    const memberRegion = screen.getByRole('region', {
+      name: 'hr:competenceCenters.members: Engineering',
+    });
+    expect(within(memberRegion).getByText('AS')).toBeInTheDocument();
     // Each badge surfaces the member's full name as its accessible label.
-    expect(screen.getByLabelText('Andrea Scognamiglio')).toBeInTheDocument();
+    expect(within(memberRegion).getByLabelText('Andrea Scognamiglio')).toBeInTheDocument();
     // 6 members, inline cap of 5 → one collapses into a "+1" badge.
-    expect(screen.getByText('+1')).toBeInTheDocument();
+    expect(within(memberRegion).getByText('+1')).toBeInTheDocument();
     // The avatar row replaces both the count line and the empty-state text.
     expect(screen.queryByText(/competenceCenters\.users/)).not.toBeInTheDocument();
     expect(screen.queryByText(/competenceCenters\.noMembersAssigned/)).not.toBeInTheDocument();
@@ -76,5 +90,19 @@ describe('<WorkUnitsView /> member preview (issue #761)', () => {
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText(/competenceCenters\.noMembersAssigned/)).toBeInTheDocument();
+  });
+
+  test('uses userCount instead of claiming no members when the preview is omitted', () => {
+    renderView([
+      {
+        id: 'wu-3',
+        name: 'Platform',
+        managers: [],
+        userCount: 3,
+      },
+    ]);
+
+    expect(screen.getAllByText(/competenceCenters\.memberCount/)).toHaveLength(2);
+    expect(screen.queryByText(/competenceCenters\.noMembersAssigned/)).not.toBeInTheDocument();
   });
 });

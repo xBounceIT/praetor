@@ -1,16 +1,16 @@
-import type { WorkUnit } from '../../types';
+import type { WorkUnit, WorkUnitMutationPayload } from '../../types';
 import { fetchApi } from './client';
 
 export const workUnitsApi = {
   list: (): Promise<WorkUnit[]> => fetchApi('/work-units'),
 
-  create: (data: Partial<WorkUnit>): Promise<WorkUnit> =>
+  create: (data: WorkUnitMutationPayload): Promise<WorkUnit> =>
     fetchApi('/work-units', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  update: (id: string, updates: Partial<WorkUnit>): Promise<WorkUnit> =>
+  update: (id: string, updates: WorkUnitMutationPayload): Promise<WorkUnit> =>
     fetchApi(`/work-units/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types';
@@ -109,6 +109,10 @@ const baseProps = {
   onDeleteOffer: () => {},
   currency: 'EUR',
 };
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 afterEach(() => {
   document.body.style.overflow = '';
@@ -1154,7 +1158,7 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('O-SENT'));
+    fireEvent.click(await screen.findByText('O-SENT'));
     await screen.findByRole('button', { name: 'common:buttons.cancel' });
     // The extend-only submit path is for EXPIRED offers; exposing it on valid sent offers let a
     // no-op "Update" click write needless version snapshots and audit rows.
@@ -1173,7 +1177,7 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('O-SENT'));
+    fireEvent.click(await screen.findByText('O-SENT'));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('sales:clientOffers.readOnlyStatus')).toBeTruthy();
     const restore = within(dialog).getByTestId('client-offer-modal-restore-draft');
@@ -1201,7 +1205,7 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('O-ACME-ACCEPTED'));
+    fireEvent.click(await screen.findByText('O-ACME-ACCEPTED'));
     const dialog = await screen.findByRole('dialog');
     const restore = within(dialog).getByTestId('client-offer-modal-restore-draft');
     expect(restore).toBeDisabled();
@@ -1218,7 +1222,7 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('O-ACME-ACCEPTED'));
+    fireEvent.click(await screen.findByText('O-ACME-ACCEPTED'));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByTestId('client-offer-modal-restore-draft')).toBeDisabled();
   });
@@ -1235,7 +1239,7 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('O-ACME-ACCEPTED'));
+    fireEvent.click(await screen.findByText('O-ACME-ACCEPTED'));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByTestId('client-offer-modal-restore-draft'));
     expect(screen.getByText('sales:clientOffers.revertToDraftTitle')).toBeInTheDocument();
@@ -1244,7 +1248,6 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
 
 describe('<ClientOffersView /> paginated item validation', () => {
   test('blocks a quantity missing on a row outside the first page', async () => {
-    localStorage.clear();
     const offerId = 'O-PAGED-VALIDATION';
     const items = Array.from({ length: 6 }, (_, index): ClientOffer['items'][number] => ({
       id: `paged-offer-item-${index + 1}`,

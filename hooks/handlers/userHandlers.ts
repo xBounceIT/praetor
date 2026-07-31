@@ -1,6 +1,6 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { Role, User, UserAuthMethod, WorkUnit } from '../../types';
+import type { Role, User, UserAuthMethod, WorkUnit, WorkUnitMutationPayload } from '../../types';
 import { getErrorMessage } from '../../utils/errors';
 import { TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
@@ -214,7 +214,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     }
   };
 
-  const addWorkUnit = async (data: Partial<WorkUnit>) => {
+  const addWorkUnit = async (data: WorkUnitMutationPayload) => {
     try {
       const unit = await api.workUnits.create(data);
       setWorkUnits((prev) => [...prev, unit]);
@@ -224,7 +224,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     }
   };
 
-  const updateWorkUnit = async (id: string, updates: Partial<WorkUnit>) => {
+  const updateWorkUnit = async (id: string, updates: WorkUnitMutationPayload) => {
     try {
       const updated = await api.workUnits.update(id, updates);
       setWorkUnits((prev) => prev.map((w) => (w.id === id ? updated : w)));

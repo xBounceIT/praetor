@@ -304,6 +304,25 @@ describe('<SelectControl />', () => {
     expect(within(trigger).getByText('+1')).toHaveClass('hidden', 'sm:inline-flex');
   });
 
+  test('multi combobox preserves value order and ignores duplicate ids', () => {
+    render(
+      <SelectControl
+        options={options}
+        value={['b', 'a', 'b']}
+        onChange={() => {}}
+        searchable
+        isMulti
+      />,
+    );
+
+    const trigger = screen.getByRole('button');
+    const triggerText = trigger.textContent ?? '';
+    expect(triggerText.indexOf('Banana')).toBeLessThan(triggerText.indexOf('Apple'));
+    expect(within(trigger).getAllByText('Banana')).toHaveLength(1);
+    expect(within(trigger).getAllByText('+1')).toHaveLength(1);
+    expect(within(trigger).queryByText('+2')).toBeNull();
+  });
+
   test('empty-string option ids round-trip through plain select', () => {
     const emptyOptions = [{ id: '', name: 'Custom item' }, ...options];
     const plainChange = mock((_value: string | string[]) => {});

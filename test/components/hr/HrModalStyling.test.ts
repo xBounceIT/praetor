@@ -79,7 +79,7 @@ describe('HR employee modal styling', () => {
 });
 
 describe('HR competence center modal styling', () => {
-  test('create/edit dialogs use shared shadcn layout and primitives', async () => {
+  test('create, edit, and manager dialogs use shared shadcn layout and primitives', async () => {
     const source = await readComponentSource('WorkUnitsView.tsx');
 
     expectSourceContainsAll(source, [
@@ -89,8 +89,9 @@ describe('HR competence center modal styling', () => {
       "import { Textarea } from '@/components/ui/textarea';",
       '<ModalContent size="lg">',
       '<ModalHeader>',
-      '<ModalBody className="space-y-4">',
+      '<ModalBody className="space-y-5">',
       '<ModalFooter>',
+      'id="work-unit-manager-assignments"',
       '<ModalContent size="sm">',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl shadow-2xl']);

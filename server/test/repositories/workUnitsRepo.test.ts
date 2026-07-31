@@ -47,6 +47,16 @@ describe('findById', () => {
     expect(emitted).toContain("json_build_object('id', mu.id, 'name', mu.name)");
     expect(result?.members).toEqual([{ id: 'u-1', name: 'Alice' }]);
   });
+
+  test('baseSelect returns managers in a stable name and id order', async () => {
+    exec.enqueue({ rows: [aggRow] });
+    await workUnitsRepo.findById('wu-1', testDb);
+
+    const emitted = exec.calls[0].sql.toLowerCase().replace(/\s+/g, ' ');
+    expect(emitted).toContain(
+      "json_build_object('id', u.id, 'name', u.name) order by u.name, u.id",
+    );
+  });
 });
 
 describe('listAll', () => {
