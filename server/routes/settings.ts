@@ -8,6 +8,7 @@ import {
 import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
+import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
@@ -116,13 +117,15 @@ const mcpTokenSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    roleId: { type: 'string' },
+    roleName: { type: 'string' },
     name: { type: 'string' },
     tokenPrefix: { type: 'string' },
     scope: { type: 'string', enum: [...mcpTokensRepo.MCP_TOKEN_SCOPES] },
     createdAt: { type: 'number' },
     lastUsedAt: { type: ['number', 'null'] },
   },
-  required: ['id', 'name', 'tokenPrefix', 'scope', 'createdAt', 'lastUsedAt'],
+  required: ['id', 'roleId', 'roleName', 'name', 'tokenPrefix', 'scope', 'createdAt', 'lastUsedAt'],
 } as const;
 
 const mcpTokenCreateBodySchema = {
@@ -133,6 +136,15 @@ const mcpTokenCreateBodySchema = {
   },
   required: ['name'],
 } as const;
+
+const attachMcpTokenRoleNames = async (tokens: mcpTokensRepo.McpTokenSummary[]) => {
+  const roleIds = Array.from(new Set(tokens.map((token) => token.roleId)));
+  const rolesById = await rolesRepo.listByIds(roleIds);
+  return tokens.map((token) => ({
+    ...token,
+    roleName: rolesById.get(token.roleId)?.name ?? token.roleId,
+  }));
+};
 
 const mcpTokenCreateResponseSchema = {
   type: 'object',
@@ -279,7 +291,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
-      return mcpTokensRepo.listForUser(request.user.id);
+      return attachMcpTokenRoleNames(await mcpTokensRepo.listForUser(request.user.id));
     },
   );
 
@@ -323,16 +335,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      // Resolve display metadata before the irreversible one-time secret is persisted. If this
+      // lookup fails, no token is created whose raw value cannot be returned to the caller.
+      const role = await rolesRepo.findById(request.user.role);
       const rawToken = mcpTokensRepo.generateRawToken();
       const token = await mcpTokensRepo.createForUser({
         id: generatePrefixedId('mcp-token'),
         userId: request.user.id,
+        roleId: request.user.role,
         name: nameResult.value,
         rawToken,
         scope: scopeResult.value ?? 'full',
       });
 
-      return reply.code(201).send({ token, rawToken });
+      return reply.code(201).send({
+        token: { ...token, roleName: role?.name ?? request.user.role },
+        rawToken,
+      });
     },
   );
 

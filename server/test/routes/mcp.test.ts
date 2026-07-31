@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import swagger from '@fastify/swagger';
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import type { McpAuthenticatedUser } from '../../middleware/mcpAuth.ts';
 import * as realMcpAuth from '../../middleware/mcpAuth.ts';
@@ -76,6 +77,10 @@ const deleteTimeEntryMock = mock();
 let routePlugin: FastifyPluginAsync;
 let testApp: FastifyInstance;
 let currentPermissions: string[] = [];
+let currentTokenScope: 'full' | 'read_only' = 'full';
+const gatewayMutationMock = mock();
+let activeGatewayRequests = 0;
+let maxActiveGatewayRequests = 0;
 
 const makeMcpUser = (): McpAuthenticatedUser => ({
   id: 'u1',
@@ -94,12 +99,18 @@ const authenticateMcpTokenMock = async (request: FastifyRequest, reply: FastifyR
 
   const user = makeMcpUser();
   request.user = user;
-  request.auth = { userId: user.id, sessionStart: Date.now() };
+  request.auth = { userId: user.id, source: 'mcpToken', tokenScope: currentTokenScope };
   (request.raw as typeof request.raw & { auth?: unknown }).auth = {
     token: 'praetor_mcp_test',
     clientId: user.id,
     scopes: user.permissions,
-    extra: { user, tokenId: 'mcp-token-1', tokenName: 'Agent' },
+    extra: {
+      clientIp: request.ip,
+      user,
+      tokenId: 'mcp-token-1',
+      tokenName: 'Agent',
+      tokenScope: currentTokenScope,
+    },
   };
 };
 
@@ -251,11 +262,15 @@ beforeEach(async () => {
     createTimeEntryMock,
     updateTimeEntryMock,
     deleteTimeEntryMock,
+    gatewayMutationMock,
   ]) {
     m.mockReset();
   }
 
   currentPermissions = ['timesheets.tracker.view'];
+  currentTokenScope = 'full';
+  activeGatewayRequests = 0;
+  maxActiveGatewayRequests = 0;
   clientOffersListAllMock.mockResolvedValue([]);
   clientOffersListAllItemsMock.mockResolvedValue([]);
   clientQuotesListAllMock.mockResolvedValue([]);
@@ -320,10 +335,89 @@ beforeEach(async () => {
   updateTimeEntryMock.mockImplementation((_user, id, patch) => Promise.resolve({ id, ...patch }));
   deleteTimeEntryMock.mockResolvedValue({ message: 'Entry deleted' });
 
-  testApp = await buildRouteTestApp(routePlugin, '/api/mcp');
+  testApp = await buildRouteTestApp(routePlugin, '/api/mcp', async (app) => {
+    await app.register(swagger, {
+      openapi: { info: { title: 'MCP gateway test API', version: '1.0.0' } },
+    });
+    const requireGatewayPermission =
+      (permission: string) => async (request: FastifyRequest, _reply: FastifyReply) => {
+        if (request.headers.authorization !== 'Bearer praetor_mcp_test') {
+          throw Object.assign(new Error('Authentication required'), { statusCode: 401 });
+        }
+        if (!currentPermissions.includes(permission)) {
+          throw Object.assign(new Error('Insufficient permissions'), { statusCode: 403 });
+        }
+      };
+
+    app.get(
+      '/api/gateway-test/:id',
+      {
+        onRequest: [requireGatewayPermission('gateway.view')],
+        schema: { summary: 'Get gateway test', tags: ['gateway'] },
+      },
+      async (request) => ({
+        id: (request.params as { id: string }).id,
+        ip: request.ip,
+        query: request.query,
+      }),
+    );
+    app.patch(
+      '/api/gateway-test/:id',
+      {
+        onRequest: [requireGatewayPermission('gateway.update')],
+        schema: { summary: 'Update gateway test', tags: ['gateway'] },
+      },
+      async (request) => {
+        gatewayMutationMock(request.body);
+        return {
+          id: (request.params as { id: string }).id,
+          body: request.body,
+        };
+      },
+    );
+    app.get('/api/gateway-redirect', { schema: { hide: true } }, async (_request, reply) =>
+      reply.code(302).header('location', '/api/gateway-test/item-1').send(),
+    );
+    app.patch(
+      '/api/gateway-large-response',
+      {
+        onRequest: [requireGatewayPermission('gateway.update')],
+        schema: { hide: true },
+      },
+      async (request) => {
+        gatewayMutationMock(request.body);
+        return { payload: 'x'.repeat(2 * 1024 * 1024) };
+      },
+    );
+    app.get(
+      '/api/gateway-medium-response/:id',
+      {
+        onRequest: [requireGatewayPermission('gateway.view')],
+        schema: { hide: true },
+      },
+      async (request) => ({
+        id: (request.params as { id: string }).id,
+        payload: 'x'.repeat(1024 * 1024),
+      }),
+    );
+    app.get(
+      '/api/gateway-slow/:id',
+      {
+        onRequest: [requireGatewayPermission('gateway.view')],
+        schema: { hide: true },
+      },
+      async (request) => {
+        activeGatewayRequests += 1;
+        maxActiveGatewayRequests = Math.max(maxActiveGatewayRequests, activeGatewayRequests);
+        await Bun.sleep(10);
+        activeGatewayRequests -= 1;
+        return { id: (request.params as { id: string }).id };
+      },
+    );
+  });
 });
 
-const rpc = async (body: Record<string, unknown>, auth = true) =>
+const rpc = async (body: Record<string, unknown>, auth = true, remoteAddress?: string) =>
   testApp.inject({
     method: 'POST',
     url: '/api/mcp',
@@ -334,6 +428,7 @@ const rpc = async (body: Record<string, unknown>, auth = true) =>
       'mcp-protocol-version': '2025-06-18',
     },
     payload: JSON.stringify(body),
+    ...(remoteAddress ? { remoteAddress } : {}),
   });
 
 const parseMcpBody = (body: string) => {
@@ -440,6 +535,11 @@ describe('/api/mcp', () => {
     expect(toolNames).toContain('praetor_bulk_create_time_entries');
     expect(toolNames).toContain('praetor_bulk_update_time_entries');
     expect(toolNames).toContain('praetor_bulk_delete_time_entries');
+    expect(toolNames).toContain('praetor_list_api_operations');
+    expect(toolNames).toContain('praetor_retrieve');
+    expect(toolNames).toContain('praetor_bulk_retrieve');
+    expect(toolNames).toContain('praetor_mutate');
+    expect(toolNames).toContain('praetor_bulk_mutate');
     expect(toolNames).not.toContain('praetor_get_reporting_dataset');
 
     const clientsRes = await rpc({
@@ -455,6 +555,378 @@ describe('/api/mcp', () => {
       { id: 'c1', name: 'Client One', description: null },
     ]);
     expect(clientsListMock).toHaveBeenCalledWith({ canViewAllClients: false, userId: 'u1' });
+  });
+
+  test('discovers non-auth API operations alongside the token permissions', async () => {
+    currentPermissions = ['gateway.view', 'gateway.update'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_list_api_operations',
+        arguments: { search: 'gateway', limit: 10 },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content.total).toBe(2);
+    expect(content.operations).toEqual([
+      {
+        method: 'GET',
+        path: '/api/gateway-test/{id}',
+        summary: 'Get gateway test',
+        tags: ['gateway'],
+      },
+      {
+        method: 'PATCH',
+        path: '/api/gateway-test/{id}',
+        summary: 'Update gateway test',
+        tags: ['gateway'],
+      },
+    ]);
+    expect(content.grantedPermissions).toEqual(['gateway.view', 'gateway.update']);
+  });
+
+  test('retrieves any authorized API route with query parameters', async () => {
+    currentPermissions = ['gateway.view'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_retrieve',
+        arguments: {
+          requestId: 'lookup-1',
+          path: '/api/gateway-test/item-1',
+          query: { include: ['details', 'history'], limit: 5 },
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content).toMatchObject({
+      requestId: 'lookup-1',
+      ok: true,
+      status: 200,
+      body: {
+        id: 'item-1',
+        query: { include: ['details', 'history'], limit: '5' },
+      },
+    });
+  });
+
+  test('preserves the outer client IP for target-route audit and rate limiting', async () => {
+    currentPermissions = ['gateway.view'];
+
+    const res = await rpc(
+      {
+        jsonrpc: '2.0',
+        id: 221,
+        method: 'tools/call',
+        params: {
+          name: 'praetor_retrieve',
+          arguments: { path: '/api/gateway-test/item-1' },
+        },
+      },
+      true,
+      '203.0.113.7',
+    );
+
+    expect(parseMcpBody(res.body).result.structuredContent).toMatchObject({
+      ok: true,
+      status: 200,
+      body: { ip: '203.0.113.7' },
+    });
+  });
+
+  test('returns target-route permission failures without bypassing the route guard', async () => {
+    currentPermissions = [];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 22,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_retrieve',
+        arguments: { path: '/api/gateway-test/item-1' },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content).toMatchObject({
+      ok: false,
+      status: 403,
+      body: { message: 'Insufficient permissions' },
+    });
+  });
+
+  test('bulk retrieves with stable order and per-request results', async () => {
+    currentPermissions = ['gateway.view'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 23,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_retrieve',
+        arguments: {
+          requests: [
+            { requestId: 'found', path: '/api/gateway-test/item-1' },
+            { requestId: 'missing', path: '/api/not-found' },
+          ],
+        },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content.summary).toEqual({ requested: 2, succeeded: 1, failed: 1 });
+    expect(content.results).toEqual([
+      expect.objectContaining({ index: 0, requestId: 'found', ok: true, status: 200 }),
+      expect.objectContaining({ index: 1, requestId: 'missing', ok: false, status: 404 }),
+    ]);
+  });
+
+  test('bounds concurrent gateway work in bulk retrievals', async () => {
+    currentPermissions = ['gateway.view'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 231,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_retrieve',
+        arguments: {
+          requests: Array.from({ length: 12 }, (_, index) => ({
+            path: `/api/gateway-slow/${index}`,
+          })),
+        },
+      },
+    });
+
+    expect(parseMcpBody(res.body).result.structuredContent.summary).toEqual({
+      requested: 12,
+      succeeded: 12,
+      failed: 0,
+    });
+    expect(maxActiveGatewayRequests).toBeLessThanOrEqual(5);
+  });
+
+  test('caps aggregate bulk response bodies while preserving each target outcome', async () => {
+    currentPermissions = ['gateway.view'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 232,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_retrieve',
+        arguments: {
+          requests: Array.from({ length: 6 }, (_, index) => ({
+            requestId: `medium-${index}`,
+            path: `/api/gateway-medium-response/${index}`,
+          })),
+        },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content.summary).toEqual({ requested: 6, succeeded: 6, failed: 0 });
+    expect(content.results.every((result: { ok: boolean }) => result.ok)).toBe(true);
+    expect(
+      content.results.some(
+        (result: { bodyTruncated?: boolean; body?: { targetRequestSucceeded?: boolean } }) =>
+          result.bodyTruncated && result.body?.targetRequestSucceeded === true,
+      ),
+    ).toBe(true);
+  });
+
+  test('mutates any authorized API route with a full-access token', async () => {
+    currentPermissions = ['gateway.update'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 24,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_mutate',
+        arguments: {
+          method: 'PATCH',
+          path: '/api/gateway-test/item-1',
+          body: { name: 'Updated' },
+        },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content).toMatchObject({
+      ok: true,
+      status: 200,
+      body: { id: 'item-1', body: { name: 'Updated' } },
+    });
+    expect(gatewayMutationMock).toHaveBeenCalledWith({ name: 'Updated' });
+  });
+
+  test('does not report a committed mutation as failed when its response body is oversized', async () => {
+    currentPermissions = ['gateway.update'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 241,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_mutate',
+        arguments: {
+          method: 'PATCH',
+          path: '/api/gateway-large-response',
+          body: { name: 'Committed once' },
+        },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content).toMatchObject({
+      ok: true,
+      status: 200,
+      bodyTruncated: true,
+      body: { targetRequestSucceeded: true },
+    });
+    expect(content.originalBodyBytes).toBeGreaterThan(2 * 1024 * 1024);
+    expect(gatewayMutationMock).toHaveBeenCalledTimes(1);
+    expect(gatewayMutationMock).toHaveBeenCalledWith({ name: 'Committed once' });
+  });
+
+  test('classifies redirects as non-successful target responses', async () => {
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 242,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_retrieve',
+        arguments: { path: '/api/gateway-redirect' },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content).toMatchObject({
+      ok: false,
+      status: 302,
+      headers: { location: '/api/gateway-test/item-1' },
+    });
+  });
+
+  test('blocks generic mutations for read-only tokens before calling the target route', async () => {
+    currentPermissions = ['gateway.update'];
+    currentTokenScope = 'read_only';
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 25,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_mutate',
+        arguments: {
+          method: 'PATCH',
+          path: '/api/gateway-test/item-1',
+          body: { name: 'Blocked' },
+        },
+      },
+    });
+
+    const result = parseMcpBody(res.body).result;
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('MCP token is read-only');
+    expect(gatewayMutationMock).not.toHaveBeenCalled();
+  });
+
+  test('bulk mutates with partial results and no rollback of successful requests', async () => {
+    currentPermissions = ['gateway.update'];
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 251,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_mutate',
+        arguments: {
+          requests: [
+            {
+              requestId: 'updated',
+              method: 'PATCH',
+              path: '/api/gateway-test/item-1',
+              body: { name: 'Updated in bulk' },
+            },
+            { requestId: 'missing', method: 'DELETE', path: '/api/not-found' },
+          ],
+        },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content.summary).toEqual({ requested: 2, succeeded: 1, failed: 1 });
+    expect(content.results).toEqual([
+      expect.objectContaining({ index: 0, requestId: 'updated', ok: true, status: 200 }),
+      expect.objectContaining({ index: 1, requestId: 'missing', ok: false, status: 404 }),
+    ]);
+    expect(gatewayMutationMock).toHaveBeenCalledWith({ name: 'Updated in bulk' });
+  });
+
+  test('rejects auth gateway paths and API batches over 25 requests', async () => {
+    const authPathRes = await rpc({
+      jsonrpc: '2.0',
+      id: 26,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_retrieve',
+        arguments: { path: '/api/auth/login' },
+      },
+    });
+    const authPathResult = parseMcpBody(authPathRes.body).result;
+    expect(authPathResult.isError).toBe(true);
+    expect(authPathResult.content[0].text).toMatch(/authentication endpoints/i);
+
+    const encodedAuthPathRes = await rpc({
+      jsonrpc: '2.0',
+      id: 261,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_retrieve',
+        arguments: { path: '/api/%61uth/login' },
+      },
+    });
+    expect(parseMcpBody(encodedAuthPathRes.body).result.isError).toBe(true);
+
+    const encodedSeparatorRes = await rpc({
+      jsonrpc: '2.0',
+      id: 262,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_retrieve',
+        arguments: { path: '/api/%2fauth/login' },
+      },
+    });
+    expect(parseMcpBody(encodedSeparatorRes.body).result.isError).toBe(true);
+
+    const batchRes = await rpc({
+      jsonrpc: '2.0',
+      id: 27,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_retrieve',
+        arguments: {
+          requests: Array.from({ length: 26 }, (_, index) => ({
+            path: `/api/gateway-test/${index}`,
+          })),
+        },
+      },
+    });
+    const batchResult = parseMcpBody(batchRes.body).result;
+    expect(batchResult.isError).toBe(true);
+    expect(batchResult.content[0].text).toContain('Too big');
   });
 
   test('redacts advanced project data for list-only MCP users', async () => {
@@ -763,6 +1235,72 @@ describe('/api/mcp', () => {
     expect(workUnitsListAllMock).not.toHaveBeenCalled();
   });
 
+  test('tracker_all MCP viewers see every user without managing their competence centers', async () => {
+    currentPermissions = ['timesheets.tracker_all.view'];
+    usersListAllForAdminMock.mockResolvedValue([FULL_HR_USER]);
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 51,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content.users).toEqual([
+      {
+        id: 'u2',
+        name: 'Bob',
+        username: 'bob',
+        email: '',
+        role: 'user',
+        avatarInitials: 'BO',
+        costPerHour: 0,
+        isDisabled: false,
+        employeeType: 'internal',
+        hasTopManagerRole: false,
+        isAdminOnly: false,
+      },
+    ]);
+    expect(content.workUnits).toEqual([]);
+    expect(content.scope).toMatchObject({ canViewAllUsers: true, canViewWorkUnits: false });
+    expect(usersListAllForAdminMock).toHaveBeenCalledTimes(1);
+    expect(usersListScopedForManagerMock).not.toHaveBeenCalled();
+  });
+
+  test('tracker_all MCP viewers can load the same selector catalogs as the REST API', async () => {
+    currentPermissions = ['timesheets.tracker_all.view'];
+
+    const [clientsRes, projectsRes, tasksRes] = await Promise.all([
+      rpc({
+        jsonrpc: '2.0',
+        id: 52,
+        method: 'tools/call',
+        params: { name: 'praetor_list_clients', arguments: {} },
+      }),
+      rpc({
+        jsonrpc: '2.0',
+        id: 53,
+        method: 'tools/call',
+        params: { name: 'praetor_list_projects', arguments: {} },
+      }),
+      rpc({
+        jsonrpc: '2.0',
+        id: 54,
+        method: 'tools/call',
+        params: { name: 'praetor_list_tasks', arguments: {} },
+      }),
+    ]);
+
+    for (const response of [clientsRes, projectsRes, tasksRes]) {
+      expect(parseMcpBody(response.body).result.isError).not.toBe(true);
+    }
+    expect(clientsListMock).toHaveBeenCalledWith({ canViewAllClients: false, userId: 'u1' });
+    expect(projectsListForUserMock).toHaveBeenCalledWith('u1');
+    expect(tasksListForUserMock).toHaveBeenCalledWith('u1');
+  });
+
   test('does not disclose HR details through hierarchy-only permissions', async () => {
     currentPermissions = ['timesheets.tracker.view', 'hr.work_units.view'];
     usersListScopedForManagerMock.mockResolvedValue([FULL_HR_USER]);
@@ -821,7 +1359,7 @@ describe('/api/mcp', () => {
       firstName: 'Robert',
       emergencyContactName: 'Emergency Contact',
       notes: 'Private HR notes',
-      email: '',
+      email: 'bob@example.com',
       costPerHour: 0,
     });
     expect(externalUser).toEqual({
@@ -1013,6 +1551,118 @@ describe('/api/mcp', () => {
     expect(workUnitsListManagedByMock).not.toHaveBeenCalled();
   });
 
+  test('work_units_all alone exposes all work units just like the scoped REST guard', async () => {
+    currentPermissions = ['hr.work_units_all.view'];
+    workUnitsListAllMock.mockResolvedValue([
+      {
+        id: 'wu-all',
+        name: 'Operations',
+        description: 'Ops',
+        managers: [{ id: 'u2', name: 'Bob' }],
+        members: [{ id: 'u2', name: 'Bob' }],
+        isDisabled: false,
+        userCount: 1,
+      },
+    ]);
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 72,
+      method: 'tools/call',
+      params: { name: 'praetor_get_users_hierarchy', arguments: {} },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content.workUnits).toEqual([expect.objectContaining({ id: 'wu-all', userIds: ['u2'] })]);
+    expect(content.scope).toMatchObject({
+      canViewAllWorkUnits: true,
+      canViewWorkUnits: true,
+    });
+    expect(workUnitsListAllMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('masks time-entry costs unless the MCP role grants reports.cost.view', async () => {
+    const entry = {
+      id: 'te-cost',
+      userId: 'u1',
+      date: '2026-05-11',
+      clientId: 'c1',
+      clientName: 'Client One',
+      projectId: 'p1',
+      projectName: 'Project One',
+      task: 'Task One',
+      taskId: 't1',
+      notes: null,
+      duration: 2,
+      hourlyCost: 80,
+      cost: 160,
+      isPlaceholder: false,
+      location: 'remote',
+      createdAt: 1,
+      version: 1,
+    };
+    listTimeEntriesMock.mockResolvedValue({ entries: [entry], nextCursor: null });
+
+    const maskedRes = await rpc({
+      jsonrpc: '2.0',
+      id: 73,
+      method: 'tools/call',
+      params: { name: 'praetor_list_time_entries', arguments: {} },
+    });
+    const maskedEntry = parseMcpBody(maskedRes.body).result.structuredContent.entries[0];
+    expect(maskedEntry).not.toHaveProperty('hourlyCost');
+    expect(maskedEntry).not.toHaveProperty('cost');
+
+    currentPermissions = ['timesheets.tracker.view', 'reports.cost.view'];
+    const visibleRes = await rpc({
+      jsonrpc: '2.0',
+      id: 74,
+      method: 'tools/call',
+      params: { name: 'praetor_list_time_entries', arguments: {} },
+    });
+    expect(parseMcpBody(visibleRes.body).result.structuredContent.entries[0]).toMatchObject({
+      hourlyCost: 80,
+      cost: 160,
+    });
+  });
+
+  test('masks costs returned by single and bulk time-entry writes', async () => {
+    createTimeEntryMock.mockImplementation((_user, entry) =>
+      Promise.resolve({
+        id: `created-${entry.task}`,
+        ...entry,
+        hourlyCost: 80,
+        cost: 80,
+      }),
+    );
+
+    const singleRes = await rpc({
+      jsonrpc: '2.0',
+      id: 75,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_create_time_entry',
+        arguments: makeCreateTimeEntryArgs('Single Cost'),
+      },
+    });
+    const bulkRes = await rpc({
+      jsonrpc: '2.0',
+      id: 76,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_create_time_entries',
+        arguments: { entries: [makeCreateTimeEntryArgs('Bulk Cost')] },
+      },
+    });
+
+    const singleEntry = parseMcpBody(singleRes.body).result.structuredContent.entry;
+    const bulkEntry = parseMcpBody(bulkRes.body).result.structuredContent.results[0].entry;
+    for (const returnedEntry of [singleEntry, bulkEntry]) {
+      expect(returnedEntry).not.toHaveProperty('hourlyCost');
+      expect(returnedEntry).not.toHaveProperty('cost');
+    }
+  });
+
   test('enforces Praetor permissions for users hierarchy', async () => {
     currentPermissions = [];
 
@@ -1069,6 +1719,77 @@ describe('/api/mcp', () => {
       expect.objectContaining({ id: 'u1' }),
       makeCreateTimeEntryArgs('Task One'),
     );
+  });
+
+  test('keeps per-item outcomes when one bulk time-entry operation throws unexpectedly', async () => {
+    createTimeEntryMock
+      .mockResolvedValueOnce({ id: 'te-1', ...makeCreateTimeEntryArgs('Task One') })
+      .mockRejectedValueOnce(new Error('database connection lost'))
+      .mockResolvedValueOnce({ id: 'te-3', ...makeCreateTimeEntryArgs('Task Three') });
+
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 84,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_create_time_entries',
+        arguments: {
+          entries: [
+            makeCreateTimeEntryArgs('Task One'),
+            makeCreateTimeEntryArgs('Task Two'),
+            makeCreateTimeEntryArgs('Task Three'),
+          ],
+        },
+      },
+    });
+
+    const content = parseMcpBody(res.body).result.structuredContent;
+    expect(content.summary).toEqual({ requested: 3, succeeded: 2, failed: 1 });
+    expect(content.results).toEqual([
+      expect.objectContaining({
+        index: 0,
+        success: true,
+        entry: expect.objectContaining({ id: 'te-1' }),
+      }),
+      { index: 1, success: false, error: 'Unexpected internal error' },
+      expect.objectContaining({
+        index: 2,
+        success: true,
+        entry: expect.objectContaining({ id: 'te-3' }),
+      }),
+    ]);
+  });
+
+  test('bounds concurrent service work in bulk time-entry writes', async () => {
+    let activeOperations = 0;
+    let maxActiveOperations = 0;
+    createTimeEntryMock.mockImplementation(async (_user, entry) => {
+      activeOperations += 1;
+      maxActiveOperations = Math.max(maxActiveOperations, activeOperations);
+      await Bun.sleep(10);
+      activeOperations -= 1;
+      return { id: `created-${entry.task}`, ...entry };
+    });
+
+    const entries = Array.from({ length: 12 }, (_, index) =>
+      makeCreateTimeEntryArgs(`Task ${index}`),
+    );
+    const res = await rpc({
+      jsonrpc: '2.0',
+      id: 83,
+      method: 'tools/call',
+      params: {
+        name: 'praetor_bulk_create_time_entries',
+        arguments: { entries },
+      },
+    });
+
+    expect(parseMcpBody(res.body).result.structuredContent.summary).toEqual({
+      requested: 12,
+      succeeded: 12,
+      failed: 0,
+    });
+    expect(maxActiveOperations).toBeLessThanOrEqual(5);
   });
 
   test('bulk_create_time_entries keeps omitted notes compatible during the UI rollout', async () => {

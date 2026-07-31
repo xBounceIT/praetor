@@ -564,6 +564,26 @@ describe('GET /api/users', () => {
     expect(listAllForAdminMock).not.toHaveBeenCalled();
   });
 
+  test('200 tracker_all viewer lists every user without competence-center management', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.view']);
+    listAllForAdminMock.mockResolvedValue([SAMPLE_USER_ROW]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listAllForAdminMock).toHaveBeenCalledTimes(1);
+    expect(listScopedForManagerMock).not.toHaveBeenCalled();
+    const body = JSON.parse(res.body);
+    expect(body[0].id).toBe(SAMPLE_USER_ROW.id);
+    expect(body[0].email).toBe('');
+    expect(body[0].costPerHour).toBe(0);
+  });
+
   test('200 RIL viewer can list scoped users for the RIL user picker', async () => {
     findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
     getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
@@ -4033,6 +4053,27 @@ describe('POST /api/users/:id/assignments', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test('403 tracker-all visibility does not grant assignment-management scope', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue([
+      'timesheets.tracker.view',
+      'timesheets.tracker_all.view',
+      'hr.employee_assignments.update',
+    ]);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users/u-target/assignments',
+      headers: managerAuth(),
+      payload: { clientIds: ['c1'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+    expect(replaceUserClientsMock).not.toHaveBeenCalled();
   });
 
   test('403 without hr.employee_assignments.update', async () => {

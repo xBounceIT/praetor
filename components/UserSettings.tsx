@@ -2366,7 +2366,10 @@ const McpTokenRow: React.FC<{ controller: UserSettingsController; token: McpToke
         <p className="text-xs text-muted-foreground mt-1">
           {token.tokenPrefix}... · {controller.t('mcp.created')}{' '}
           {formatMcpTokenDate(token.createdAt)} · {controller.t('mcp.lastUsed')}{' '}
-          {formatMcpTokenDate(token.lastUsedAt)}
+          {formatMcpTokenDate(token.lastUsedAt)} ·{' '}
+          <span data-role={token.roleId}>
+            {controller.t('mcp.role')}: {token.roleName}
+          </span>
         </p>
       </div>
       <Dialog>

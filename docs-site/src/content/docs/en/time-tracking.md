@@ -30,9 +30,11 @@ From the daily activity list you can **Duplicate** an existing entry: a dialog l
 
 Single-entry duration is capped at 24 hours: both `POST /api/entries` and `PUT /api/entries/:id` reject any `duration` greater than `24`. Split work across separate dates instead of recording impossibly long durations.
 
-Projects whose end date is before today are considered expired, except jobs in **Perpetuo** status, which remain available in the tracker even with a past end date. Without the `timesheets.expired_projects.create` permission, expired projects are hidden from the daily and weekly selections and the server rejects new entries or moves into those projects with `403`. Jobs in **In pausa** or **Terminato** status are always excluded from the tracker, weekly-view, and RIL selectors, and the server always rejects new entries or moves into those jobs even when the user can work on expired projects. Existing entries already logged on expired projects can still be edited for non-catalog fields such as duration, notes, location, and placeholder state; **In pausa** or **Terminato** also blocks edits to entries already linked to that job and any catalog change into that job.
+Projects whose end date is before today are considered expired in selectors, except jobs in **Perpetuo** status, which remain available even with a past end date. The server compares the entry date with the project end date: a historical entry within the project's valid period can be created or moved without an additional permission even when the project is expired today. `timesheets.expired_projects.create` is required only for entries after the project end date. Jobs in **In pausa** or **Terminato** status are always excluded from the tracker, weekly-view, and RIL selectors, and the server always rejects new entries or moves into those jobs. Existing entries can still be edited for non-catalog fields such as duration, notes, location, and placeholder state; **In pausa** or **Terminato** also blocks edits to entries already linked to that job and any catalog change into that job.
 
 When an entry is edited, Praetor uses the API-returned `version` field to prevent concurrent overwrites. If the same entry was saved elsewhere meanwhile, `PUT /api/entries/:id` returns `409` and the entry must be reloaded before retrying.
+
+The `timesheets.tracker_all.view` permission allows viewing every user's time entries without requiring the viewer to manage those users' competence centers. To make the correct user selectable, both the REST user list and `praetor_get_users_hierarchy` include every user; email addresses, HR details, and costs remain masked unless their dedicated permissions are also granted.
 
 ## Weekly view
 
@@ -79,7 +81,7 @@ For `monthly` recurrences, if the start-date day does not exist in a shorter mon
 
 Sundays, Saturdays (when the _Treat Saturday as holiday_ setting is enabled), and Italian holidays are always skipped.
 
-Recurring tasks linked to expired projects are skipped during generation unless the role has `timesheets.expired_projects.create`. Recurrences linked to jobs in **In pausa** or **Terminato** status are always skipped.
+For recurring tasks, Praetor generates dates up to the project end date even when processing a historical range. Later dates are skipped unless the role has `timesheets.expired_projects.create`. Recurrences linked to jobs in **In pausa** or **Terminato** status are always skipped.
 
 ### Server-side generation
 

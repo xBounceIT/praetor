@@ -32,12 +32,15 @@ export const isProjectStatusExemptFromExpiry = (
   status: ProjectStatus | null | undefined,
 ): boolean => status === 'perpetuo';
 
-export const isProjectExpiredForTimeEntries = (project: {
-  endDate?: string | null;
-  status?: ProjectStatus | null;
-}): boolean => {
+export const isProjectExpiredForTimeEntries = (
+  project: {
+    endDate?: string | null;
+    status?: ProjectStatus | null;
+  },
+  referenceDate = todayLocalDateOnly(),
+): boolean => {
   if (isProjectStatusExemptFromExpiry(project.status)) return false;
-  return !!project.endDate && project.endDate < todayLocalDateOnly();
+  return !!project.endDate && project.endDate < referenceDate;
 };
 
 export const isProjectEndDateRequired = ({

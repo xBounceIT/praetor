@@ -33,6 +33,8 @@ const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 const findAuthUserByIdMock = mock();
 const findCoreByIdMock = mock();
 const userHasRoleMock = mock();
+const findRoleByIdMock = mock();
+const listRolesByIdsMock = mock();
 const getRolePermissionsMock = mock();
 const getOrCreateForUserMock = mock();
 const upsertForUserMock = mock();
@@ -67,6 +69,8 @@ beforeAll(async () => {
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
+    findById: findRoleByIdMock,
+    listByIds: listRolesByIdsMock,
     userHasRole: userHasRoleMock,
   }));
   mock.module('../../utils/permissions.ts', () => ({
@@ -157,6 +161,8 @@ const allMocks = [
   findAuthUserByIdMock,
   findCoreByIdMock,
   userHasRoleMock,
+  findRoleByIdMock,
+  listRolesByIdsMock,
   getRolePermissionsMock,
   getOrCreateForUserMock,
   upsertForUserMock,
@@ -195,6 +201,16 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   findCoreByIdMock.mockResolvedValue(LOCAL_CORE_USER);
   userHasRoleMock.mockResolvedValue(true);
+  findRoleByIdMock.mockImplementation((id: string) =>
+    Promise.resolve({ id, name: id === 'top_manager' ? 'Top Manager' : 'Delivery Lead' }),
+  );
+  listRolesByIdsMock.mockImplementation((ids: string[]) =>
+    Promise.resolve(
+      new Map(
+        ids.map((id) => [id, { id, name: id === 'top_manager' ? 'Top Manager' : 'Delivery Lead' }]),
+      ),
+    ),
+  );
   getRolePermissionsMock.mockResolvedValue([]);
   upsertAdminPasswordWarningMock.mockResolvedValue(undefined);
   deleteAdminPasswordWarningMock.mockResolvedValue(undefined);
@@ -202,6 +218,7 @@ beforeEach(async () => {
   generateRawMcpTokenMock.mockReturnValue('praetor_mcp_raw');
   createMcpTokenForUserMock.mockResolvedValue({
     id: 'mcp-token-1',
+    roleId: 'user',
     name: 'Agent',
     tokenPrefix: 'praetor_mcp_raw',
     scope: 'full',
@@ -230,7 +247,9 @@ afterEach(async () => {
   await testApp.close();
 });
 
-const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+const authHeader = (activeRole?: string) => ({
+  authorization: `Bearer ${signToken({ userId: 'u1', activeRole })}`,
+});
 const patHeader = () => ({ authorization: 'Bearer praetor_pat_forged-test-token' });
 
 describe('GET /api/settings', () => {
@@ -441,6 +460,8 @@ describe('MCP token settings routes', () => {
     listMcpTokensForUserMock.mockResolvedValue([
       {
         id: 'mcp-token-1',
+        roleId: 'user',
+        roleName: 'Delivery Lead',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_abcd',
         scope: 'full',
@@ -459,6 +480,8 @@ describe('MCP token settings routes', () => {
     expect(JSON.parse(res.body)).toEqual([
       {
         id: 'mcp-token-1',
+        roleId: 'user',
+        roleName: 'Delivery Lead',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_abcd',
         scope: 'full',
@@ -467,6 +490,7 @@ describe('MCP token settings routes', () => {
       },
     ]);
     expect(listMcpTokensForUserMock).toHaveBeenCalledWith('u1');
+    expect(listRolesByIdsMock).toHaveBeenCalledWith(['user']);
   });
 
   test('GET /api/settings/mcp-tokens rejects personal access token authentication', async () => {
@@ -493,6 +517,8 @@ describe('MCP token settings routes', () => {
     expect(JSON.parse(res.body)).toEqual({
       token: {
         id: 'mcp-token-1',
+        roleId: 'user',
+        roleName: 'Delivery Lead',
         name: 'Agent',
         tokenPrefix: 'praetor_mcp_raw',
         scope: 'full',
@@ -504,11 +530,56 @@ describe('MCP token settings routes', () => {
     expect(createMcpTokenForUserMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'u1',
+        roleId: 'user',
         name: 'Agent',
         rawToken: 'praetor_mcp_raw',
         scope: 'full',
       }),
     );
+  });
+
+  test('does not persist a token when its role name cannot be resolved', async () => {
+    findRoleByIdMock.mockRejectedValueOnce(new Error('role lookup unavailable'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader(),
+      payload: { name: 'Agent' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(createMcpTokenForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/settings/mcp-tokens binds the token to the active session role', async () => {
+    createMcpTokenForUserMock.mockResolvedValue({
+      id: 'mcp-token-1',
+      roleId: 'top_manager',
+      name: 'Top Manager Agent',
+      tokenPrefix: 'praetor_mcp_raw',
+      scope: 'full',
+      createdAt: 1000,
+      lastUsedAt: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: authHeader('top_manager'),
+      payload: { name: 'Top Manager Agent' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMcpTokenForUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u1',
+        roleId: 'top_manager',
+        name: 'Top Manager Agent',
+      }),
+    );
+    expect(JSON.parse(res.body).token.roleId).toBe('top_manager');
+    expect(JSON.parse(res.body).token.roleName).toBe('Top Manager');
   });
 
   test('POST /api/settings/mcp-tokens rejects personal access token authentication', async () => {
@@ -542,6 +613,7 @@ describe('MCP token settings routes', () => {
   test('POST /api/settings/mcp-tokens forwards explicit read_only scope', async () => {
     createMcpTokenForUserMock.mockResolvedValue({
       id: 'mcp-token-1',
+      roleId: 'user',
       name: 'Agent',
       tokenPrefix: 'praetor_mcp_raw',
       scope: 'read_only',
@@ -579,6 +651,7 @@ describe('MCP token settings routes', () => {
     listMcpTokensForUserMock.mockResolvedValue(
       Array.from({ length: 20 }, (_, i) => ({
         id: `mcp-token-${i}`,
+        roleId: 'user',
         name: `Agent ${i}`,
         tokenPrefix: `praetor_mcp_${i}`,
         scope: 'full' as const,

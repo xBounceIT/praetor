@@ -1070,6 +1070,34 @@ describe('POST /api/entries', () => {
     expect(entriesCreateMock).not.toHaveBeenCalled();
   });
 
+  test('201 creates a historical entry dated within a project that has since expired', async () => {
+    projectsFindClientIdAndEndDateMock.mockResolvedValue({
+      clientId: 'c1',
+      endDate: '2025-06-30',
+      status: 'in_corso',
+    });
+    findCostPerHourMock.mockResolvedValue(50);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: validBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ date: '2025-06-02', projectId: 'p1' }),
+      TX_SENTINEL,
+    );
+  });
+
   test('201 creates on an expired perpetuo project without the override permission', async () => {
     projectsFindClientIdAndEndDateMock.mockResolvedValue({
       clientId: 'c1',
@@ -1874,6 +1902,29 @@ describe('PUT /api/entries/:id', () => {
     expect(entriesUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('200 moves an entry to a historical date within a project that has since expired', async () => {
+    entriesFindContextMock.mockResolvedValue(sampleContext({ date: '2025-06-02' }));
+    projectsFindTimeEntryAvailabilityByIdMock.mockResolvedValue({
+      endDate: '2025-06-30',
+      status: 'in_corso',
+    });
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, date: '2025-06-03' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ date: '2025-06-03' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-1',
+      expect.objectContaining({ date: '2025-06-03' }),
+      TX_SENTINEL,
+    );
+  });
+
   test('403 date change on a paused project even with the expired-project override', async () => {
     getRolePermissionsMock.mockResolvedValue([
       ...TRACKER_PERMS,
@@ -2471,6 +2522,35 @@ describe('POST /api/entries/recurring/generate', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toMatchObject({ generatedCount: 0, skippedExistingCount: 0 });
     expect(entriesCreateManyMock).not.toHaveBeenCalled();
+  });
+
+  test('200: generates historical recurrences within a project that has since expired', async () => {
+    setupHappyPath();
+    projectsListNamesByIdsMock.mockResolvedValue(
+      new Map([
+        [
+          'p1',
+          {
+            projectName: 'Historically Active Project',
+            clientId: 'c1',
+            clientName: 'Client One',
+            endDate: '2025-06-30',
+            status: 'in_corso',
+          },
+        ],
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).generatedCount).toBe(5);
+    expect(entriesCreateManyMock).toHaveBeenCalledTimes(1);
   });
 
   test('200: includes recurring templates for expired projects with the override permission', async () => {

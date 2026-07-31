@@ -6,7 +6,8 @@ declare module 'fastify' {
       userId: string;
       sessionStart?: number;
       sessionVersion?: number;
-      source?: 'session' | 'personalAccessToken';
+      source?: 'session' | 'personalAccessToken' | 'mcpToken';
+      tokenScope?: 'full' | 'read_only';
     };
     user?: {
       id: string;

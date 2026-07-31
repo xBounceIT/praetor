@@ -115,12 +115,14 @@ Creating and revoking MCP tokens requires an active interactive session: sign in
 
 > Upgrade note: the release that introduces cryptographic key separation (issue #416) changes the HMAC key used for MCP-token hashes. After the upgrade, existing MCP tokens stop working and must be regenerated from Settings > MCP.
 
-MCP tools always respect the permissions of your current role. The first release includes tools for the current user, users and hierarchy, clients, suppliers, projects, tasks, quotes, offers, orders, invoices, time entries, and notifications.
+MCP tools always respect the permissions of the active role used to create the token. In addition to dedicated tools for the current user, users and hierarchy, clients, suppliers, projects, tasks, quotes, offers, orders, invoices, time entries, and notifications, the REST gateway makes other token-authorized API operations available through MCP.
+
+The role is recorded when the token is created and its name, including custom role names, is shown on the same line as last use in the token list. Praetor reloads that role's current permissions on every call and verifies that the user still holds it; removing the role from the user immediately invalidates the token. Tokens created before the role-binding upgrade are migrated to the user's current primary role. Recreate them from a session using the intended role if they must run as a secondary role such as Top Manager.
 
 Each MCP token is created with a **scope**:
 
-- **Full access** — the token can call any tool your role grants, including write tools (create / update / delete).
-- **Read-only** — the token can only call tools that map to `*.view` permissions. Write tools return "Insufficient permissions" even if your role has write access.
+- **Full access** — the token can call any tool granted by its bound role, including write tools (create / update / delete).
+- **Read-only** — the token can only call tools that map to `*.view` permissions. Write tools are rejected even if your role has write access.
 
 Configure the MCP client with the endpoint URL and this header:
 
@@ -141,6 +143,11 @@ Use these steps to connect an external agent:
 Supported tools:
 
 - `praetor_get_current_user`
+- `praetor_list_api_operations`
+- `praetor_retrieve`
+- `praetor_bulk_retrieve`
+- `praetor_mutate`
+- `praetor_bulk_mutate`
 - `praetor_get_users_hierarchy`
 - `praetor_list_clients`
 - `praetor_list_suppliers`
@@ -163,15 +170,22 @@ Supported tools:
 
 Bulk time-entry tools accept up to 100 items per call. They process each item independently and return a summary with per-item successes and errors.
 
+`praetor_list_api_operations` exposes the searchable, paginated OpenAPI catalog. The catalog helps discover route methods, paths, and descriptions; an operation appearing in it does not grant access. `praetor_retrieve` performs `GET` requests, while `praetor_mutate` performs `POST`, `PUT`, `PATCH`, or `DELETE`. Both accept paths under `/api/`, separate query parameters and, for mutations, a JSON body. `/api/auth/*` and `/api/mcp/*` routes cannot be called through the gateway.
+
+The bulk gateway variants accept up to 25 requests, with at most five operations running concurrently. They preserve input order and return each item's HTTP status, relevant headers, body, and outcome; binary responses are base64 encoded. A batch is not transactional: a failure does not roll back successful operations. Bodies larger than 2 MiB are omitted and each batch retains up to 4 MiB of bodies in total, while always preserving the target route's real HTTP status and outcome; a successful mutation is therefore not reported as failed and must not be retried solely because its body was truncated. Use route filters or pagination for larger datasets, or split the batch.
+
 Time-entry update tools require the `version` field returned by `praetor_list_time_entries`. If the entry changed after it was read, the update returns a conflict error and the agent should read the entry list again before retrying.
+
+Time-entry results, including single and bulk write responses, include `hourlyCost` and `cost` only when the role bound to the token grants `reports.cost.view`, matching the REST routes.
 
 Security notes:
 
-- MCP tokens inherit your current role permissions at call time, filtered by the token's scope (full or read-only).
-- `praetor_get_users_hierarchy` returns HR details only for employee types authorized by `hr.internal.view` or `hr.external.view`. Email and hourly-cost visibility remain controlled independently by their respective permissions.
+- MCP tokens use the role active when they were created. On every call they inherit that role's current permissions, filtered by the token scope (full or read-only), and are rejected if the user no longer holds the role.
+- Gateway calls pass through the real REST routes, so validation, permissions, row visibility, auditing, and version checks remain identical to the application. A read-only token cannot use `praetor_mutate` or `praetor_bulk_mutate` and is also rejected for direct REST requests that use write methods.
+- `praetor_get_users_hierarchy` returns every user with `timesheets.tracker_all.view`, without requiring competence-center management. HR details and email addresses are visible only for employee types authorized by `hr.internal.view` or `hr.external.view`, or with user-management permissions; hourly costs remain controlled separately.
 - Tokens expire automatically after 30 days of inactivity. Operators can override the window with the `MCP_IDLE_TIMEOUT_MS` environment variable (milliseconds).
 - Changing your account password also invalidates every MCP token you previously issued. Re-issue and re-key your agents after a password rotation.
 - The MCP endpoint is rate-limited at the standard authenticated-route limit (600 requests/minute per client IP); excess requests get a 429 response.
 - Store MCP tokens like passwords or API keys.
 - Revoke tokens when an agent is retired, a device is lost, or access is no longer needed.
-- Time-entry and notification tools can write data; review agent prompts and automation rules before enabling unattended use.
+- Time-entry, notification, and mutation-gateway tools can write data; review agent prompts and automation rules before enabling unattended use.

@@ -19,7 +19,7 @@ L'eliminazione di un utente richiede il permesso **Delete** adatto al tipo di di
 
 La consultazione e la modifica dei ruoli assegnati seguono lo stesso ambito: con **User Management - Update** ma senza `administration.user_management_all.view` puoi intervenire soltanto sugli utenti gestiti tramite un Competence Center condiviso. La modifica dei ruoli richiede inoltre una sessione interattiva del browser, non accetta token API personali e non consente mai di cambiare i propri ruoli.
 
-Il permesso `timesheets.expired_projects.create` abilita la registrazione di ore su progetti scaduti. I ruoli di sistema **Manager** e **Top Manager** lo ricevono per impostazione predefinita; per gli altri ruoli assegnalo solo quando è necessario consentire consuntivazioni tardive o rettifiche operative su progetti già conclusi.
+Il permesso `timesheets.expired_projects.create` abilita registrazioni con data successiva alla data fine della commessa. Le presenze storiche comprese nel periodo della commessa non lo richiedono. I ruoli di sistema **Manager** e **Top Manager** lo ricevono per impostazione predefinita; per gli altri ruoli assegnalo solo quando è necessario consentire consuntivazioni tardive oltre il periodo previsto.
 
 Il permesso di sola lettura `projects.details.view` separa l'archivio commesse dai dati avanzati della singola commessa. Per aprire il dettaglio servono anche `projects.manage.view` o `projects.manage_all.view`; Manager e Top Manager ricevono il nuovo permesso per impostazione predefinita, mentre User e Admin no. I ruoli personalizzati possono riceverlo manualmente.
 

@@ -115,12 +115,14 @@ La creazione e la revoca dei token MCP richiedono una sessione interattiva attiv
 
 > Nota di aggiornamento: la release che introduce la separazione delle chiavi crittografiche (issue #416) cambia la chiave HMAC usata per gli hash dei token MCP. Dopo l'aggiornamento i token MCP esistenti smettono di funzionare e vanno rigenerati da Impostazioni > MCP.
 
-Gli strumenti MCP rispettano sempre i permessi del tuo ruolo corrente. La prima versione include strumenti per utente corrente, utenti e gerarchie, clienti, fornitori, progetti, attività, preventivi, offerte, ordini, fatture, consuntivi e notifiche.
+Gli strumenti MCP rispettano sempre i permessi del ruolo attivo con cui il token è stato creato. Oltre agli strumenti dedicati per utente corrente, utenti e gerarchie, clienti, fornitori, progetti, attività, preventivi, offerte, ordini, fatture, consuntivi e notifiche, il gateway REST consente di usare tramite MCP le altre operazioni API autorizzate al token.
+
+Il ruolo viene registrato nel token alla creazione e il suo nome, compresi i nomi dei ruoli personalizzati, viene mostrato sulla stessa riga dell'ultimo utilizzo nell'elenco dei token. Praetor rilegge i permessi aggiornati di quel ruolo a ogni chiamata e verifica che l'utente ne faccia ancora parte; se il ruolo viene rimosso dall'utente, il token smette immediatamente di funzionare. I token creati prima dell'aggiornamento che introduce il ruolo associato vengono migrati sul ruolo primario corrente dell'utente: ricreali da una sessione con il ruolo desiderato se devono usare un ruolo secondario come Top Manager.
 
 Ogni token MCP viene creato con un **ambito**:
 
-- **Accesso completo** — il token può richiamare qualsiasi strumento concesso dal tuo ruolo, inclusi gli strumenti di scrittura (create / update / delete).
-- **Sola lettura** — il token può richiamare solo gli strumenti corrispondenti ai permessi `*.view`. Gli strumenti di scrittura restituiscono "Insufficient permissions" anche se il tuo ruolo ha accesso in scrittura.
+- **Accesso completo** — il token può richiamare qualsiasi strumento concesso dal ruolo associato, inclusi gli strumenti di scrittura (create / update / delete).
+- **Sola lettura** — il token può richiamare solo gli strumenti corrispondenti ai permessi `*.view`. Gli strumenti di scrittura vengono rifiutati anche se il tuo ruolo ha accesso in scrittura.
 
 Configura il client MCP con l'URL dell'endpoint e l'header:
 
@@ -141,6 +143,11 @@ Per collegare un agente esterno:
 Strumenti supportati:
 
 - `praetor_get_current_user`
+- `praetor_list_api_operations`
+- `praetor_retrieve`
+- `praetor_bulk_retrieve`
+- `praetor_mutate`
+- `praetor_bulk_mutate`
 - `praetor_get_users_hierarchy`
 - `praetor_list_clients`
 - `praetor_list_suppliers`
@@ -163,15 +170,22 @@ Strumenti supportati:
 
 Gli strumenti bulk per i consuntivi accettano fino a 100 elementi per chiamata. Elaborano ogni elemento in modo indipendente e restituiscono un riepilogo con successi ed errori per singolo elemento.
 
+`praetor_list_api_operations` espone il catalogo OpenAPI paginabile e ricercabile. Il catalogo serve per scoprire metodo, percorso e descrizione delle route; la presenza di una route nel catalogo non concede accesso. `praetor_retrieve` esegue richieste `GET`, mentre `praetor_mutate` esegue `POST`, `PUT`, `PATCH` o `DELETE`. Entrambi accettano percorsi sotto `/api/`, parametri query separati e, per le mutazioni, un corpo JSON. Le route `/api/auth/*` e `/api/mcp/*` non sono richiamabili dal gateway.
+
+Le varianti bulk del gateway accettano fino a 25 richieste, eseguite con un massimo di cinque operazioni concorrenti. Mantengono l'ordine di input e restituiscono stato HTTP, header rilevanti, corpo e risultato per ogni elemento; una risposta binaria è codificata in base64. Il batch non è transazionale: un errore non annulla le operazioni già riuscite. I corpi oltre 2 MiB vengono omessi e un batch conserva complessivamente fino a 4 MiB di corpi, mantenendo sempre lo stato HTTP e l'esito reale della route; una mutazione riuscita non viene quindi riportata come fallita e non va ripetuta soltanto perché il corpo è stato troncato. Per dataset più grandi usa filtri o paginazione oppure dividi il batch.
+
 Gli strumenti di aggiornamento dei consuntivi richiedono il campo `version` restituito da `praetor_list_time_entries`. Se la registrazione è stata modificata dopo la lettura, l'aggiornamento restituisce un errore di conflitto e l'agente deve rileggere i dati prima di riprovare.
+
+I risultati delle presenze, incluse le risposte delle scritture singole e bulk, includono `hourlyCost` e `cost` soltanto se il ruolo associato al token possiede `reports.cost.view`, come nelle route REST.
 
 Note di sicurezza:
 
-- I token MCP ereditano i permessi del tuo ruolo corrente al momento della chiamata, filtrati dall'ambito del token (completo o sola lettura).
-- `praetor_get_users_hierarchy` restituisce i dettagli HR solo per i tipi di dipendente autorizzati da `hr.internal.view` o `hr.external.view`. La visibilità di email e costi orari resta regolata separatamente dai relativi permessi.
+- I token MCP usano il ruolo attivo al momento della creazione. A ogni chiamata ereditano i permessi correnti di quel ruolo, filtrati dall'ambito del token (completo o sola lettura), e vengono rifiutati se l'utente non possiede più il ruolo.
+- Le chiamate del gateway attraversano le route REST reali: validazione, permessi, visibilità per riga, audit e controllo delle versioni restano identici all'applicazione. Un token sola lettura non può usare `praetor_mutate` o `praetor_bulk_mutate` e viene rifiutato anche sulle richieste REST con metodi di scrittura.
+- `praetor_get_users_hierarchy` restituisce tutti gli utenti con `timesheets.tracker_all.view`, senza richiedere la gestione dei relativi Competence Center. I dettagli HR e le email sono visibili solo per i tipi di dipendente autorizzati da `hr.internal.view` o `hr.external.view`, oppure con i permessi di gestione utenti; i costi orari restano regolati separatamente.
 - I token scadono automaticamente dopo 30 giorni di inattività. Gli operatori possono modificare la finestra tramite la variabile d'ambiente `MCP_IDLE_TIMEOUT_MS` (millisecondi).
 - Il cambio password del tuo account invalida anche tutti i token MCP precedentemente emessi. Dopo una rotazione della password devi ricreare i token e reimpostare gli agenti.
 - L'endpoint MCP è limitato alla soglia standard delle route autenticate (600 richieste/minuto per IP client); le richieste in eccesso ricevono una risposta 429.
 - Conserva i token MCP come password o chiavi API.
 - Revoca i token quando un agente viene dismesso, un dispositivo viene perso o l'accesso non serve più.
-- Gli strumenti per consuntivi e notifiche possono modificare dati; controlla prompt e automazioni dell'agente prima di abilitarne l'uso non presidiato.
+- Gli strumenti per consuntivi, notifiche e il gateway di mutazione possono modificare dati; controlla prompt e automazioni dell'agente prima di abilitarne l'uso non presidiato.

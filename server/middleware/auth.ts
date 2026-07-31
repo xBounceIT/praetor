@@ -26,6 +26,7 @@ import {
   normalizeSessionIdleTimeoutMinutes,
   sessionIdleTimeoutMinutesToMs,
 } from '../utils/sessionTimeout.ts';
+import { authenticateMcpToken, isMcpToken } from './mcpAuth.ts';
 
 const resolveJwtSecret = () => {
   const configured = process.env.JWT_SECRET?.trim();
@@ -231,6 +232,10 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
 
   if (isPersonalAccessToken(token)) {
     return authenticatePersonalAccessToken(request, reply, token);
+  }
+
+  if (isMcpToken(token)) {
+    return authenticateMcpToken(request, reply);
   }
 
   try {

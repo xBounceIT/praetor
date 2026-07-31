@@ -2,11 +2,16 @@ import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
 import { type CallToolResult, McpServer, type ServerContext } from '@modelcontextprotocol/server';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { authenticateMcpToken, type McpAuthenticatedUser } from '../middleware/mcpAuth.ts';
+import {
+  authenticateMcpToken,
+  type McpAuthenticatedUser,
+  type McpAuthInfoExtra,
+} from '../middleware/mcpAuth.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
+import type { TimeEntry } from '../repositories/entriesRepo.ts';
 import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
@@ -24,15 +29,20 @@ import {
   listTimeEntries,
   MAX_DURATION_HOURS,
   MAX_NOTES_LENGTH,
+  sanitizeTimeEntryCosts,
   TimeEntryServiceError,
   updateTimeEntry,
 } from '../services/timeEntries.ts';
 import {
+  canViewAllUsersWithPermissions,
+  canViewUserEmailWithPermissions,
   HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE,
   maskUserResponse,
 } from '../services/userVisibility.ts';
 import { APP_VERSION } from '../utils/app-version.ts';
+import { mapWithConcurrency } from '../utils/concurrency.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
+import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { canViewProjectDetails, equivalentPermissionsFor } from '../utils/permissions.ts';
 import {
   effectiveQuoteStatusFromDate,
@@ -40,6 +50,8 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { normalizeUnitType } from '../utils/unit-type.ts';
+
+const mcpLogger = createChildLogger({ module: 'mcp' });
 
 const hasPermission = (user: McpAuthenticatedUser, permission: string) =>
   user.permissions.includes(permission);
@@ -51,9 +63,12 @@ const CLIENT_LIST_PERMISSIONS = [
   'crm.clients.view',
   'crm.clients_all.view',
   'timesheets.tracker.view',
+  'timesheets.tracker_all.view',
   'timesheets.recurring.view',
   'projects.manage.view',
+  'projects.manage_all.view',
   'projects.tasks.view',
+  'projects.tasks_all.view',
   'sales.client_quotes.view',
   'sales.client_offers.view',
   'accounting.clients_orders.view',
@@ -74,15 +89,16 @@ const SUPPLIER_LIST_PERMISSIONS = [
 
 const PROJECT_LIST_PERMISSIONS = [
   ...equivalentPermissionsFor('projects.manage', 'view'),
-  'projects.tasks.view',
-  'timesheets.tracker.view',
+  ...equivalentPermissionsFor('projects.tasks', 'view'),
+  ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+  'timesheets.ril.view',
   'timesheets.recurring.view',
 ] as const;
 
 const TASK_LIST_PERMISSIONS = [
-  'projects.tasks.view',
-  'projects.manage.view',
-  'timesheets.tracker.view',
+  ...equivalentPermissionsFor('projects.tasks', 'view'),
+  ...equivalentPermissionsFor('projects.manage', 'view'),
+  ...equivalentPermissionsFor('timesheets.tracker', 'view'),
   'timesheets.recurring.view',
 ] as const;
 
@@ -91,10 +107,12 @@ const USER_HIERARCHY_PERMISSIONS = [
   'administration.user_management_all.view',
   'hr.internal.view',
   'hr.external.view',
-  'timesheets.tracker.view',
-  'projects.manage.view',
-  'projects.tasks.view',
-  'hr.work_units.view',
+  ...equivalentPermissionsFor('timesheets.tracker', 'view'),
+  'timesheets.ril.view',
+  'timesheets.recurring.view',
+  ...equivalentPermissionsFor('projects.manage', 'view'),
+  ...equivalentPermissionsFor('projects.tasks', 'view'),
+  ...equivalentPermissionsFor('hr.work_units', 'view'),
 ] as const;
 
 const QUOTE_LIST_PERMISSIONS = ['sales.client_quotes.view', 'sales.supplier_quotes.view'] as const;
@@ -108,6 +126,85 @@ const INVOICE_LIST_PERMISSIONS = [
 ] as const;
 
 const MAX_BULK_TIME_ENTRY_ITEMS = 100;
+const MAX_BULK_API_REQUESTS = 25;
+const MAX_BULK_CONCURRENCY = 5;
+const MAX_API_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_BULK_API_RESPONSE_BYTES = 4 * 1024 * 1024;
+const API_RESPONSE_HEADERS = [
+  'content-disposition',
+  'content-type',
+  'etag',
+  'last-modified',
+  'location',
+  'retry-after',
+] as const;
+
+const queryPrimitiveSchema = z.union([z.string(), z.number(), z.boolean()]);
+const querySchema = z
+  .record(
+    z.string().min(1).max(128),
+    z.union([queryPrimitiveSchema, z.array(queryPrimitiveSchema).max(100)]),
+  )
+  .optional();
+
+const decodeApiPath = (path: string): string | null => {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+};
+
+const isSafeApiPath = (path: string): boolean => {
+  const decoded = decodeApiPath(path);
+  if (!decoded?.startsWith('/api/') || /[?#\\]/.test(decoded)) return false;
+  if (/%(?:2f|5c)/i.test(path) || /%(?:2f|5c)/i.test(decoded)) return false;
+  if (decoded.split('/').some((segment) => segment === '.' || segment === '..')) return false;
+  return !/^\/api\/(?:auth|mcp)(?:\/|$)/i.test(decoded);
+};
+
+const apiPathSchema = z
+  .string()
+  .trim()
+  .min(6)
+  .max(2_048)
+  .refine((path) => path.startsWith('/api/'), 'Path must start with /api/')
+  .refine((path) => !/[?#\\]/.test(path), 'Put query parameters in the query object')
+  .refine(
+    isSafeApiPath,
+    'Encoded separators, path traversal, authentication endpoints, and MCP endpoints are not allowed',
+  );
+
+const retrieveRequestSchema = z.object({
+  requestId: z.string().min(1).max(128).optional(),
+  path: apiPathSchema,
+  query: querySchema,
+});
+
+const mutationRequestSchema = z.object({
+  requestId: z.string().min(1).max(128).optional(),
+  method: z.enum(['POST', 'PUT', 'PATCH', 'DELETE']),
+  path: apiPathSchema,
+  query: querySchema,
+  body: z.unknown().optional(),
+});
+
+type RetrieveRequest = z.infer<typeof retrieveRequestSchema>;
+type MutationRequest = z.infer<typeof mutationRequestSchema>;
+type ApiGatewayRequest = RetrieveRequest & {
+  method: 'GET' | MutationRequest['method'];
+  body?: unknown;
+};
+
+type ApiGatewayResponse = {
+  ok: boolean;
+  status: number;
+  headers: Record<string, string | string[]>;
+  body: unknown;
+  encoding?: 'base64';
+  bodyTruncated?: true;
+  originalBodyBytes?: number;
+};
 
 const createTimeEntryInputSchema = z.object({
   date: z.string(),
@@ -177,14 +274,6 @@ const groupBy = <T>(items: T[], getKey: (item: T) => string) => {
 const listIfAllowed = <T>(allowed: boolean, list: () => Promise<T[]>): Promise<T[]> =>
   allowed ? list() : Promise.resolve([]);
 
-const canViewAllUsers = (user: McpAuthenticatedUser) =>
-  hasPermission(user, 'administration.user_management_all.view') ||
-  hasPermission(user, 'hr.work_units_all.view');
-
-const canViewUserEmails = (user: McpAuthenticatedUser) =>
-  hasPermission(user, 'administration.user_management_all.view') ||
-  hasPermission(user, 'administration.user_management.view');
-
 const canViewAllWorkUnits = (user: McpAuthenticatedUser) =>
   hasPermission(user, 'hr.work_units_all.view');
 
@@ -197,6 +286,9 @@ const canViewCostFor = (user: McpAuthenticatedUser, targetUserId: string | null 
   if (targetUserId === user.id) return hasPermission(user, 'hr.costs.view');
   return hasPermission(user, 'hr.costs_all.view');
 };
+
+const sanitizeTimeEntryForUser = (user: McpAuthenticatedUser, entry: TimeEntry) =>
+  sanitizeTimeEntryCosts(entry, hasPermission(user, 'reports.cost.view'));
 
 const runTimeEntryTool = async (
   operation: () => Promise<Record<string, unknown>>,
@@ -213,15 +305,23 @@ const runBulkTimeEntryTool = async <T>(
   items: T[],
   operation: (item: T) => Promise<Record<string, unknown>>,
 ): Promise<CallToolResult> => {
-  const results = await Promise.all(
-    items.map(async (item, index): Promise<Record<string, unknown>> => {
+  const results = await mapWithConcurrency(
+    items,
+    MAX_BULK_CONCURRENCY,
+    async (item, index): Promise<Record<string, unknown>> => {
       try {
         return { index, success: true, ...(await operation(item)) };
       } catch (err) {
-        if (!(err instanceof TimeEntryServiceError)) throw err;
-        return { index, success: false, error: err.message };
+        if (err instanceof TimeEntryServiceError) {
+          return { index, success: false, error: err.message };
+        }
+        mcpLogger.error(
+          { err: serializeError(err), index },
+          'Unexpected failure in MCP bulk time-entry operation',
+        );
+        return { index, success: false, error: 'Unexpected internal error' };
       }
-    }),
+    },
   );
   const succeeded = results.filter((result) => result.success).length;
 
@@ -235,12 +335,210 @@ const runBulkTimeEntryTool = async <T>(
   });
 };
 
-const buildServer = () => {
+const requireMcpAuth = (
+  ctx: ServerContext,
+): {
+  clientIp: string;
+  rawToken: string;
+  tokenScope: McpAuthInfoExtra['tokenScope'];
+} => {
+  const authInfo = ctx.http?.authInfo;
+  const extra = authInfo?.extra as McpAuthInfoExtra | undefined;
+  if (!authInfo?.token || !extra?.clientIp || !extra.tokenScope) {
+    throw new Error('MCP authentication context is missing');
+  }
+  return { clientIp: extra.clientIp, rawToken: authInfo.token, tokenScope: extra.tokenScope };
+};
+
+const buildApiUrl = (path: string, query: RetrieveRequest['query']): string => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query ?? {})) {
+    const values = Array.isArray(value) ? value : [value];
+    for (const item of values) params.append(key, String(item));
+  }
+  const queryString = params.toString();
+  return queryString ? `${path}?${queryString}` : path;
+};
+
+const runApiRequest = async (
+  fastify: FastifyInstance,
+  rawToken: string,
+  clientIp: string,
+  request: ApiGatewayRequest,
+): Promise<{ response: ApiGatewayResponse; bodyBytes: number }> => {
+  const response = await fastify.inject({
+    method: request.method,
+    url: buildApiUrl(request.path, request.query),
+    remoteAddress: clientIp,
+    headers: {
+      authorization: `Bearer ${rawToken}`,
+      accept: 'application/json, text/plain, */*',
+      ...(request.body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    ...(request.body === undefined ? {} : { payload: JSON.stringify(request.body) }),
+  });
+
+  const headers = Object.fromEntries(
+    API_RESPONSE_HEADERS.flatMap((name) => {
+      const value = response.headers[name];
+      return value === undefined ? [] : [[name, value] as const];
+    }),
+  );
+  const ok = response.statusCode >= 200 && response.statusCode < 300;
+
+  if (response.rawPayload.byteLength > MAX_API_RESPONSE_BYTES) {
+    const body = {
+      warning: `API response body omitted because it exceeds the ${MAX_API_RESPONSE_BYTES}-byte MCP limit; narrow retrievals with route filters or pagination`,
+      targetRequestSucceeded: ok,
+    };
+    return {
+      response: {
+        ok,
+        status: response.statusCode,
+        headers,
+        body,
+        bodyTruncated: true,
+        originalBodyBytes: response.rawPayload.byteLength,
+      },
+      bodyBytes: Buffer.byteLength(JSON.stringify(body)),
+    };
+  }
+
+  const contentType = String(response.headers['content-type'] ?? '').toLowerCase();
+  let body: unknown;
+  let encoding: ApiGatewayResponse['encoding'];
+
+  if (response.rawPayload.byteLength === 0) {
+    body = null;
+  } else if (contentType.includes('json')) {
+    try {
+      body = response.body ? JSON.parse(response.body) : null;
+    } catch {
+      body = response.body;
+    }
+  } else if (contentType.startsWith('text/') || contentType.includes('xml')) {
+    body = response.body;
+  } else {
+    body = response.rawPayload.toString('base64');
+    encoding = 'base64';
+  }
+
+  return {
+    response: {
+      ok,
+      status: response.statusCode,
+      headers,
+      body,
+      ...(encoding ? { encoding } : {}),
+    },
+    bodyBytes: Buffer.byteLength(typeof body === 'string' ? body : (JSON.stringify(body) ?? '')),
+  };
+};
+
+const runBulkApiRequests = async (
+  fastify: FastifyInstance,
+  rawToken: string,
+  clientIp: string,
+  requests: ApiGatewayRequest[],
+): Promise<CallToolResult> => {
+  const executed = await mapWithConcurrency(
+    requests,
+    MAX_BULK_CONCURRENCY,
+    async (request, index) => ({
+      index,
+      request,
+      ...(await runApiRequest(fastify, rawToken, clientIp, request)),
+    }),
+  );
+  let retainedBodyBytes = 0;
+  const results = executed.map(({ index, request, response, bodyBytes }) => {
+    const exceedsBulkLimit =
+      !response.bodyTruncated && retainedBodyBytes + bodyBytes > MAX_BULK_API_RESPONSE_BYTES;
+    if (!exceedsBulkLimit) retainedBodyBytes += bodyBytes;
+
+    const boundedResponse: ApiGatewayResponse = exceedsBulkLimit
+      ? {
+          ok: response.ok,
+          status: response.status,
+          headers: response.headers,
+          body: {
+            warning: `API response body omitted because the batch exceeds the ${MAX_BULK_API_RESPONSE_BYTES}-byte aggregate MCP limit; split the batch or narrow retrievals`,
+            targetRequestSucceeded: response.ok,
+          },
+          bodyTruncated: true,
+          originalBodyBytes: bodyBytes,
+        }
+      : response;
+
+    return {
+      index,
+      ...(request.requestId ? { requestId: request.requestId } : {}),
+      ...boundedResponse,
+    };
+  });
+  const succeeded = results.filter((result) => result.ok).length;
+  return jsonResult({
+    summary: {
+      requested: requests.length,
+      succeeded,
+      failed: requests.length - succeeded,
+    },
+    results,
+  });
+};
+
+type OpenApiOperation = {
+  description?: string;
+  operationId?: string;
+  summary?: string;
+  tags?: string[];
+};
+
+type OpenApiDocument = {
+  paths?: Record<string, Partial<Record<string, OpenApiOperation>>>;
+};
+
+const listApiOperations = (
+  fastify: FastifyInstance,
+  options: { limit: number; offset: number; search?: string },
+) => {
+  if (typeof fastify.swagger !== 'function') throw new Error('OpenAPI catalog is unavailable');
+
+  const search = options.search?.trim().toLowerCase();
+  const spec = fastify.swagger() as unknown as OpenApiDocument;
+  const operations = Object.entries(spec.paths ?? {}).flatMap(([path, pathItem]) => {
+    if (/^\/api\/(?:auth|mcp)(?:\/|$)/i.test(path)) return [];
+    return Object.entries(pathItem as Partial<Record<string, OpenApiOperation>>).flatMap(
+      ([method, operation]) => {
+        if (!['get', 'post', 'put', 'patch', 'delete'].includes(method) || !operation) return [];
+        const item = {
+          method: method.toUpperCase(),
+          path,
+          ...(operation.operationId ? { operationId: operation.operationId } : {}),
+          ...(operation.summary ? { summary: operation.summary } : {}),
+          ...(operation.description ? { description: operation.description } : {}),
+          ...(operation.tags ? { tags: operation.tags } : {}),
+        };
+        if (search && !JSON.stringify(item).toLowerCase().includes(search)) return [];
+        return [item];
+      },
+    );
+  });
+
+  return {
+    total: operations.length,
+    offset: options.offset,
+    limit: options.limit,
+    operations: operations.slice(options.offset, options.offset + options.limit),
+  };
+};
+
+const buildServer = (fastify: FastifyInstance) => {
   const server = new McpServer(
     { name: 'praetor', version: APP_VERSION },
     {
       instructions:
-        'Use Praetor tools to inspect and update ERP data. Tool results are scoped to the authenticated MCP token user and their current Praetor role permissions.',
+        'Use Praetor tools to inspect and update ERP data. Tool results are scoped to the authenticated MCP token user and their current Praetor role permissions. Use praetor_list_api_operations to discover additional REST capabilities, praetor_retrieve for GET operations, and praetor_mutate only for explicitly requested writes.',
     },
   );
 
@@ -254,6 +552,110 @@ const buildServer = () => {
     async (ctx) => {
       const user = requireUser(ctx);
       return jsonResult({ user });
+    },
+  );
+
+  server.registerTool(
+    'praetor_list_api_operations',
+    {
+      title: 'List API Operations',
+      description:
+        'Discover Praetor REST operations that can be called through the generic MCP retrieval and mutation tools. Actual access is always decided by the target route using the current token permissions.',
+      inputSchema: z.object({
+        search: z.string().max(200).optional(),
+        offset: z.number().int().nonnegative().default(0),
+        limit: z.number().int().positive().max(500).default(100),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async (args, ctx) => {
+      const user = requireUser(ctx);
+      try {
+        return jsonResult({
+          ...listApiOperations(fastify, args),
+          grantedPermissions: user.permissions,
+        });
+      } catch (err) {
+        return toolError(err instanceof Error ? err.message : 'OpenAPI catalog is unavailable');
+      }
+    },
+  );
+
+  server.registerTool(
+    'praetor_retrieve',
+    {
+      title: 'Retrieve API Data',
+      description:
+        'Call any JSON, text, or file GET route under /api using the authenticated MCP token. The target route applies the same permission and row-scope checks as the Praetor app.',
+      inputSchema: retrieveRequestSchema,
+      annotations: { readOnlyHint: true },
+    },
+    async (request, ctx) => {
+      const { clientIp, rawToken } = requireMcpAuth(ctx);
+      return jsonResult({
+        ...(request.requestId ? { requestId: request.requestId } : {}),
+        ...(await runApiRequest(fastify, rawToken, clientIp, { ...request, method: 'GET' }))
+          .response,
+      });
+    },
+  );
+
+  server.registerTool(
+    'praetor_bulk_retrieve',
+    {
+      title: 'Bulk Retrieve API Data',
+      description:
+        'Call up to 25 GET routes in one MCP request. Results preserve input order and report success or failure independently for each retrieval.',
+      inputSchema: z.object({
+        requests: z.array(retrieveRequestSchema).min(1).max(MAX_BULK_API_REQUESTS),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ requests }, ctx) => {
+      const { clientIp, rawToken } = requireMcpAuth(ctx);
+      return runBulkApiRequests(
+        fastify,
+        rawToken,
+        clientIp,
+        requests.map((request) => ({ ...request, method: 'GET' })),
+      );
+    },
+  );
+
+  server.registerTool(
+    'praetor_mutate',
+    {
+      title: 'Mutate API Data',
+      description:
+        'Call any POST, PUT, PATCH, or DELETE route under /api using the authenticated full-access MCP token. The target route remains authoritative for permissions, validation, row scope, audit logging, and conflicts.',
+      inputSchema: mutationRequestSchema,
+      annotations: { destructiveHint: true, idempotentHint: false },
+    },
+    async (request, ctx) => {
+      const { clientIp, rawToken, tokenScope } = requireMcpAuth(ctx);
+      if (tokenScope === 'read_only') return toolError('MCP token is read-only');
+      return jsonResult({
+        ...(request.requestId ? { requestId: request.requestId } : {}),
+        ...(await runApiRequest(fastify, rawToken, clientIp, request)).response,
+      });
+    },
+  );
+
+  server.registerTool(
+    'praetor_bulk_mutate',
+    {
+      title: 'Bulk Mutate API Data',
+      description:
+        'Call up to 25 POST, PUT, PATCH, or DELETE routes in one MCP request. Results preserve input order and report success or failure independently; the batch is not transactional.',
+      inputSchema: z.object({
+        requests: z.array(mutationRequestSchema).min(1).max(MAX_BULK_API_REQUESTS),
+      }),
+      annotations: { destructiveHint: true, idempotentHint: false },
+    },
+    async ({ requests }, ctx) => {
+      const { clientIp, rawToken, tokenScope } = requireMcpAuth(ctx);
+      if (tokenScope === 'read_only') return toolError('MCP token is read-only');
+      return runBulkApiRequests(fastify, rawToken, clientIp, requests);
     },
   );
 
@@ -517,7 +919,10 @@ const buildServer = () => {
       const denied = enforceAny(user, USER_HIERARCHY_PERMISSIONS);
       if (denied) return denied;
 
-      const hasWorkUnitsView = hasPermission(user, 'hr.work_units.view');
+      const hasWorkUnitsView = hasAnyPermission(
+        user,
+        equivalentPermissionsFor('hr.work_units', 'view'),
+      );
       // `hasCostsView` reflects ONLY the cross-user grant — the truthful meaning
       // of `scope.includesCosts` below is "can the client trust every row's
       // costPerHour to be populated?". With the explicit-split semantics, a
@@ -526,9 +931,11 @@ const buildServer = () => {
       // handled by canViewCostFor inside the .map.
       const hasCostsView = hasPermission(user, 'hr.costs_all.view');
       const hasUserManagementView = hasPermission(user, 'administration.user_management.view');
-      const hasAllUsersView = canViewAllUsers(user);
+      const hasAllUsersView = canViewAllUsersWithPermissions(user.permissions);
       const hasAllWorkUnitsView = canViewAllWorkUnits(user);
-      const hasEmailView = canViewUserEmails(user);
+      const hasAllEmailView =
+        hasPermission(user, 'administration.user_management_all.view') ||
+        hasPermission(user, 'administration.user_management.view');
 
       const users = hasAllUsersView
         ? await usersRepo.listAllForAdmin()
@@ -561,7 +968,7 @@ const buildServer = () => {
             { ...entry, costPerHour: currentCosts.get(entry.id) ?? entry.costPerHour },
             {
               canViewCosts: canViewCostFor(user, entry.id),
-              canViewEmails: hasEmailView,
+              canViewEmails: canViewUserEmailWithPermissions(user.permissions, entry.employeeType),
               canViewHrDetails: hasPermission(
                 user,
                 HR_VIEW_PERMISSION_BY_EMPLOYEE_TYPE[entry.employeeType],
@@ -582,7 +989,7 @@ const buildServer = () => {
           canViewAllWorkUnits: hasAllWorkUnitsView,
           canViewWorkUnits: hasWorkUnitsView,
           includesCosts: hasCostsView,
-          includesEmails: hasEmailView,
+          includesEmails: hasAllEmailView,
         },
       });
     },
@@ -602,7 +1009,13 @@ const buildServer = () => {
     },
     async (args, ctx) => {
       const user = requireUser(ctx);
-      return runTimeEntryTool(async () => ({ ...(await listTimeEntries(user, args)) }));
+      return runTimeEntryTool(async () => {
+        const result = await listTimeEntries(user, args);
+        return {
+          ...result,
+          entries: result.entries.map((entry) => sanitizeTimeEntryForUser(user, entry)),
+        };
+      });
     },
   );
 
@@ -616,7 +1029,9 @@ const buildServer = () => {
     },
     async (args, ctx) => {
       const user = requireUser(ctx);
-      return runTimeEntryTool(async () => ({ entry: await createTimeEntry(user, args) }));
+      return runTimeEntryTool(async () => ({
+        entry: sanitizeTimeEntryForUser(user, await createTimeEntry(user, args)),
+      }));
     },
   );
 
@@ -634,7 +1049,7 @@ const buildServer = () => {
     async ({ entries }, ctx) => {
       const user = requireUser(ctx);
       return runBulkTimeEntryTool(entries, async (entry) => ({
-        entry: await createTimeEntry(user, entry),
+        entry: sanitizeTimeEntryForUser(user, await createTimeEntry(user, entry)),
       }));
     },
   );
@@ -650,7 +1065,9 @@ const buildServer = () => {
     },
     async ({ id, ...patch }, ctx) => {
       const user = requireUser(ctx);
-      return runTimeEntryTool(async () => ({ entry: await updateTimeEntry(user, id, patch) }));
+      return runTimeEntryTool(async () => ({
+        entry: sanitizeTimeEntryForUser(user, await updateTimeEntry(user, id, patch)),
+      }));
     },
   );
 
@@ -668,7 +1085,7 @@ const buildServer = () => {
     async ({ entries }, ctx) => {
       const user = requireUser(ctx);
       return runBulkTimeEntryTool(entries, async ({ id, ...patch }) => ({
-        entry: await updateTimeEntry(user, id, patch),
+        entry: sanitizeTimeEntryForUser(user, await updateTimeEntry(user, id, patch)),
       }));
     },
   );
@@ -790,7 +1207,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
       });
-      const mcpServer = buildServer();
+      const mcpServer = buildServer(fastify);
       await mcpServer.connect(transport);
       reply.raw.on('close', () => {
         void transport.close().catch((err) => {

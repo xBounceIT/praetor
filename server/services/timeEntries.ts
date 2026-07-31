@@ -77,6 +77,17 @@ export type ListTimeEntriesResult = {
   dailyDurationByOwnerDate?: Map<string, number>;
 };
 
+export type SanitizedTimeEntry = TimeEntry | Omit<TimeEntry, 'cost' | 'hourlyCost'>;
+
+export const sanitizeTimeEntryCosts = (
+  entry: TimeEntry,
+  includeCost: boolean,
+): SanitizedTimeEntry => {
+  if (includeCost) return entry;
+  const { cost: _cost, hourlyCost: _hourlyCost, ...visibleEntry } = entry;
+  return visibleEntry;
+};
+
 const hasPermission = (actor: AuthenticatedActor, permission: string) =>
   actor.permissions.includes(permission);
 
@@ -102,9 +113,10 @@ const enforceProjectStatusAllowsTimeEntryChanges = (project: ProjectEntryAvailab
 const enforceProjectCanAcceptTimeEntries = (
   actor: AuthenticatedActor,
   project: ProjectEntryAvailability,
+  entryDate: string,
 ) => {
   enforceProjectStatusAllowsTimeEntryChanges(project);
-  if (!canWriteExpiredProjectEntries(actor) && isProjectExpiredForTimeEntries(project)) {
+  if (!canWriteExpiredProjectEntries(actor) && isProjectExpiredForTimeEntries(project, entryDate)) {
     fail(403, 'Project is expired');
   }
 };
@@ -318,7 +330,7 @@ export const createTimeEntry = async (
   if (projectHeader.clientId !== clientId) {
     badRequest('Project does not belong to the selected client');
   }
-  enforceProjectCanAcceptTimeEntries(actor, projectHeader);
+  enforceProjectCanAcceptTimeEntries(actor, projectHeader, date);
 
   if (!hasPermission(actor, 'timesheets.tracker_all.create')) {
     const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
@@ -464,7 +476,7 @@ export const updateTimeEntry = async (
       effectiveProjectId !== context.projectId ||
       effectiveTask !== context.task;
     if (catalogChangedFromContext || dateChanging) {
-      enforceProjectCanAcceptTimeEntries(actor, projectHeader);
+      enforceProjectCanAcceptTimeEntries(actor, projectHeader, date ?? context.date);
     }
 
     resolvedTaskId = taskFkLookup ?? null;
@@ -488,7 +500,8 @@ export const updateTimeEntry = async (
     if (
       availability &&
       !isProjectStatusBlockingTimeEntries(availability.status) &&
-      (canWriteExpiredProjectEntries(actor) || !isProjectExpiredForTimeEntries(availability))
+      (canWriteExpiredProjectEntries(actor) ||
+        !isProjectExpiredForTimeEntries(availability, context.date))
     ) {
       const backfill = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
       if (backfill) resolvedTaskId = backfill;
@@ -497,7 +510,7 @@ export const updateTimeEntry = async (
 
   if (dateChanging && !catalogChanging) {
     const availability = await getCurrentProjectAvailability();
-    if (availability) enforceProjectCanAcceptTimeEntries(actor, availability);
+    if (availability) enforceProjectCanAcceptTimeEntries(actor, availability, date);
   }
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
@@ -679,12 +692,6 @@ export const generateRecurringEntries = async (
     const project = projectsByProjectId.get(task.projectId);
     return project !== undefined && !isProjectStatusBlockingTimeEntries(project.status);
   });
-  if (!canWriteExpiredProjectEntries(actor)) {
-    allowedTasks = allowedTasks.filter((task) => {
-      const project = projectsByProjectId.get(task.projectId);
-      return project !== undefined && !isProjectExpiredForTimeEntries(project);
-    });
-  }
   if (!hasPermission(actor, 'timesheets.tracker_all.create')) {
     const uniqueClientIds = Array.from(
       new Set(
@@ -778,6 +785,12 @@ export const generateRecurringEntries = async (
       if (!recurrenceMatches(cursor, task.recurrencePattern, templateStart)) continue;
 
       const dateStr = formatLocalDateOnly(cursor);
+      if (
+        !canWriteExpiredProjectEntries(actor) &&
+        isProjectExpiredForTimeEntries(project, dateStr)
+      ) {
+        continue;
+      }
       const key = `${dateStr}|${task.projectId}|${task.name}`;
       if (stagedKeys.has(key)) continue;
       stagedKeys.add(key);

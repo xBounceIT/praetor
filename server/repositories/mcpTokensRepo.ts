@@ -12,6 +12,7 @@ export type { McpTokenScope };
 
 export type McpTokenSummary = {
   id: string;
+  roleId: string;
   name: string;
   tokenPrefix: string;
   scope: McpTokenScope;
@@ -22,6 +23,7 @@ export type McpTokenSummary = {
 export type ActiveMcpToken = {
   id: string;
   userId: string;
+  roleId: string;
   name: string;
   scope: McpTokenScope;
   createdAt: Date | null;
@@ -39,6 +41,7 @@ const displayPrefix = (rawToken: string): string => rawToken.slice(0, 24);
 
 const mapSummary = (row: typeof mcpTokens.$inferSelect): McpTokenSummary => ({
   id: row.id,
+  roleId: row.roleId,
   name: row.name,
   tokenPrefix: row.tokenPrefix,
   scope: row.scope,
@@ -62,6 +65,7 @@ export const createForUser = async (
   input: {
     id: string;
     userId: string;
+    roleId: string;
     name: string;
     rawToken: string;
     scope?: McpTokenScope;
@@ -73,6 +77,7 @@ export const createForUser = async (
     .values({
       id: input.id,
       userId: input.userId,
+      roleId: input.roleId,
       name: input.name,
       tokenPrefix: displayPrefix(input.rawToken),
       tokenHash: hashToken(input.rawToken),
@@ -92,6 +97,7 @@ export const findActiveByRawToken = async (
     .select({
       id: mcpTokens.id,
       userId: mcpTokens.userId,
+      roleId: mcpTokens.roleId,
       name: mcpTokens.name,
       scope: mcpTokens.scope,
       createdAt: mcpTokens.createdAt,

@@ -142,6 +142,33 @@ describe('listAll', () => {
   });
 });
 
+describe('listByIds', () => {
+  test('returns an empty Map without firing SQL when ids is empty', async () => {
+    expect(await rolesRepo.listByIds([], testDb)).toEqual(new Map());
+    expect(exec.calls).toHaveLength(0);
+  });
+
+  test('returns mapped roles in a Map and filters by the requested ids', async () => {
+    exec.enqueue({
+      rows: [
+        ['manager', 'Manager', false, false],
+        ['custom', 'Delivery Lead', null, null],
+      ],
+    });
+
+    const result = await rolesRepo.listByIds(['manager', 'custom'], testDb);
+
+    expect(result).toEqual(
+      new Map([
+        ['manager', { id: 'manager', name: 'Manager', isSystem: false, isAdmin: false }],
+        ['custom', { id: 'custom', name: 'Delivery Lead', isSystem: false, isAdmin: false }],
+      ]),
+    );
+    expect(exec.calls[0].params).toContain('manager');
+    expect(exec.calls[0].params).toContain('custom');
+  });
+});
+
 describe('findById', () => {
   test('returns the mapped row when found', async () => {
     exec.enqueue({ rows: [['manager', 'Manager', false, false]] });
