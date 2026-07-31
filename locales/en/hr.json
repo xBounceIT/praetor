@@ -121,6 +121,8 @@
     "assignUsers": "Assign Users",
     "searchUsers": "Search users...",
     "newCompetenceCenter": "New Competence Center",
+    "createDescription": "Define the new team's identity and managers.",
+    "editDescription": "Update the team's identity and managers.",
     "saveChanges": "Save Changes",
     "failedToSaveAssignments": "Failed to save assignments",
     "failedToLoadUnitUsers": "Failed to load competence center members. Saving now could remove existing members — please close and retry.",

@@ -54,7 +54,7 @@ const PERMISSIONS = [
 ];
 
 describe('<WorkUnitsView /> member assignments', () => {
-  test('renders the manage-members action as a native shadcn primary button', () => {
+  test('renders the manage-members action as a native shadcn outline button', () => {
     render(
       <WorkUnitsView
         workUnits={[UNIT]}
@@ -68,12 +68,12 @@ describe('<WorkUnitsView /> member assignments', () => {
     );
 
     const trigger = screen.getByRole('button', {
-      name: 'hr:competenceCenters.manageMembers',
+      name: 'hr:competenceCenters.manageMembers: Engineering',
     });
     // Native shadcn Button carries these data attributes; the old bespoke
     // <button> did not, so this fails on the pre-fix markup.
-    expect(trigger).toHaveAttribute('data-slot', 'button');
-    expect(trigger).toHaveAttribute('data-variant', 'default');
+    expect(trigger.getAttribute('data-slot')).toBe('button');
+    expect(trigger.getAttribute('data-variant')).toBe('outline');
   });
 
   test('uses the shared user assignment modal for competence-center members', async () => {

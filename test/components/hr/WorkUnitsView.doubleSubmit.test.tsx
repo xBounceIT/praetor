@@ -139,13 +139,7 @@ describe('<WorkUnitsView /> double-submit guards', () => {
 
     const { onUpdate: updateMock } = renderWorkUnitsView({ onUpdate });
 
-    // Open the edit modal via the per-row Edit button (single Edit button per unit).
-    const editButtons = screen.getAllByRole('button').filter((btn) => {
-      const icon = btn.querySelector('i.fa-solid.fa-pen');
-      return icon !== null && !btn.querySelector('i.fa-trash-can');
-    });
-    if (editButtons.length === 0) throw new Error('edit button not found');
-    fireEvent.click(editButtons[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.edit: Engineering' }));
 
     const form = findFormByHeading('hr:competenceCenters.editCompetenceCenter');
 
@@ -174,12 +168,7 @@ describe('<WorkUnitsView /> double-submit guards', () => {
 
     const { onDelete: deleteMock } = renderWorkUnitsView({ onDelete });
 
-    // Open delete confirm via the per-row Delete (trash) button.
-    const deleteButtons = screen
-      .getAllByRole('button')
-      .filter((btn) => btn.querySelector('i.fa-trash-can'));
-    if (deleteButtons.length === 0) throw new Error('delete button not found');
-    fireEvent.click(deleteButtons[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.delete: Engineering' }));
 
     // Confirm dialog: find the Yes-delete button.
     const confirm = await screen.findByRole('button', { name: 'hr:competenceCenters.yesDelete' });

@@ -121,6 +121,8 @@
     "assignUsers": "Assegna Utenti",
     "searchUsers": "Cerca utenti...",
     "newCompetenceCenter": "Nuovo Competence Center",
+    "createDescription": "Definisci identità e responsabili del nuovo team.",
+    "editDescription": "Aggiorna identità e responsabili del team.",
     "saveChanges": "Salva Modifiche",
     "failedToSaveAssignments": "Impossibile salvare le assegnazioni",
     "failedToLoadUnitUsers": "Impossibile caricare i membri del Competence Center. Salvare ora potrebbe rimuovere i membri esistenti — chiudi e riprova.",

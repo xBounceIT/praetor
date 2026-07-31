@@ -89,7 +89,7 @@ describe('HR competence center modal styling', () => {
       "import { Textarea } from '@/components/ui/textarea';",
       '<ModalContent size="lg">',
       '<ModalHeader>',
-      '<ModalBody className="space-y-4">',
+      '<ModalBody className="space-y-5">',
       '<ModalFooter>',
       '<ModalContent size="sm">',
     ]);

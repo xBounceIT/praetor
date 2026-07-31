@@ -35,6 +35,17 @@ const renderView = (workUnits: WorkUnit[]) =>
   );
 
 describe('<WorkUnitsView /> member preview (issue #761)', () => {
+  test('keeps the empty-state title in the page heading hierarchy', () => {
+    renderView([]);
+
+    expect(
+      screen.getByRole('heading', {
+        level: 3,
+        name: 'competenceCenters.noCompetenceCentersAssigned',
+      }),
+    ).toBeInTheDocument();
+  });
+
   test('renders member initials with a +N overflow badge instead of the count', () => {
     renderView([
       {
@@ -53,7 +64,7 @@ describe('<WorkUnitsView /> member preview (issue #761)', () => {
       },
     ]);
 
-    expect(screen.getByText('AS')).toBeInTheDocument();
+    expect(screen.getAllByText('AS').length).toBeGreaterThan(0);
     // Each badge surfaces the member's full name as its accessible label.
     expect(screen.getByLabelText('Andrea Scognamiglio')).toBeInTheDocument();
     // 6 members, inline cap of 5 → one collapses into a "+1" badge.
@@ -76,5 +87,19 @@ describe('<WorkUnitsView /> member preview (issue #761)', () => {
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText(/competenceCenters\.noMembersAssigned/)).toBeInTheDocument();
+  });
+
+  test('uses userCount instead of claiming no members when the preview is omitted', () => {
+    renderView([
+      {
+        id: 'wu-3',
+        name: 'Platform',
+        managers: [],
+        userCount: 3,
+      },
+    ]);
+
+    expect(screen.getAllByText(/competenceCenters\.memberCount/)).toHaveLength(2);
+    expect(screen.queryByText(/competenceCenters\.noMembersAssigned/)).not.toBeInTheDocument();
   });
 });

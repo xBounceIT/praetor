@@ -339,10 +339,19 @@ const SearchableSelectControl = ({
   const [modal, setModal] = useState(false);
   const selectedOption = getSingleSelectedOption(options, value);
   const selectedValueSet = useMemo(() => new Set(Array.isArray(value) ? value : []), [value]);
-  const selectedOptions = useMemo(
-    () => options.filter((option) => selectedValueSet.has(option.id)),
-    [options, selectedValueSet],
+  const optionById = useMemo(
+    () => new Map(options.map((option) => [option.id, option])),
+    [options],
   );
+  const selectedOptions = useMemo(() => {
+    const seenIds = new Set<string>();
+    return (Array.isArray(value) ? value : []).flatMap((id) => {
+      if (seenIds.has(id)) return [];
+      seenIds.add(id);
+      const option = optionById.get(id);
+      return option ? [option] : [];
+    });
+  }, [optionById, value]);
   const buttonLabel = isMulti
     ? getMultiButtonLabel({ displayValue, placeholder, selectedOptions, t })
     : displayValue || selectedOption?.name || placeholder || t('select.placeholder');

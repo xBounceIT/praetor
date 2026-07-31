@@ -1,13 +1,41 @@
+import {
+  Building2,
+  Pencil,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  UserRoundCog,
+  UsersRound,
+} from 'lucide-react';
 import type React from 'react';
-import { useReducer } from 'react';
+import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { workUnitsApi } from '../services/api/workUnits';
 import type { User, WorkUnit } from '../types';
+import { getInitials } from '../utils/initials';
 import { hasScopedActionPermission } from '../utils/permissions';
 import HeaderAddButton from './shared/HeaderAddButton';
 import MemberAvatarGroup from './shared/MemberAvatarGroup';
@@ -16,6 +44,7 @@ import {
   ModalBody,
   ModalCloseButton,
   ModalContent,
+  ModalDescription,
   ModalFooter,
   ModalHeader,
   ModalTitle,
@@ -77,7 +106,8 @@ interface WorkUnitFormModalProps {
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => Promise<void>;
   title: React.ReactNode;
-  titleIconClassName: string;
+  descriptionText: React.ReactNode;
+  titleIcon: React.ReactNode;
   submitLabel: React.ReactNode;
   submitDisabled?: boolean;
   managersRequired?: boolean;
@@ -102,7 +132,8 @@ const WorkUnitFormModal = ({
   onClose,
   onSubmit,
   title,
-  titleIconClassName,
+  descriptionText,
+  titleIcon,
   submitLabel,
   submitDisabled = false,
   managersRequired = false,
@@ -126,16 +157,19 @@ const WorkUnitFormModal = ({
       <ModalContent size="lg">
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
           <ModalHeader>
-            <ModalTitle className="gap-3">
-              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                <i className={`fa-solid ${titleIconClassName}`} aria-hidden="true"></i>
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                {titleIcon}
               </span>
-              {title}
-            </ModalTitle>
+              <div className="min-w-0 space-y-1">
+                <ModalTitle>{title}</ModalTitle>
+                <ModalDescription>{descriptionText}</ModalDescription>
+              </div>
+            </div>
             <ModalCloseButton onClick={onClose} disabled={isSubmitting} />
           </ModalHeader>
 
-          <ModalBody className="space-y-4">
+          <ModalBody className="space-y-5">
             <Field data-invalid={Boolean(errors.name)}>
               <FieldLabel htmlFor={nameInputId} required>
                 {t('hr:competenceCenters.unitName')}
@@ -287,28 +321,46 @@ const WorkUnitCard: React.FC<{
   onManageMembers: (unit: WorkUnit) => void;
 }> = ({ unit, canUpdate, canDelete, canManageMembers, onEdit, onDelete, onManageMembers }) => {
   const { t } = useTranslation(['hr', 'common']);
+  const memberCount = unit.userCount ?? unit.members?.length ?? 0;
 
   return (
-    <div className="group rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
-      <div className="mb-4 flex items-start justify-between">
-        <div className="flex size-12 items-center justify-center rounded-xl bg-zinc-100 text-praetor text-xl">
-          <i className="fa-solid fa-sitemap" aria-hidden="true"></i>
+    <Card className="gap-0 overflow-hidden py-0 transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-md">
+      <CardHeader className="border-b border-border bg-muted/20 px-5 py-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
+            <Building2 className="size-5" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="min-w-0 text-base leading-snug">
+                <h3 className="break-words">{unit.name}</h3>
+              </CardTitle>
+              <Badge variant="outline" className="font-normal text-muted-foreground">
+                {t('hr:competenceCenters.memberCount', { count: memberCount })}
+              </Badge>
+            </div>
+            {unit.description && (
+              <CardDescription className="mt-1 line-clamp-2 leading-relaxed">
+                {unit.description}
+              </CardDescription>
+            )}
+          </div>
         </div>
+
         {(canUpdate || canDelete) && (
-          <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <CardAction className="flex items-center gap-1">
             {canUpdate && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(unit)}
-                      aria-label={t('common:buttons.edit')}
-                      className="flex size-8 items-center justify-center rounded-lg bg-zinc-50 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-praetor"
-                    >
-                      <i className="fa-solid fa-pen" aria-hidden="true"></i>
-                    </button>
-                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onEdit(unit)}
+                    aria-label={`${t('common:buttons.edit')}: ${unit.name}`}
+                  >
+                    <Pencil aria-hidden="true" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
               </Tooltip>
@@ -316,105 +368,135 @@ const WorkUnitCard: React.FC<{
             {canDelete && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <button
-                      type="button"
-                      onClick={() => onDelete(unit)}
-                      aria-label={t('common:buttons.delete')}
-                      className="flex size-8 items-center justify-center rounded-lg bg-zinc-50 text-red-600 transition-colors hover:bg-red-50 hover:text-red-500"
-                    >
-                      <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                    </button>
-                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onDelete(unit)}
+                    aria-label={`${t('common:buttons.delete')}: ${unit.name}`}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
               </Tooltip>
             )}
-          </div>
+          </CardAction>
         )}
-      </div>
+      </CardHeader>
 
-      <h3 className="mb-1 font-semibold text-lg text-zinc-800">{unit.name}</h3>
-      {unit.description && (
-        <p className="mb-4 line-clamp-2 text-sm text-zinc-500">{unit.description}</p>
-      )}
-
-      <div className="space-y-3 border-zinc-100 border-t pt-4">
-        <div className="flex items-start gap-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 font-bold text-xs text-zinc-500">
-            <i className="fa-solid fa-user-tie" aria-hidden="true"></i>
-          </div>
-          <div>
-            <p className="font-bold text-[10px] text-zinc-400 uppercase tracking-wider">
+      <CardContent className="grid flex-1 p-0 sm:grid-cols-2">
+        <section
+          aria-label={`${t('hr:competenceCenters.managers')}: ${unit.name}`}
+          className="space-y-3 p-5 sm:border-r sm:border-border"
+        >
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <UserRoundCog className="size-4" aria-hidden="true" />
+            <h4 className="font-medium text-xs uppercase tracking-wide">
               {t('hr:competenceCenters.managers')}
-            </p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {unit.managers && unit.managers.length > 0 ? (
-                unit.managers.map((manager) => (
-                  <span
-                    key={manager.id}
-                    className="inline-flex items-center rounded bg-zinc-100 px-2 py-0.5 font-medium text-praetor text-xs"
-                  >
-                    {manager.name}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-zinc-400 italic">
-                  {t('hr:competenceCenters.noManagersAssigned')}
-                </span>
-              )}
-            </div>
+            </h4>
           </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 font-bold text-xs text-zinc-500">
-              <i className="fa-solid fa-users" aria-hidden="true"></i>
-            </div>
-            <div>
-              <p className="font-bold text-[10px] text-zinc-400 uppercase tracking-wider">
-                {t('hr:competenceCenters.members')}
+          <div className="flex flex-wrap gap-2">
+            {unit.managers.length > 0 ? (
+              unit.managers.map((manager) => (
+                <Badge
+                  key={manager.id}
+                  variant="secondary"
+                  className="max-w-full min-w-0 gap-2 rounded-full py-1 pr-2.5 pl-1 font-medium"
+                >
+                  <Avatar size="sm" aria-hidden="true">
+                    <AvatarFallback className="text-[9px] font-semibold">
+                      {getInitials(manager.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="truncate">{manager.name}</span>
+                </Badge>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t('hr:competenceCenters.noManagersAssigned')}
               </p>
-              {unit.members?.length ? (
-                <MemberAvatarGroup members={unit.members} className="mt-1.5" />
-              ) : (
-                <p className="text-sm text-zinc-400 italic">
-                  {t('hr:competenceCenters.noMembersAssigned')}
-                </p>
-              )}
-            </div>
+            )}
+          </div>
+        </section>
+
+        <section
+          aria-label={`${t('hr:competenceCenters.members')}: ${unit.name}`}
+          className="flex flex-col gap-3 border-t border-border p-5 sm:border-t-0"
+        >
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <UsersRound className="size-4" aria-hidden="true" />
+            <h4 className="font-medium text-xs uppercase tracking-wide">
+              {t('hr:competenceCenters.members')}
+            </h4>
+          </div>
+          <div className="flex min-h-8 items-center">
+            {unit.members?.length ? (
+              <MemberAvatarGroup members={unit.members} />
+            ) : memberCount > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t('hr:competenceCenters.memberCount', { count: memberCount })}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t('hr:competenceCenters.noMembersAssigned')}
+              </p>
+            )}
           </div>
           {canManageMembers && (
-            <Button type="button" onClick={() => onManageMembers(unit)}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-auto w-full"
+              onClick={() => onManageMembers(unit)}
+              aria-label={`${t('hr:competenceCenters.manageMembers')}: ${unit.name}`}
+            >
+              <UsersRound aria-hidden="true" />
               {t('hr:competenceCenters.manageMembers')}
             </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </section>
+      </CardContent>
+    </Card>
   );
 };
 
-const WorkUnitsEmptyState: React.FC<{ canCreate: boolean }> = ({ canCreate }) => {
+const WorkUnitsEmptyState: React.FC<{ canCreate: boolean; onCreate: () => void }> = ({
+  canCreate,
+  onCreate,
+}) => {
   const { t } = useTranslation('hr');
 
   return (
-    <div className="col-span-full flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 bg-white px-6 py-20 text-center">
-      <div className="mb-4 flex size-16 items-center justify-center rounded-full bg-zinc-50 text-2xl text-zinc-300">
-        <i className="fa-solid fa-sitemap" aria-hidden="true"></i>
-      </div>
-      <h3 className="font-semibold text-lg text-zinc-800">
-        {canCreate
-          ? t('competenceCenters.noCompetenceCentersCreated')
-          : t('competenceCenters.noCompetenceCentersAssigned')}
-      </h3>
-      <p className={`${canCreate ? 'max-w-sm' : 'max-w-md'} mt-1 text-zinc-500`}>
-        {canCreate
-          ? t('competenceCenters.noCompetenceCentersCreatedDescription')
-          : t('competenceCenters.noCompetenceCentersAssignedDescription')}
-      </p>
-    </div>
+    <Empty className="col-span-full min-h-72 border border-border bg-card">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Building2 aria-hidden="true" />
+        </EmptyMedia>
+        <EmptyTitle>
+          <h3>
+            {canCreate
+              ? t('competenceCenters.noCompetenceCentersCreated')
+              : t('competenceCenters.noCompetenceCentersAssigned')}
+          </h3>
+        </EmptyTitle>
+        <EmptyDescription>
+          {canCreate
+            ? t('competenceCenters.noCompetenceCentersCreatedDescription')
+            : t('competenceCenters.noCompetenceCentersAssignedDescription')}
+        </EmptyDescription>
+      </EmptyHeader>
+      {canCreate && (
+        <EmptyContent>
+          <Button type="button" onClick={onCreate}>
+            <Plus aria-hidden="true" />
+            {t('competenceCenters.newCompetenceCenter')}
+          </Button>
+        </EmptyContent>
+      )}
+    </Empty>
   );
 };
 
@@ -434,7 +516,7 @@ const WorkUnitDeleteConfirmModal: React.FC<{
           <ModalHeader className="justify-center text-center">
             <div className="space-y-3">
               <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                <i className="fa-solid fa-triangle-exclamation text-xl" aria-hidden="true"></i>
+                <TriangleAlert className="size-5" aria-hidden="true" />
               </div>
               <ModalTitle className="justify-center">
                 {t('hr:competenceCenters.deleteCompetenceCenter')}
@@ -587,7 +669,16 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     dispatch({ type: 'closeDeleteConfirm' });
   };
 
-  const managerOptions = users.map((u) => ({ id: u.id, name: u.name }));
+  const managerOptions = useMemo(() => {
+    const options = users.map((user) => ({ id: user.id, name: user.name }));
+    const knownManagerIds = new Set(options.map((option) => option.id));
+    for (const manager of editingUnit?.managers ?? []) {
+      if (knownManagerIds.has(manager.id)) continue;
+      knownManagerIds.add(manager.id);
+      options.push(manager);
+    }
+    return options;
+  }, [editingUnit, users]);
 
   const canCreateWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'create');
   const canUpdateWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'update');
@@ -596,23 +687,37 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-zinc-800 tracking-tight">
-            {t('hr:competenceCenters.title')}
-          </h2>
-          <p className="text-zinc-500 font-medium">{t('hr:competenceCenters.subtitle')}</p>
+      <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <Building2 className="size-5" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                {t('hr:competenceCenters.title')}
+              </h2>
+              {workUnits.length > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="tabular-nums"
+                  aria-label={`${workUnits.length} ${t('hr:competenceCenters.title')}`}
+                >
+                  {workUnits.length}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{t('hr:competenceCenters.subtitle')}</p>
+          </div>
         </div>
         {canCreateWorkUnits && (
-          <HeaderAddButton actionSize="wide" onClick={openCreateModal}>
+          <HeaderAddButton onClick={openCreateModal}>
             {t('hr:competenceCenters.newCompetenceCenter')}
           </HeaderAddButton>
         )}
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
         {workUnits.map((unit) => (
           <WorkUnitCard
             key={unit.id}
@@ -626,7 +731,9 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
           />
         ))}
 
-        {workUnits.length === 0 && <WorkUnitsEmptyState canCreate={canCreateWorkUnits} />}
+        {workUnits.length === 0 && (
+          <WorkUnitsEmptyState canCreate={canCreateWorkUnits} onCreate={openCreateModal} />
+        )}
       </div>
 
       <WorkUnitFormModal
@@ -634,7 +741,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         onClose={requestCloseCreateModal}
         onSubmit={handleCreate}
         title={t('hr:competenceCenters.newCompetenceCenter')}
-        titleIconClassName="fa-plus"
+        descriptionText={t('hr:competenceCenters.createDescription')}
+        titleIcon={<Plus className="size-5" aria-hidden="true" />}
         submitLabel={t('hr:competenceCenters.createUnit')}
         submitDisabled={selectedManagerIds.length === 0}
         managersRequired
@@ -663,7 +771,8 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         onClose={requestCloseEditModal}
         onSubmit={handleUpdate}
         title={t('hr:competenceCenters.editCompetenceCenter')}
-        titleIconClassName="fa-pen-to-square"
+        descriptionText={t('hr:competenceCenters.editDescription')}
+        titleIcon={<Pencil className="size-5" aria-hidden="true" />}
         submitLabel={t('hr:competenceCenters.saveChanges')}
         nameInputId="work-unit-edit-name"
         managersInputId="work-unit-edit-managers"

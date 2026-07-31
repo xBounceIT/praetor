@@ -26,7 +26,10 @@ export type WorkUnit = {
 const baseSelect = sql`
   SELECT w.id, w.name, w.description, w.is_disabled AS "isDisabled",
     (
-      SELECT COALESCE(json_agg(json_build_object('id', u.id, 'name', u.name)), '[]')
+      SELECT COALESCE(
+        json_agg(json_build_object('id', u.id, 'name', u.name) ORDER BY u.name, u.id),
+        '[]'
+      )
       FROM work_unit_managers wum
       JOIN users u ON wum.user_id = u.id
       WHERE wum.work_unit_id = w.id
