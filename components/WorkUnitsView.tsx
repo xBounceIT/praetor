@@ -34,9 +34,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { workUnitsApi } from '../services/api/workUnits';
-import type { User, WorkUnit } from '../types';
+import type { User, WorkUnit, WorkUnitMutationPayload } from '../types';
 import { getInitials } from '../utils/initials';
 import { hasScopedActionPermission } from '../utils/permissions';
+import { toastError } from '../utils/toast';
 import HeaderAddButton from './shared/HeaderAddButton';
 import MemberAvatarGroup from './shared/MemberAvatarGroup';
 import Modal from './shared/Modal';
@@ -63,7 +64,7 @@ export interface WorkUnitsViewProps {
   users: User[];
   permissions: string[];
   onAddWorkUnit: (data: WorkUnitPayload) => Promise<void>;
-  onUpdateWorkUnit: (id: string, updates: WorkUnitPayload) => Promise<void>;
+  onUpdateWorkUnit: (id: string, updates: WorkUnitMutationPayload) => Promise<void>;
   onDeleteWorkUnit: (id: string) => Promise<void>;
   refreshWorkUnits: () => Promise<void>;
 }
@@ -71,6 +72,7 @@ export interface WorkUnitsViewProps {
 type WorkUnitsState = {
   isCreateModalOpen: boolean;
   isEditModalOpen: boolean;
+  isManagerAssignmentModalOpen: boolean;
   isAssignmentModalOpen: boolean;
   isDeleteConfirmOpen: boolean;
   editingUnit: WorkUnit | null;
@@ -86,10 +88,12 @@ type WorkUnitsState = {
 type WorkUnitsAction =
   | { type: 'openCreate' }
   | { type: 'openEdit'; unit: WorkUnit }
+  | { type: 'openManagerAssignments'; unit: WorkUnit }
   | { type: 'openAssignments'; unit: WorkUnit }
   | { type: 'confirmDelete'; unit: WorkUnit }
   | { type: 'closeCreate' }
   | { type: 'closeEdit' }
+  | { type: 'closeManagerAssignments' }
   | { type: 'closeAssignments' }
   | { type: 'closeDeleteConfirm' }
   | { type: 'deleteSuccess' }
@@ -110,22 +114,26 @@ interface WorkUnitFormModalProps {
   titleIcon: React.ReactNode;
   submitLabel: React.ReactNode;
   submitDisabled?: boolean;
+  showManagers?: boolean;
   managersRequired?: boolean;
   nameInputId: string;
-  managersInputId: string;
+  managersInputId?: string;
   descriptionInputId: string;
   name: string;
-  selectedManagerIds: string[];
+  selectedManagerIds?: string[];
   description: string;
   errors: Record<string, string>;
   isSubmitting: boolean;
-  managerOptions: Option[];
+  managerOptions?: Option[];
   t: (key: string) => string;
   onNameChange: (name: string) => void;
-  onSelectedManagerIdsChange: (managerIds: string[]) => void;
+  onSelectedManagerIdsChange?: (managerIds: string[]) => void;
   onDescriptionChange: (description: string) => void;
   onClearError: (field: string) => void;
 }
+
+const EMPTY_MANAGER_IDS: string[] = [];
+const EMPTY_MANAGER_OPTIONS: Option[] = [];
 
 const WorkUnitFormModal = ({
   isOpen,
@@ -136,16 +144,17 @@ const WorkUnitFormModal = ({
   titleIcon,
   submitLabel,
   submitDisabled = false,
+  showManagers = false,
   managersRequired = false,
   nameInputId,
   managersInputId,
   descriptionInputId,
   name,
-  selectedManagerIds,
+  selectedManagerIds = EMPTY_MANAGER_IDS,
   description,
   errors,
   isSubmitting,
-  managerOptions,
+  managerOptions = EMPTY_MANAGER_OPTIONS,
   t,
   onNameChange,
   onSelectedManagerIdsChange,
@@ -191,29 +200,31 @@ const WorkUnitFormModal = ({
               <FieldError className="text-xs">{errors.name}</FieldError>
             </Field>
 
-            <div className="space-y-2">
-              <SelectControl
-                id={managersInputId}
-                label={t('hr:competenceCenters.managers')}
-                required={managersRequired}
-                options={managerOptions}
-                value={selectedManagerIds}
-                onChange={(val) => {
-                  onSelectedManagerIdsChange(val as string[]);
-                  if (errors.managers) onClearError('managers');
-                }}
-                isMulti={true}
-                searchable={true}
-                placeholder={t('hr:competenceCenters.selectManagers')}
-                disabled={isSubmitting}
-                buttonClassName={
-                  errors.managers
-                    ? 'border-destructive focus-visible:ring-destructive/20'
-                    : undefined
-                }
-              />
-              <FieldError className="text-xs">{errors.managers}</FieldError>
-            </div>
+            {showManagers && managersInputId && onSelectedManagerIdsChange && (
+              <div className="space-y-2">
+                <SelectControl
+                  id={managersInputId}
+                  label={t('hr:competenceCenters.managers')}
+                  required={managersRequired}
+                  options={managerOptions}
+                  value={selectedManagerIds}
+                  onChange={(val) => {
+                    onSelectedManagerIdsChange(val as string[]);
+                    if (errors.managers) onClearError('managers');
+                  }}
+                  isMulti={true}
+                  searchable={true}
+                  placeholder={t('hr:competenceCenters.selectManagers')}
+                  disabled={isSubmitting}
+                  buttonClassName={
+                    errors.managers
+                      ? 'border-destructive focus-visible:ring-destructive/20'
+                      : undefined
+                  }
+                />
+                <FieldError className="text-xs">{errors.managers}</FieldError>
+              </div>
+            )}
 
             <Field>
               <FieldLabel htmlFor={descriptionInputId}>
@@ -247,6 +258,7 @@ const WorkUnitFormModal = ({
 const createWorkUnitsState = (): WorkUnitsState => ({
   isCreateModalOpen: false,
   isEditModalOpen: false,
+  isManagerAssignmentModalOpen: false,
   isAssignmentModalOpen: false,
   isDeleteConfirmOpen: false,
   editingUnit: null,
@@ -276,9 +288,15 @@ const workUnitsReducer = (state: WorkUnitsState, action: WorkUnitsAction): WorkU
         editingUnit: action.unit,
         isEditModalOpen: true,
         name: action.unit.name,
-        selectedManagerIds: action.unit.managers?.map((manager) => manager.id) ?? [],
         description: action.unit.description || '',
         errors: {},
+      };
+    case 'openManagerAssignments':
+      return {
+        ...state,
+        targetUnit: action.unit,
+        selectedManagerIds: action.unit.managers?.map((manager) => manager.id) ?? [],
+        isManagerAssignmentModalOpen: true,
       };
     case 'openAssignments':
       return { ...state, targetUnit: action.unit, isAssignmentModalOpen: true };
@@ -288,6 +306,8 @@ const workUnitsReducer = (state: WorkUnitsState, action: WorkUnitsAction): WorkU
       return { ...state, isCreateModalOpen: false };
     case 'closeEdit':
       return { ...state, isEditModalOpen: false, editingUnit: null };
+    case 'closeManagerAssignments':
+      return { ...state, isManagerAssignmentModalOpen: false, targetUnit: null };
     case 'closeAssignments':
       return { ...state, isAssignmentModalOpen: false, targetUnit: null };
     case 'closeDeleteConfirm':
@@ -315,11 +335,11 @@ const WorkUnitCard: React.FC<{
   unit: WorkUnit;
   canUpdate: boolean;
   canDelete: boolean;
-  canManageMembers: boolean;
   onEdit: (unit: WorkUnit) => void;
   onDelete: (unit: WorkUnit) => void;
+  onManageManagers: (unit: WorkUnit) => void;
   onManageMembers: (unit: WorkUnit) => void;
-}> = ({ unit, canUpdate, canDelete, canManageMembers, onEdit, onDelete, onManageMembers }) => {
+}> = ({ unit, canUpdate, canDelete, onEdit, onDelete, onManageManagers, onManageMembers }) => {
   const { t } = useTranslation(['hr', 'common']);
   const memberCount = unit.userCount ?? unit.members?.length ?? 0;
 
@@ -389,7 +409,7 @@ const WorkUnitCard: React.FC<{
       <CardContent className="grid flex-1 p-0 sm:grid-cols-2">
         <section
           aria-label={`${t('hr:competenceCenters.managers')}: ${unit.name}`}
-          className="space-y-3 p-5 sm:border-r sm:border-border"
+          className="flex flex-col gap-3 p-5 sm:border-r sm:border-border"
         >
           <div className="flex items-center gap-2 text-muted-foreground">
             <UserRoundCog className="size-4" aria-hidden="true" />
@@ -397,7 +417,7 @@ const WorkUnitCard: React.FC<{
               {t('hr:competenceCenters.managers')}
             </h4>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-h-8 flex-wrap items-center gap-2">
             {unit.managers.length > 0 ? (
               unit.managers.map((manager) => (
                 <Badge
@@ -419,6 +439,19 @@ const WorkUnitCard: React.FC<{
               </p>
             )}
           </div>
+          {canUpdate && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-auto w-full"
+              onClick={() => onManageManagers(unit)}
+              aria-label={`${t('hr:competenceCenters.manageManagers')}: ${unit.name}`}
+            >
+              <UserRoundCog aria-hidden="true" />
+              {t('hr:competenceCenters.manageManagers')}
+            </Button>
+          )}
         </section>
 
         <section
@@ -444,7 +477,7 @@ const WorkUnitCard: React.FC<{
               </p>
             )}
           </div>
-          {canManageMembers && (
+          {canUpdate && (
             <Button
               type="button"
               variant="outline"
@@ -497,6 +530,155 @@ const WorkUnitsEmptyState: React.FC<{ canCreate: boolean; onCreate: () => void }
         </EmptyContent>
       )}
     </Empty>
+  );
+};
+
+const WorkUnitsHeader: React.FC<{
+  workUnitCount: number;
+  canCreate: boolean;
+  onCreate: () => void;
+}> = ({ workUnitCount, canCreate, onCreate }) => {
+  const { t } = useTranslation(['hr', 'common']);
+
+  return (
+    <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <Building2 className="size-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+              {t('hr:competenceCenters.title')}
+            </h2>
+            {workUnitCount > 0 && (
+              <Badge
+                variant="secondary"
+                className="tabular-nums"
+                aria-label={`${workUnitCount} ${t('hr:competenceCenters.title')}`}
+              >
+                {workUnitCount}
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">{t('hr:competenceCenters.subtitle')}</p>
+        </div>
+      </div>
+      {canCreate && (
+        <HeaderAddButton onClick={onCreate}>
+          {t('hr:competenceCenters.newCompetenceCenter')}
+        </HeaderAddButton>
+      )}
+    </div>
+  );
+};
+
+const WorkUnitsGrid: React.FC<{
+  workUnits: WorkUnit[];
+  canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  onCreate: () => void;
+  onEdit: (unit: WorkUnit) => void;
+  onDelete: (unit: WorkUnit) => void;
+  onManageManagers: (unit: WorkUnit) => void;
+  onManageMembers: (unit: WorkUnit) => void;
+}> = ({
+  workUnits,
+  canCreate,
+  canUpdate,
+  canDelete,
+  onCreate,
+  onEdit,
+  onDelete,
+  onManageManagers,
+  onManageMembers,
+}) => (
+  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+    {workUnits.map((unit) => (
+      <WorkUnitCard
+        key={unit.id}
+        unit={unit}
+        canUpdate={canUpdate}
+        canDelete={canDelete}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onManageManagers={onManageManagers}
+        onManageMembers={onManageMembers}
+      />
+    ))}
+
+    {workUnits.length === 0 && <WorkUnitsEmptyState canCreate={canCreate} onCreate={onCreate} />}
+  </div>
+);
+
+const WorkUnitManagerAssignmentModal: React.FC<{
+  isOpen: boolean;
+  unit: WorkUnit | null;
+  managerOptions: Option[];
+  selectedManagerIds: string[];
+  isSubmitting: boolean;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent) => Promise<void>;
+  onSelectedManagerIdsChange: (managerIds: string[]) => void;
+}> = ({
+  isOpen,
+  unit,
+  managerOptions,
+  selectedManagerIds,
+  isSubmitting,
+  onClose,
+  onSubmit,
+  onSelectedManagerIdsChange,
+}) => {
+  const { t } = useTranslation(['hr', 'common']);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
+      {() => (
+        <ModalContent size="lg">
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            <ModalHeader>
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <UserRoundCog className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 space-y-1">
+                  <ModalTitle>{t('hr:competenceCenters.manageManagers')}</ModalTitle>
+                  <ModalDescription>
+                    {t('hr:competenceCenters.manageManagersDescription', { name: unit?.name })}
+                  </ModalDescription>
+                </div>
+              </div>
+              <ModalCloseButton onClick={onClose} disabled={isSubmitting} />
+            </ModalHeader>
+
+            <ModalBody className="space-y-5">
+              <SelectControl
+                id="work-unit-manager-assignments"
+                label={t('hr:competenceCenters.managers')}
+                options={managerOptions}
+                value={selectedManagerIds}
+                onChange={(value) => onSelectedManagerIdsChange(value as string[])}
+                isMulti={true}
+                searchable={true}
+                placeholder={t('hr:competenceCenters.selectManagers')}
+                disabled={isSubmitting}
+              />
+            </ModalBody>
+
+            <ModalFooter>
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                {t('common:buttons.cancel')}
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? t('common:buttons.saving') : t('hr:competenceCenters.saveManagers')}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      )}
+    </Modal>
   );
 };
 
@@ -554,6 +736,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   const {
     isCreateModalOpen,
     isEditModalOpen,
+    isManagerAssignmentModalOpen,
     isAssignmentModalOpen,
     isDeleteConfirmOpen,
     editingUnit,
@@ -612,7 +795,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     if (!editingUnit || !name) return;
     dispatch({ type: 'setSubmitting', isSubmitting: true });
     try {
-      await onUpdateWorkUnit(editingUnit.id, { name, managerIds: selectedManagerIds, description });
+      await onUpdateWorkUnit(editingUnit.id, { name, description });
       dispatch({ type: 'closeEdit' });
     } finally {
       dispatch({ type: 'setSubmitting', isSubmitting: false });
@@ -639,6 +822,26 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     dispatch({ type: 'openAssignments', unit });
   };
 
+  const openManagerAssignments = (unit: WorkUnit) => {
+    dispatch({ type: 'openManagerAssignments', unit });
+  };
+
+  const handleManagerUpdate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!targetUnit || isSubmitting) return;
+
+    dispatch({ type: 'setSubmitting', isSubmitting: true });
+    try {
+      await onUpdateWorkUnit(targetUnit.id, { managerIds: selectedManagerIds });
+      dispatch({ type: 'closeManagerAssignments' });
+    } catch (error) {
+      console.error('Failed to update competence center managers', error);
+      toastError(t('hr:competenceCenters.failedToSaveManagers'));
+    } finally {
+      dispatch({ type: 'setSubmitting', isSubmitting: false });
+    }
+  };
+
   const loadAssignedUnitUserIds = (signal?: AbortSignal) => {
     if (!targetUnit) return Promise.resolve([]);
     return workUnitsApi.getUsers(targetUnit.id, signal);
@@ -660,6 +863,11 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
     dispatch({ type: 'closeEdit' });
   };
 
+  const requestCloseManagerAssignments = () => {
+    if (isSubmitting) return;
+    dispatch({ type: 'closeManagerAssignments' });
+  };
+
   const closeAssignments = () => {
     dispatch({ type: 'closeAssignments' });
   };
@@ -672,69 +880,38 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
   const managerOptions = useMemo(() => {
     const options = users.map((user) => ({ id: user.id, name: user.name }));
     const knownManagerIds = new Set(options.map((option) => option.id));
-    for (const manager of editingUnit?.managers ?? []) {
+    const assignedManagers = isManagerAssignmentModalOpen ? (targetUnit?.managers ?? []) : [];
+    for (const manager of assignedManagers) {
       if (knownManagerIds.has(manager.id)) continue;
       knownManagerIds.add(manager.id);
       options.push(manager);
     }
     return options;
-  }, [editingUnit, users]);
+  }, [isManagerAssignmentModalOpen, targetUnit, users]);
 
   const canCreateWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'create');
   const canUpdateWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'update');
   const canDeleteWorkUnits = hasScopedActionPermission(permissions, 'hr.work_units', 'delete');
-  const canManageMembers = canUpdateWorkUnits;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <Building2 className="size-5" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-                {t('hr:competenceCenters.title')}
-              </h2>
-              {workUnits.length > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="tabular-nums"
-                  aria-label={`${workUnits.length} ${t('hr:competenceCenters.title')}`}
-                >
-                  {workUnits.length}
-                </Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">{t('hr:competenceCenters.subtitle')}</p>
-          </div>
-        </div>
-        {canCreateWorkUnits && (
-          <HeaderAddButton onClick={openCreateModal}>
-            {t('hr:competenceCenters.newCompetenceCenter')}
-          </HeaderAddButton>
-        )}
-      </div>
+      <WorkUnitsHeader
+        workUnitCount={workUnits.length}
+        canCreate={canCreateWorkUnits}
+        onCreate={openCreateModal}
+      />
 
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-        {workUnits.map((unit) => (
-          <WorkUnitCard
-            key={unit.id}
-            unit={unit}
-            canUpdate={canUpdateWorkUnits}
-            canDelete={canDeleteWorkUnits}
-            canManageMembers={canManageMembers}
-            onEdit={openEditModal}
-            onDelete={confirmDelete}
-            onManageMembers={openAssignments}
-          />
-        ))}
-
-        {workUnits.length === 0 && (
-          <WorkUnitsEmptyState canCreate={canCreateWorkUnits} onCreate={openCreateModal} />
-        )}
-      </div>
+      <WorkUnitsGrid
+        workUnits={workUnits}
+        canCreate={canCreateWorkUnits}
+        canUpdate={canUpdateWorkUnits}
+        canDelete={canDeleteWorkUnits}
+        onCreate={openCreateModal}
+        onEdit={openEditModal}
+        onDelete={confirmDelete}
+        onManageManagers={openManagerAssignments}
+        onManageMembers={openAssignments}
+      />
 
       <WorkUnitFormModal
         isOpen={isCreateModalOpen}
@@ -745,6 +922,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         titleIcon={<Plus className="size-5" aria-hidden="true" />}
         submitLabel={t('hr:competenceCenters.createUnit')}
         submitDisabled={selectedManagerIds.length === 0}
+        showManagers
         managersRequired
         nameInputId="work-unit-create-name"
         managersInputId="work-unit-create-managers"
@@ -775,23 +953,30 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         titleIcon={<Pencil className="size-5" aria-hidden="true" />}
         submitLabel={t('hr:competenceCenters.saveChanges')}
         nameInputId="work-unit-edit-name"
-        managersInputId="work-unit-edit-managers"
         descriptionInputId="work-unit-edit-description"
         name={name}
-        selectedManagerIds={selectedManagerIds}
         description={description}
         errors={errors}
         isSubmitting={isSubmitting}
-        managerOptions={managerOptions}
         t={t}
         onNameChange={(nextName) => dispatch({ type: 'setName', name: nextName })}
-        onSelectedManagerIdsChange={(managerIds) =>
-          dispatch({ type: 'setSelectedManagerIds', selectedManagerIds: managerIds })
-        }
         onDescriptionChange={(nextDescription) =>
           dispatch({ type: 'setDescription', description: nextDescription })
         }
         onClearError={(field) => dispatch({ type: 'clearError', field })}
+      />
+
+      <WorkUnitManagerAssignmentModal
+        isOpen={isManagerAssignmentModalOpen && !!targetUnit}
+        unit={targetUnit}
+        managerOptions={managerOptions}
+        selectedManagerIds={selectedManagerIds}
+        isSubmitting={isSubmitting}
+        onClose={requestCloseManagerAssignments}
+        onSubmit={handleManagerUpdate}
+        onSelectedManagerIdsChange={(managerIds) =>
+          dispatch({ type: 'setSelectedManagerIds', selectedManagerIds: managerIds })
+        }
       />
 
       {/* Assignment Modal */}
@@ -808,7 +993,7 @@ const WorkUnitsView: React.FC<WorkUnitsViewProps> = ({
         loadErrorMessage={t('hr:competenceCenters.failedToLoadUnitUsers')}
         saveErrorMessage={t('hr:competenceCenters.failedToSaveAssignments')}
         saveButtonLabel={t('hr:competenceCenters.saveAssignments')}
-        disabled={!canManageMembers}
+        disabled={!canUpdateWorkUnits}
       />
 
       <WorkUnitDeleteConfirmModal

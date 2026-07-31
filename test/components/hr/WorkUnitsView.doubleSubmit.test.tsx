@@ -155,6 +155,7 @@ describe('<WorkUnitsView /> double-submit guards', () => {
     });
 
     expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(updateMock.mock.calls[0][1]).toEqual({ name: 'Engineering', description: 'eng' });
   });
 
   test('handleDelete: rapid clicks call onDeleteWorkUnit only once', async () => {

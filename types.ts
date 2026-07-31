@@ -1347,6 +1347,13 @@ export interface WorkUnit {
   userCount?: number;
 }
 
+export interface WorkUnitMutationPayload {
+  name?: string;
+  managerIds?: string[];
+  description?: string;
+  isDisabled?: boolean;
+}
+
 export interface InvoiceItem {
   id: string;
   invoiceId: string;

@@ -33,7 +33,7 @@ const WORK_UNIT: WorkUnit = {
 const noop = mock(async () => {});
 
 describe('<WorkUnitsView /> manager order', () => {
-  test('keeps the card order and assigned managers missing from the user options', () => {
+  test('keeps the card order and assigned managers missing from the management options', () => {
     render(
       <WorkUnitsView
         workUnits={[WORK_UNIT]}
@@ -65,13 +65,30 @@ describe('<WorkUnitsView /> manager order', () => {
     const cardText = managerRegion.textContent ?? '';
     expect(cardText.indexOf('Emanuele Ciccioli')).toBeLessThan(cardText.indexOf("Daniel D'Angeli"));
 
-    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.edit: Offensive' }));
+    const manageManagers = screen.getByRole('button', {
+      name: 'hr:competenceCenters.manageManagers: Offensive',
+    });
+    expect(manageManagers.getAttribute('data-slot')).toBe('button');
+    expect(manageManagers.getAttribute('data-variant')).toBe('outline');
 
-    const editManagerTrigger = document.getElementById('work-unit-edit-managers');
-    if (!editManagerTrigger) throw new Error('edit manager trigger not found');
-    const editText = editManagerTrigger.textContent ?? '';
-    expect(editText).toContain('Emanuele Ciccioli');
-    expect(editText).toContain("Daniel D'Angeli");
-    expect(editText.indexOf('Emanuele Ciccioli')).toBeLessThan(editText.indexOf("Daniel D'Angeli"));
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.edit: Offensive' }));
+    expect(
+      screen.getByRole('heading', { name: 'hr:competenceCenters.editCompetenceCenter' }),
+    ).toBeInTheDocument();
+    expect(document.getElementById('work-unit-edit-managers')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.cancel' }));
+
+    fireEvent.click(manageManagers);
+    expect(
+      screen.getByRole('heading', { name: 'hr:competenceCenters.manageManagers' }),
+    ).toBeInTheDocument();
+    const managerTrigger = document.getElementById('work-unit-manager-assignments');
+    if (!managerTrigger) throw new Error('manager assignment trigger not found');
+    const managerText = managerTrigger.textContent ?? '';
+    expect(managerText).toContain('Emanuele Ciccioli');
+    expect(managerText).toContain("Daniel D'Angeli");
+    expect(managerText.indexOf('Emanuele Ciccioli')).toBeLessThan(
+      managerText.indexOf("Daniel D'Angeli"),
+    );
   });
 });
