@@ -20,12 +20,15 @@ describe('App.tsx recurring generation after entries load (#620)', () => {
 
   test('runs recurring generation when the entries dataset fails', () => {
     expect(caseBody).toMatch(
-      /if\s*\(\s*failedDatasets\.includes\(\s*['"]entries['"]\s*\)\s*\)\s*\{\s*void\s+generateRecurringEntries\(\);\s*\}/,
+      /if\s*\(\s*shouldGenerateTrackerRecurrences\s*&&\s*failedDatasets\.includes\(\s*['"]entries['"]\s*\)\s*\)\s*\{\s*void\s+generateRecurringEntries\(\);\s*\}/,
     );
   });
 
   test('runs recurring generation on the success-path apply', () => {
-    expect(caseBody).toContain('void generateRecurringEntries();');
+    expect(caseBody).toContain('const shouldGenerateTrackerRecurrences =');
+    expect(caseBody).toMatch(
+      /if\s*\(shouldGenerateTrackerRecurrences\)\s*void\s+generateRecurringEntries\(\);/,
+    );
     const occurrences = caseBody.match(/void\s+generateRecurringEntries\(\)/g) ?? [];
     expect(occurrences.length).toBeGreaterThanOrEqual(2);
   });
