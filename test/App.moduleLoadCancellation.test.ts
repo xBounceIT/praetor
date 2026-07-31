@@ -21,7 +21,8 @@ describe('App.tsx module-load cancellation', () => {
     expect(effectBody).toContain('activeLoadModuleRef.current === module');
     expect(effectBody).toContain('isModuleLoaded(module) &&');
     expect(effectBody).toContain("module !== 'timesheets'");
-    expect(effectBody).toContain('loadedTimesheetsViewRef.current === activeView');
+    expect(effectBody).toContain('isTimesheetViewLoadCurrent');
+    expect(source).toContain('loadedTimesheetsViewRef.current === activeView');
     expect(effectBody).not.toContain('if (loadedModules.has(module)) return;');
     expect(effectBody).toContain('return cancelModuleLoad;');
     expect(effectBody).toContain('moduleLoadTokenRef.current += 1;');
@@ -38,6 +39,7 @@ describe('App.tsx module-load cancellation', () => {
     expect(dependencyEnd).toBeGreaterThan(dependencyStart);
     const dependencies = source.slice(dependencyStart, dependencyEnd);
     expect(dependencies).toContain('isModuleLoaded');
+    expect(dependencies).toContain('isTimesheetViewLoadCurrent');
     expect(dependencies).not.toContain('loadedModules');
   });
 });

@@ -92,7 +92,6 @@ import { useAuth } from './hooks/useAuth';
 import { useLatestRef } from './hooks/useLatestRef';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
-import { decodeEntriesCursor } from './services/api/entries';
 import type {
   QuoteCommunicationChannel,
   QuoteCommunicationChannelIcon,
@@ -186,6 +185,7 @@ import {
   filterTrackerCatalogs,
   type TrackerCatalogState,
 } from './utils/trackerCatalogs';
+import { mergeTrackerEntryPage } from './utils/trackerEntryPageMerge';
 
 type AppModuleState = {
   users: User[];
@@ -1384,6 +1384,9 @@ const useAppContentController = () => {
   // Bumped on navigation/auth reset so stale module-load completions cannot commit state.
   const moduleLoadTokenRef = useRef(0);
   const loadedTimesheetsViewRef = useRef<string | null>(null);
+  // The tracker entry dataset is server-scoped to the selected user. Remember whose
+  // dataset completed so changing the user cannot reuse an unrelated in-memory page.
+  const loadedTrackerUserIdRef = useRef<string | null>(null);
   const [localState, dispatchLocalState] = useReducer(
     appLocalStateReducer,
     INITIAL_APP_LOCAL_STATE,
@@ -1634,6 +1637,7 @@ const useAppContentController = () => {
   const projectsRef = useLatestRef(projects);
   const quotesRef = useLatestRef(quotes);
   const clientOffersRef = useLatestRef(clientOffers);
+  const entriesRef = useLatestRef(entries);
 
   const clearAuthScopedAppState = useCallback(() => {
     // Bump cancellation tokens before any setter call so in-flight async
@@ -1642,6 +1646,7 @@ const useAppContentController = () => {
     // writes take effect synchronously.
     moduleLoadTokenRef.current++;
     entriesStreamTokenRef.current++;
+    loadedTrackerUserIdRef.current = null;
     resetModuleLoader();
     const setModuleState = <Key extends keyof AppModuleState>(
       key: Key,
@@ -2101,6 +2106,9 @@ const useAppContentController = () => {
   const activeLoadModuleRef = useLatestRef(
     currentUser && isRouteAccessible ? getModuleFromView(activeView) : null,
   );
+  const isTimesheetViewLoadCurrent =
+    loadedTimesheetsViewRef.current === activeView &&
+    (activeView !== 'timesheets/tracker' || loadedTrackerUserIdRef.current === viewingUserId);
 
   // Redirect to 404 if route is not accessible
   useEffect(() => {
@@ -2198,10 +2206,7 @@ const useAppContentController = () => {
     if (!isRouteAccessible) return;
     const module = getModuleFromView(activeView);
     if (!module) return;
-    if (
-      isModuleLoaded(module) &&
-      (module !== 'timesheets' || loadedTimesheetsViewRef.current === activeView)
-    ) {
+    if (isModuleLoaded(module) && (module !== 'timesheets' || isTimesheetViewLoadCurrent)) {
       return;
     }
     const loadToken = ++moduleLoadTokenRef.current;
@@ -2489,81 +2494,24 @@ const useAppContentController = () => {
           case 'timesheets': {
             if (!canViewTimesheets) return;
             const requirements = getTimesheetLoadRequirements(activeView);
-            // Merge incoming entries with existing state so an in-flight
-            // optimistic insert (handleAddEntry / handleAddBulkEntries) isn't
-            // dropped when the pager finally resolves. Preserve `prev`'s
-            // order: streamed continuation pages arrive older-than-prev (cursor
-            // is `<` on `created_at DESC`), so newer rows MUST stay on top —
-            // prepending page would reverse chunk order for any user with more
-            // than 500 entries. Server still wins on id collisions because
-            // matching prev rows are replaced with the page version in place.
-            //
-            // Drop prev entries that fall inside this page's authoritative
-            // (createdAt, id) window but weren't returned — those were deleted
-            // on the server (issue #519). Window bounds:
-            //   upper: inputCursor exclusive (continuation page); the page's
-            //          newest entry inclusive on the first page (preserves
-            //          concurrent optimistic inserts whose createdAt is newer
-            //          than the snapshot).
-            //   lower: the page's oldest entry inclusive when more pages
-            //          follow; -Infinity on the last page (page covered
-            //          everything older).
-            //
-            // Comparisons use ms-precision only. pg-node truncates each
-            // entry's `createdAt` to a JS Date (ms), but cursors and the
-            // server-side row ordering use the column's µs precision. When
-            // an entry's ms matches a window-boundary's ms, the µs ordering
-            // is unrecoverable on the client — treat the entry as OUTSIDE
-            // the window (keep it in prev) rather than rely on an id
-            // tiebreaker that may disagree with the server at sub-ms
-            // resolution. Trade: a deletion sitting exactly at a sub-ms
-            // boundary waits until the next full reload, but we never
-            // wrongly drop a row that the server placed on the other side
-            // of the cursor.
-            const mergeById = (
-              prev: TimeEntry[],
-              pageEntries: TimeEntry[],
-              inputCursor: string | null,
-              nextCursor: string | null,
-            ): TimeEntry[] => {
-              const incoming = new Map(pageEntries.map((entry) => [entry.id, entry]));
-              const upperBound = decodeEntriesCursor(inputCursor);
-              const newestInPage = pageEntries[0] ?? null;
-              const oldestInPage = pageEntries[pageEntries.length - 1] ?? null;
-              const hasMorePages = nextCursor !== null;
-              const isWithinPageWindow = (entry: TimeEntry): boolean => {
-                if (!newestInPage || !oldestInPage) return false;
-                if (upperBound) {
-                  if (entry.createdAt >= upperBound.createdAt) return false;
-                } else if (entry.createdAt >= newestInPage.createdAt) {
-                  return false;
-                }
-                if (hasMorePages && entry.createdAt <= oldestInPage.createdAt) return false;
-                return true;
-              };
-              const seen = new Set<string>();
-              const merged: TimeEntry[] = [];
-              let changed = false;
-              for (const entry of prev) {
-                const replacement = incoming.get(entry.id);
-                if (replacement) {
-                  merged.push(replacement);
-                  seen.add(entry.id);
-                  if (replacement !== entry) changed = true;
-                } else if (!isWithinPageWindow(entry)) {
-                  merged.push(entry);
-                } else {
-                  changed = true;
-                }
+            // A delegated-user switch has its own catalog request below this effect.
+            // Reuse the already-loaded shared catalogs and refresh them only when
+            // returning to self or entering the tracker from another view/module.
+            const shouldReuseTrackerCatalogDatasets =
+              activeView === 'timesheets/tracker' &&
+              loadedTimesheetsViewRef.current === activeView &&
+              viewingUserId !== currentUser.id;
+            const shouldGenerateTrackerRecurrences =
+              activeView === 'timesheets/tracker' && !shouldReuseTrackerCatalogDatasets;
+            // Only rows that existed when this selected-user load began are part of
+            // its authoritative snapshot. Writes that complete while the request is
+            // in flight are intentionally absent from this set and must survive merge.
+            const baselineEntryIds = new Set<string>();
+            if (requirements.entries) {
+              for (const entry of entriesRef.current) {
+                if (entry.userId === viewingUserId) baselineEntryIds.add(entry.id);
               }
-              for (const entry of pageEntries) {
-                if (!seen.has(entry.id)) {
-                  merged.push(entry);
-                  changed = true;
-                }
-              }
-              return changed ? merged : prev;
-            };
+            }
             const streamRemainingEntries = async (cursor: string | null, token: number) => {
               const isCancelled = () =>
                 !isCurrentModuleLoad() || entriesStreamTokenRef.current !== token;
@@ -2572,7 +2520,12 @@ const useAppContentController = () => {
                 let result: Awaited<ReturnType<typeof api.entries.listPage>> | null;
                 try {
                   result = await retryTransient(
-                    () => api.entries.listPage({ cursor: pageCursor, limit: 500 }),
+                    () =>
+                      api.entries.listPage({
+                        userId: viewingUserId,
+                        cursor: pageCursor,
+                        limit: 500,
+                      }),
                     { isCancelled },
                   );
                 } catch (err) {
@@ -2587,11 +2540,18 @@ const useAppContentController = () => {
                 if (result === null) return;
                 // Bind to a const so TS narrowing survives into the setState closure.
                 const page = result;
-                setEntries((prev) => mergeById(prev, page.entries, pageCursor, page.nextCursor));
+                setEntries((prev) =>
+                  mergeTrackerEntryPage(prev, page.entries, {
+                    userId: viewingUserId,
+                    baselineEntryIds,
+                    inputCursor: pageCursor,
+                    nextCursor: page.nextCursor,
+                  }),
+                );
                 cursor = page.nextCursor;
               }
             };
-            // RIL owns its entry fetch, so it skips the global entries dataset below. Start
+            // RIL owns its entry fetch, so it skips the tracker entries dataset below. Start
             // recurring materialization alongside the remaining preload, then await it before
             // RilView mounts and requests the selected month.
             const rilRecurringGeneration =
@@ -2605,35 +2565,42 @@ const useAppContentController = () => {
                 {
                   dataset: 'entries',
                   enabled: requirements.entries && canListEntries,
-                  load: () => api.entries.listPage({ limit: 500 }),
+                  load: () => api.entries.listPage({ userId: viewingUserId, limit: 500 }),
                   apply: (page) => {
                     const token = ++entriesStreamTokenRef.current;
-                    setEntries((prev) => mergeById(prev, page.entries, null, page.nextCursor));
-                    void generateRecurringEntries();
+                    setEntries((prev) =>
+                      mergeTrackerEntryPage(prev, page.entries, {
+                        userId: viewingUserId,
+                        baselineEntryIds,
+                        inputCursor: null,
+                        nextCursor: page.nextCursor,
+                      }),
+                    );
+                    if (shouldGenerateTrackerRecurrences) void generateRecurringEntries();
                     if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
                   },
                 },
                 listRequest(
                   'clients',
-                  requirements.clients && canListClients,
+                  requirements.clients && !shouldReuseTrackerCatalogDatasets && canListClients,
                   () => api.clients.list(),
                   setClients,
                 ),
                 listRequest(
                   'projects',
-                  requirements.projects && canListProjects,
+                  requirements.projects && !shouldReuseTrackerCatalogDatasets && canListProjects,
                   () => api.projects.list(),
                   setProjects,
                 ),
                 listRequest(
                   'tasks',
-                  requirements.tasks && canListTasks,
+                  requirements.tasks && !shouldReuseTrackerCatalogDatasets && canListTasks,
                   () => api.tasks.list(),
                   setProjectTasks,
                 ),
                 listRequest(
                   'users',
-                  requirements.users && canListUsers,
+                  requirements.users && !shouldReuseTrackerCatalogDatasets && canListUsers,
                   () => api.users.list(),
                   setUsers,
                 ),
@@ -2643,7 +2610,7 @@ const useAppContentController = () => {
             if (rilRecurringGeneration) await rilRecurringGeneration;
             // Recurring generation fetches from the server independently of
             // local entries, so still run it when the initial entries fetch fails.
-            if (failedDatasets.includes('entries')) {
+            if (shouldGenerateTrackerRecurrences && failedDatasets.includes('entries')) {
               void generateRecurringEntries();
             }
             await loadOptionalDataset(
@@ -2978,7 +2945,13 @@ const useAppContentController = () => {
         if (isCurrentModuleLoad()) {
           const uniqueFailures = Array.from(new Set(failedDatasets));
           recordFailures(module, uniqueFailures);
-          if (module === 'timesheets') loadedTimesheetsViewRef.current = activeView;
+          if (module === 'timesheets') {
+            loadedTimesheetsViewRef.current = activeView;
+            loadedTrackerUserIdRef.current = null;
+            if (activeView === 'timesheets/tracker') {
+              loadedTrackerUserIdRef.current = viewingUserId;
+            }
+          }
           markModuleLoaded(module);
         }
       }
@@ -3024,6 +2997,9 @@ const useAppContentController = () => {
     setEmailConfig,
     setRoles,
     setResponsibleUserOptions,
+    entriesRef,
+    isTimesheetViewLoadCurrent,
+    viewingUserId,
   ]);
 
   // Load target user catalogs when the timesheet user switcher changes.
@@ -3542,7 +3518,7 @@ const useAppContentController = () => {
         activeModule !== 'settings' &&
         (!loadedModules.has(activeModule) ||
           isModuleLoading(activeModule) ||
-          (activeModule === 'timesheets' && loadedTimesheetsViewRef.current !== activeView)),
+          (activeModule === 'timesheets' && !isTimesheetViewLoadCurrent)),
     ) ||
     (activeView === 'reports/ai-reporting' && !hasLoadedGeneralSettings && !reportsSettingsFailed);
 
