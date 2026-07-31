@@ -14,7 +14,7 @@ const usersApiMock = {
   updateAssignments: mock(async () => {}),
 };
 
-mock.module('../../../services/api/users', () => ({ usersApi: usersApiMock }));
+mock.module('../../../services/api', () => ({ usersApi: usersApiMock }));
 mock.module('../../../utils/toast', () => ({ toastError: mock(() => {}) }));
 clearSpyStateAfterAll();
 
