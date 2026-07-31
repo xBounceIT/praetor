@@ -149,6 +149,7 @@ describe('<WorkUnitsView /> member assignments', () => {
     // <button> did not, so this fails on the pre-fix markup.
     expect(trigger.getAttribute('data-slot')).toBe('button');
     expect(trigger.getAttribute('data-variant')).toBe('outline');
+    expect(trigger.getAttribute('data-size')).toBe('xs');
   });
 
   test('uses the shared user assignment modal for competence-center members', async () => {

@@ -345,22 +345,25 @@ const WorkUnitCard: React.FC<{
 
   return (
     <Card className="gap-0 overflow-hidden py-0 transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-md">
-      <CardHeader className="border-b border-border bg-muted/20 px-5 py-5">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/10 text-primary">
-            <Building2 className="size-5" aria-hidden="true" />
+      <CardHeader className="border-b border-border bg-muted/20 px-4 py-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-primary/15 bg-primary/10 text-primary">
+            <Building2 className="size-4" aria-hidden="true" />
           </div>
-          <div className="min-w-0 pt-0.5">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
               <CardTitle className="min-w-0 text-base leading-snug">
                 <h3 className="break-words">{unit.name}</h3>
               </CardTitle>
-              <Badge variant="outline" className="font-normal text-muted-foreground">
+              <Badge
+                variant="outline"
+                className="h-5 px-1.5 font-normal text-[10px] text-muted-foreground"
+              >
                 {t('hr:competenceCenters.memberCount', { count: memberCount })}
               </Badge>
             </div>
             {unit.description && (
-              <CardDescription className="mt-1 line-clamp-2 leading-relaxed">
+              <CardDescription className="mt-0.5 line-clamp-1 text-xs leading-snug">
                 {unit.description}
               </CardDescription>
             )}
@@ -368,14 +371,14 @@ const WorkUnitCard: React.FC<{
         </div>
 
         {(canUpdate || canDelete) && (
-          <CardAction className="flex items-center gap-1">
+          <CardAction className="flex items-center gap-0.5">
             {canUpdate && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon-xs"
                     onClick={() => onEdit(unit)}
                     aria-label={`${t('common:buttons.edit')}: ${unit.name}`}
                   >
@@ -391,7 +394,7 @@ const WorkUnitCard: React.FC<{
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon-xs"
                     onClick={() => onDelete(unit)}
                     aria-label={`${t('common:buttons.delete')}: ${unit.name}`}
                     className="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -409,7 +412,7 @@ const WorkUnitCard: React.FC<{
       <CardContent className="grid flex-1 p-0 sm:grid-cols-2">
         <section
           aria-label={`${t('hr:competenceCenters.managers')}: ${unit.name}`}
-          className="flex flex-col gap-3 p-5 sm:border-r sm:border-border"
+          className="flex flex-col gap-2.5 px-4 py-3 sm:border-r sm:border-border"
         >
           <div className="flex items-center gap-2 text-muted-foreground">
             <UserRoundCog className="size-4" aria-hidden="true" />
@@ -417,13 +420,13 @@ const WorkUnitCard: React.FC<{
               {t('hr:competenceCenters.managers')}
             </h4>
           </div>
-          <div className="flex min-h-8 flex-wrap items-center gap-2">
+          <div className="flex min-h-7 flex-wrap items-center gap-1.5">
             {unit.managers.length > 0 ? (
               unit.managers.map((manager) => (
                 <Badge
                   key={manager.id}
                   variant="secondary"
-                  className="max-w-full min-w-0 gap-2 rounded-full py-1 pr-2.5 pl-1 font-medium"
+                  className="max-w-full min-w-0 gap-1.5 rounded-full py-0.5 pr-2 pl-0.5 font-medium text-xs"
                 >
                   <Avatar size="sm" aria-hidden="true">
                     <AvatarFallback className="text-[9px] font-semibold">
@@ -443,8 +446,8 @@ const WorkUnitCard: React.FC<{
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="mt-auto w-full"
+              size="xs"
+              className="mt-auto h-7 w-full"
               onClick={() => onManageManagers(unit)}
               aria-label={`${t('hr:competenceCenters.manageManagers')}: ${unit.name}`}
             >
@@ -456,7 +459,7 @@ const WorkUnitCard: React.FC<{
 
         <section
           aria-label={`${t('hr:competenceCenters.members')}: ${unit.name}`}
-          className="flex flex-col gap-3 border-t border-border p-5 sm:border-t-0"
+          className="flex flex-col gap-2.5 border-t border-border px-4 py-3 sm:border-t-0"
         >
           <div className="flex items-center gap-2 text-muted-foreground">
             <UsersRound className="size-4" aria-hidden="true" />
@@ -464,7 +467,7 @@ const WorkUnitCard: React.FC<{
               {t('hr:competenceCenters.members')}
             </h4>
           </div>
-          <div className="flex min-h-8 items-center">
+          <div className="flex min-h-7 items-center">
             {unit.members?.length ? (
               <MemberAvatarGroup members={unit.members} />
             ) : memberCount > 0 ? (
@@ -481,8 +484,8 @@ const WorkUnitCard: React.FC<{
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="mt-auto w-full"
+              size="xs"
+              className="mt-auto h-7 w-full"
               onClick={() => onManageMembers(unit)}
               aria-label={`${t('hr:competenceCenters.manageMembers')}: ${unit.name}`}
             >
@@ -594,7 +597,7 @@ const WorkUnitsGrid: React.FC<{
   onManageManagers,
   onManageMembers,
 }) => (
-  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+  <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
     {workUnits.map((unit) => (
       <WorkUnitCard
         key={unit.id}

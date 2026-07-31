@@ -49,6 +49,8 @@ describe('<WorkUnitsView /> manager order', () => {
     const managerRegion = screen.getByRole('region', {
       name: 'hr:competenceCenters.managers: Offensive',
     });
+    const card = managerRegion.closest('[data-slot="card"]');
+    expect(card?.querySelector('[data-slot="card-header"]')).toHaveClass('px-4', 'py-3');
     expect(screen.getByRole('heading', { level: 3, name: 'Offensive' })).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 4, name: 'hr:competenceCenters.managers' }),
@@ -70,6 +72,7 @@ describe('<WorkUnitsView /> manager order', () => {
     });
     expect(manageManagers.getAttribute('data-slot')).toBe('button');
     expect(manageManagers.getAttribute('data-variant')).toBe('outline');
+    expect(manageManagers.getAttribute('data-size')).toBe('xs');
 
     fireEvent.click(screen.getByRole('button', { name: 'common:buttons.edit: Offensive' }));
     expect(
