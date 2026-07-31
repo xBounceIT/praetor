@@ -988,6 +988,38 @@ describe('POST /api/entries', () => {
     );
   });
 
+  test('201 tracker_all.create bypasses competence-center and catalog assignment scope', async () => {
+    getRolePermissionsMock.mockResolvedValue([...TRACKER_PERMS, 'timesheets.tracker_all.create']);
+    isUserManagedByMock.mockResolvedValue(false);
+    isClientAssignedToUserMock.mockResolvedValue(false);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+    isTaskAssignedToUserMock.mockResolvedValue(false);
+    findCostPerHourMock.mockResolvedValue(60);
+    findIdByProjectAndNameMock.mockResolvedValue('t1');
+    entriesCreateMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...entry,
+      createdAt: 1_700_000_000_000,
+      version: 1,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries',
+      headers: authHeader(),
+      payload: { ...validBody, userId: 'u2' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(isClientAssignedToUserMock).not.toHaveBeenCalled();
+    expect(isProjectAssignedToUserMock).not.toHaveBeenCalled();
+    expect(isTaskAssignedToUserMock).not.toHaveBeenCalled();
+    expect(entriesCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u2', projectId: 'p1', task: 'Dev' }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400 when project belongs to a different client', async () => {
     projectsFindClientIdAndEndDateMock.mockResolvedValue({
       clientId: 'other-client',
@@ -1436,6 +1468,27 @@ describe('PUT /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Not authorized to update this entry' });
+  });
+
+  test('200 tracker_all.update bypasses competence-center scope', async () => {
+    getRolePermissionsMock.mockResolvedValue([...TRACKER_PERMS, 'timesheets.tracker_all.update']);
+    entriesFindContextMock.mockResolvedValue(sampleContext({ userId: 'u2' }));
+    isUserManagedByMock.mockResolvedValue(false);
+    entriesUpdateMock.mockResolvedValue({ ...SAMPLE_ENTRY, userId: 'u2', duration: 5 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+      payload: versionedPatch({ duration: 5 }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(entriesUpdateMock).toHaveBeenCalledWith(
+      'te-1',
+      expect.objectContaining({ duration: 5 }),
+    );
   });
 
   test('400 invalid duration', async () => {
@@ -2046,6 +2099,23 @@ describe('DELETE /api/entries/:id', () => {
 
     expect(res.statusCode).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Not authorized to delete this entry' });
+  });
+
+  test('204 tracker_all.delete bypasses competence-center scope', async () => {
+    getRolePermissionsMock.mockResolvedValue([...TRACKER_PERMS, 'timesheets.tracker_all.delete']);
+    entriesFindOwnerMock.mockResolvedValue('u2');
+    isUserManagedByMock.mockResolvedValue(false);
+    entriesDeleteByIdMock.mockResolvedValue(undefined);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/entries/te-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(entriesDeleteByIdMock).toHaveBeenCalledWith('te-1');
   });
 });
 

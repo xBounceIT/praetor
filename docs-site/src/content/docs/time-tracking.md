@@ -16,6 +16,8 @@ REST e MCP esistenti continuano ad accettare registrazioni senza note.
 
 Usa il tracker per registrare il tempo lavorato su progetto e attività. Ogni registrazione deve indicare periodo, progetto, attività, descrizione e luogo quando richiesto.
 
+Il ruolo di sistema **Top Manager** dispone per impostazione predefinita dell'intero ambito **Tracker (Tutti)** (`timesheets.tracker_all.view/create/update/delete`): può consultare, inserire, modificare ed eliminare registrazioni per tutti gli utenti, anche quando non appartengono a un suo centro di competenza. Per i ruoli personalizzati, ogni azione globale deve essere concessa esplicitamente.
+
 Nei selettori del tracker, passa il puntatore su un progetto o un'attività per leggerne la descrizione senza cambiare la selezione. Il suggerimento compare solo quando l'elemento ha una descrizione. Durante la navigazione da tastiera, i lettori di schermo annunciano anche la descrizione dell'opzione attiva.
 
 Prima di salvare, verifica che le date siano corrette e che l'attività appartenga al progetto selezionato. Questo mantiene coerenti report, consuntivi e costi.
