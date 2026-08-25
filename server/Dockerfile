@@ -1,11 +1,11 @@
 # STAGE 1: Install dependencies
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS install
+FROM oven/bun:1.4.0@sha256:5ff609364c049b54eb0ff560ec96319729a972078ef2c755d758f0c6ef89c2d6 AS install
 WORKDIR /temp
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # STAGE 2: Production
-FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS release
+FROM oven/bun:1.4.0-slim@sha256:e0ee68d16ccb9927bf02aa7dd8fd4bf3369ee6d46da04faa72b05ce8bfd135f6 AS release
 WORKDIR /app
 
 ENV NODE_ENV=production
