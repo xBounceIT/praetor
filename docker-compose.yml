@@ -49,7 +49,7 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-1}
       DEMO_SEEDING: ${DEMO_SEEDING:-false}
       DEMO_USER_PASSWORD: '${DEMO_USER_PASSWORD:-}'
-      FRONTEND_URL: http://${SERVER_IP:-localhost}:3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://${SERVER_IP:-localhost}:3000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_PRETTY: '${LOG_PRETTY:-}'
       SSO_CALLBACK_BASE_URL: '${SSO_CALLBACK_BASE_URL:-}'

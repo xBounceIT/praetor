@@ -22,6 +22,8 @@ const auditSnap = { ...realAudit };
 const rateLimitSnap = { ...realRateLimit };
 
 const findBySlugMock = mock();
+const startOidcLoginMock = mock();
+const startSamlLoginMock = mock();
 const completeOidcLoginMock = mock();
 const completeSamlLoginMock = mock();
 const consumeLoginTicketMock = mock();
@@ -31,6 +33,8 @@ const recordFirstInteractiveLoginMock = mock();
 const logAuditMock = mock();
 const routeMocks = [
   findBySlugMock,
+  startOidcLoginMock,
+  startSamlLoginMock,
   completeOidcLoginMock,
   completeSamlLoginMock,
   consumeLoginTicketMock,
@@ -52,6 +56,8 @@ beforeAll(async () => {
   }));
   mock.module('../../services/sso.ts', () => ({
     ...ssoServiceSnap,
+    startOidcLogin: startOidcLoginMock,
+    startSamlLogin: startSamlLoginMock,
     completeOidcLogin: completeOidcLoginMock,
     completeSamlLogin: completeSamlLoginMock,
     consumeLoginTicket: consumeLoginTicketMock,
@@ -122,11 +128,15 @@ const oidcProvider: realSsoProvidersRepo.SsoProvider = {
 };
 
 const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
+const originalFrontend = process.env.FRONTEND_URL;
 let testApp: FastifyInstance;
 
 beforeEach(async () => {
   process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
+  process.env.FRONTEND_URL = 'https://app.example.com';
   for (const routeMock of routeMocks) routeMock.mockReset();
+  startOidcLoginMock.mockImplementation(ssoServiceSnap.startOidcLogin);
+  startSamlLoginMock.mockImplementation(ssoServiceSnap.startSamlLogin);
   testApp = await buildRouteTestApp(routePlugin, '/api/auth/sso');
 });
 
@@ -137,6 +147,8 @@ afterEach(async () => {
 afterAll(() => {
   if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
   else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
+  if (originalFrontend === undefined) delete process.env.FRONTEND_URL;
+  else process.env.FRONTEND_URL = originalFrontend;
 });
 
 describe('GET /api/auth/sso/saml/:slug/metadata', () => {
@@ -180,6 +192,18 @@ describe('GET /api/auth/sso/saml/:slug/start', () => {
     });
     expect(response.statusCode).toBe(404);
   });
+
+  test('returns a stable frontend error when SAML startup fails', async () => {
+    startSamlLoginMock.mockRejectedValue(
+      new realSsoService.SsoLoginError('invalid SAML issuer', 'provider_misconfigured'),
+    );
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/saml/okta/start',
+    });
+    expect(response.statusCode).toBe(302);
+    expect(ssoErrorParam(response.headers.location ?? '')).toBe('provider_misconfigured');
+  });
 });
 
 describe('GET /api/auth/sso/oidc/:slug/start', () => {
@@ -194,6 +218,92 @@ describe('GET /api/auth/sso/oidc/:slug/start', () => {
       url: '/api/auth/sso/oidc/google/start',
     });
     expect(response.statusCode).toBe(404);
+  });
+
+  test('redirects to Keycloak when OIDC startup succeeds', async () => {
+    startOidcLoginMock.mockResolvedValue(
+      'https://keycloak.example.com/realms/praetor/protocol/openid-connect/auth',
+    );
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/start',
+    });
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toContain('keycloak.example.com');
+  });
+
+  test('shows a stable provider error when OIDC discovery fails without leaking details', async () => {
+    startOidcLoginMock.mockRejectedValue(
+      new realSsoService.SsoLoginError(
+        'Refusing to fetch private Keycloak host',
+        'provider_misconfigured',
+      ),
+    );
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/start',
+    });
+    expect(response.statusCode).toBe(302);
+    expect(ssoErrorParam(response.headers.location ?? '')).toBe('provider_misconfigured');
+    expect(response.headers.location).not.toContain('Keycloak');
+  });
+
+  test('shows a server configuration error when the public callback URL is invalid', async () => {
+    startOidcLoginMock.mockRejectedValue(
+      new realSsoService.SsoLoginError(
+        'SSO public base URL must use https:// for non-loopback hosts',
+        'server_misconfigured',
+      ),
+    );
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/start',
+    });
+    expect(response.statusCode).toBe(302);
+    expect(ssoErrorParam(response.headers.location ?? '')).toBe('server_misconfigured');
+    expect(response.headers.location).not.toContain('https%3A');
+  });
+
+  test('handles unexpected OIDC startup errors without a 500 or internal details in the URL', async () => {
+    startOidcLoginMock.mockRejectedValue(new Error('upstream token secret: private value'));
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/start',
+    });
+    expect(response.statusCode).toBe(302);
+    expect(ssoErrorParam(response.headers.location ?? '')).toBe('generic');
+    expect(response.headers.location).not.toContain('private value');
+  });
+
+  test('returns a safe service error if FRONTEND_URL cannot be parsed for a redirect', async () => {
+    process.env.FRONTEND_URL = 'not a url';
+    startOidcLoginMock.mockRejectedValue(
+      new realSsoService.SsoLoginError('Invalid SSO frontend URL', 'server_misconfigured'),
+    );
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/start',
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.body).toContain('SSO server configuration is invalid');
+    expect(response.body).not.toContain('not a url');
+  });
+
+  test.each([
+    'http://app.example.com',
+    'https://user:secret@app.example.com',
+  ])('does not redirect an SSO error to unsafe FRONTEND_URL %s', async (frontendUrl) => {
+    process.env.FRONTEND_URL = frontendUrl;
+    startOidcLoginMock.mockRejectedValue(
+      new realSsoService.SsoLoginError('Invalid SSO frontend URL', 'server_misconfigured'),
+    );
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/start',
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.headers.location).toBeUndefined();
+    expect(response.body).not.toContain('secret');
   });
 });
 
@@ -338,6 +448,18 @@ describe('SSO callbacks — sso_error carries a stable code (issue #604)', () =>
     expect(ssoErrorParam(location)).toBe('generic');
     expect(location).not.toContain('library');
     expect(location).not.toContain('wording');
+  });
+
+  test('returns a safe service error when the callback cannot redirect to an invalid frontend URL', async () => {
+    process.env.FRONTEND_URL = 'not a url';
+    completeOidcLoginMock.mockRejectedValue(new Error('invalid token details'));
+    const response = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/sso/oidc/google/callback?state=x&code=y',
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.body).toContain('SSO server configuration is invalid');
+    expect(response.body).not.toContain('invalid token details');
   });
 
   test('sso_error is always one of the known stable codes', async () => {
