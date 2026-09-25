@@ -327,6 +327,30 @@ describe('resolvePublicBaseUrl', () => {
     expect(sso.resolvePublicBaseUrl()).toBe('https://sso.example.com');
   });
 
+  test.each([
+    'http://app.example.com',
+    'not a url',
+  ])('rejects unsafe FRONTEND_URL %s even with a valid HTTPS callback origin', (frontendUrl) => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://sso.example.com';
+    process.env.FRONTEND_URL = frontendUrl;
+    expect(() => sso.resolvePublicBaseUrl()).toThrow(sso.SsoLoginError);
+    try {
+      sso.resolvePublicBaseUrl();
+    } catch (error) {
+      expect((error as InstanceType<typeof sso.SsoLoginError>).code).toBe('server_misconfigured');
+    }
+  });
+
+  test.each([
+    ['SSO_CALLBACK_BASE_URL', 'https://user:secret@sso.example.com'],
+    ['FRONTEND_URL', 'https://user:secret@app.example.com'],
+  ] as const)('rejects embedded credentials in %s', (configKey, configuredUrl) => {
+    process.env.SSO_CALLBACK_BASE_URL = 'https://sso.example.com';
+    process.env.FRONTEND_URL = 'https://app.example.com';
+    process.env[configKey] = configuredUrl;
+    expect(() => sso.resolvePublicBaseUrl()).toThrow(/embedded credentials/);
+  });
+
   test('falls back to FRONTEND_URL', () => {
     process.env.FRONTEND_URL = 'https://app.example.com';
     expect(sso.resolvePublicBaseUrl()).toBe('https://app.example.com');
@@ -347,11 +371,20 @@ describe('resolvePublicBaseUrl', () => {
     expect(sso.resolvePublicBaseUrl()).toBe('http://localhost:3001');
     process.env.SSO_CALLBACK_BASE_URL = 'http://127.0.0.1:3001';
     expect(sso.resolvePublicBaseUrl()).toBe('http://127.0.0.1:3001');
+    process.env.SSO_CALLBACK_BASE_URL = 'http://[::1]:3001';
+    expect(sso.resolvePublicBaseUrl()).toBe('http://[::1]:3001');
   });
 
   test('rejects http:// for non-loopback hosts', () => {
     process.env.SSO_CALLBACK_BASE_URL = 'http://praetor.example.com';
     expect(() => sso.resolvePublicBaseUrl()).toThrow(/https:\/\/ for non-loopback/);
+    try {
+      sso.resolvePublicBaseUrl();
+      throw new Error('Expected invalid SSO callback URL to fail');
+    } catch (error) {
+      expect(error).toBeInstanceOf(sso.SsoLoginError);
+      expect((error as InstanceType<typeof sso.SsoLoginError>).code).toBe('server_misconfigured');
+    }
   });
 });
 
@@ -1566,6 +1599,19 @@ describe('endOidcSession', () => {
       client_id: 'praetor-client',
     });
     expect(userSessionsDeleteByUserIdMock).toHaveBeenCalledWith('u1');
+  });
+
+  test('does not send a credentialed frontend URL to the IdP during logout', async () => {
+    process.env.FRONTEND_URL = 'https://user:secret@app.example.com';
+    userSessionsFindActiveOidcByUserIdMock.mockResolvedValue(activeRow());
+    oidcDiscoveryMock.mockResolvedValue({
+      serverMetadata: () => ({ end_session_endpoint: 'https://idp.example.com/logout' }),
+    });
+    oidcBuildEndSessionUrlMock.mockReturnValue(new URL('https://idp.example.com/logout'));
+
+    await expect(sso.endOidcSession('u1')).rejects.toThrow(/embedded credentials/);
+    expect(oidcBuildEndSessionUrlMock).not.toHaveBeenCalled();
+    expect(userSessionsDeleteByUserIdMock).not.toHaveBeenCalled();
   });
 
   test('returns null and drops the row when the stored ciphertext cannot be decrypted', async () => {

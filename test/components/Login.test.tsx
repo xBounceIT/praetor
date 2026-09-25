@@ -418,6 +418,15 @@ describe('<Login />', () => {
     expect(window.location.search).not.toContain('sso_error');
   });
 
+  test('server SSO configuration errors use their translated message', () => {
+    setTestUrl('http://localhost/?sso_error=server_misconfigured');
+
+    render(<Login onLogin={() => {}} />);
+
+    expect(screen.getByText('auth:admin.sso.loginErrors.server_misconfigured')).toBeInTheDocument();
+    expect(screen.queryByText('server_misconfigured')).not.toBeInTheDocument();
+  });
+
   test('unknown sso_error value falls back to the generic translation', () => {
     // Hand-crafted URL with attacker-influenced text — must never reach the DOM.
     setTestUrl('http://localhost/?sso_error=SAML+response+did+not+include+a+subject');

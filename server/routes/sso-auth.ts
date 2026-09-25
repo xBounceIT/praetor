@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { generateTokenWithCurrentIdleTimeout } from '../middleware/auth.ts';
-import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { errorResponseSchema, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { recordFirstInteractiveLogin } from '../services/firstLogin.ts';
 import { authUserSchema } from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
@@ -45,6 +45,22 @@ const ssoCallbackErrorCode = (err: unknown): ssoService.SsoLoginErrorCode => {
   return 'generic';
 };
 
+const replyWithSsoError = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  code: ssoService.SsoLoginErrorCode,
+) => {
+  let errorUrl: string;
+  try {
+    ssoService.assertSafeSsoFrontendUrl();
+    errorUrl = buildFrontendUrl('sso_error', code);
+  } catch (err) {
+    request.log.error({ err }, 'SSO frontend error redirect failed');
+    return reply.code(503).send({ error: 'SSO server configuration is invalid' });
+  }
+  return reply.redirect(errorUrl, 302);
+};
+
 const handleSsoCallbackError = (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -54,8 +70,26 @@ const handleSsoCallbackError = (
   const message = err instanceof Error ? err.message : 'SSO login failed';
   const code = ssoCallbackErrorCode(err);
   request.log.warn({ message, code, ...context }, 'SSO callback failed');
-  return reply.redirect(buildFrontendUrl('sso_error', code), 302);
+  return replyWithSsoError(request, reply, code);
 };
+
+const handleSsoStartError = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  err: unknown,
+  context: { protocol: 'oidc' | 'saml'; slug: string },
+) => {
+  if (err instanceof NotFoundError) throw err;
+  const code = ssoCallbackErrorCode(err);
+  request.log.error({ err, code, ...context }, 'SSO login start failed');
+  return replyWithSsoError(request, reply, code);
+};
+
+const redirectResponseSchema = {
+  type: 'null',
+  description: 'Redirect to the identity provider or frontend',
+  headers: { location: { type: 'string', description: 'Redirect destination' } },
+} as const;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addContentTypeParser(
@@ -77,17 +111,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['sso'],
         summary: 'Start OIDC login',
+        description:
+          'Redirect to the identity provider, or back to the frontend with a stable sso_error code if startup fails. An invalid frontend URL returns 503.',
         params: slugParamsSchema,
         security: [],
         response: {
+          302: redirectResponseSchema,
           ...standardRateLimitedErrorResponses,
         },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { slug } = request.params as { slug: string };
-      const redirectUrl = await ssoService.startOidcLogin(slug);
-      return reply.redirect(redirectUrl, 302);
+      try {
+        const redirectUrl = await ssoService.startOidcLogin(slug);
+        return reply.redirect(redirectUrl, 302);
+      } catch (err) {
+        return handleSsoStartError(request, reply, err, { protocol: 'oidc', slug });
+      }
     },
   );
 
@@ -99,6 +140,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Complete OIDC login',
         params: slugParamsSchema,
         security: [],
+        response: { 302: redirectResponseSchema, 503: errorResponseSchema },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -123,14 +165,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['sso'],
         summary: 'Start SAML login',
+        description:
+          'Redirect to the identity provider, or back to the frontend with a stable sso_error code if startup fails. An invalid frontend URL returns 503.',
         params: slugParamsSchema,
         security: [],
+        response: { 302: redirectResponseSchema, ...standardRateLimitedErrorResponses },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { slug } = request.params as { slug: string };
-      const redirectUrl = await ssoService.startSamlLogin(slug);
-      return reply.redirect(redirectUrl, 302);
+      try {
+        const redirectUrl = await ssoService.startSamlLogin(slug);
+        return reply.redirect(redirectUrl, 302);
+      } catch (err) {
+        return handleSsoStartError(request, reply, err, { protocol: 'saml', slug });
+      }
     },
   );
 
@@ -144,6 +193,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: slugParamsSchema,
         security: [],
         response: {
+          302: redirectResponseSchema,
           ...standardRateLimitedErrorResponses,
         },
       },

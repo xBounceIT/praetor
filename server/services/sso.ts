@@ -63,6 +63,7 @@ export const SSO_LOGIN_ERROR_CODES = [
   'invalid_response',
   'provider_disabled',
   'provider_misconfigured',
+  'server_misconfigured',
   'account_disabled',
   'identity_conflict',
   'generic',
@@ -236,7 +237,42 @@ const readGroupsClaim = (
 };
 
 const isLocalLoopbackHostname = (hostname: string): boolean =>
-  hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1' ||
+  hostname === '::1' ||
+  hostname === '[::1]';
+
+const validateSsoPublicUrl = (raw: string, label: string): void => {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new SsoLoginError(`${label} is not a valid URL`, 'server_misconfigured');
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new SsoLoginError(
+      `${label} must use http(s) (got ${parsed.protocol})`,
+      'server_misconfigured',
+    );
+  }
+  if (parsed.username || parsed.password) {
+    throw new SsoLoginError(
+      `${label} must not contain embedded credentials`,
+      'server_misconfigured',
+    );
+  }
+  if (parsed.protocol === 'http:' && !isLocalLoopbackHostname(parsed.hostname)) {
+    throw new SsoLoginError(
+      `${label} must use https:// for non-loopback hosts`,
+      'server_misconfigured',
+    );
+  }
+};
+
+export const assertSafeSsoFrontendUrl = (): void => {
+  const frontendUrl = process.env.FRONTEND_URL?.trim();
+  if (frontendUrl) validateSsoPublicUrl(frontendUrl, 'FRONTEND_URL');
+};
 
 /**
  * Resolves the public base URL used to build callback / metadata / redirect URLs.
@@ -251,22 +287,18 @@ const isLocalLoopbackHostname = (hostname: string): boolean =>
  */
 export const resolvePublicBaseUrl = (): string => {
   const explicit = process.env.SSO_CALLBACK_BASE_URL?.trim();
-  const raw = explicit || process.env.FRONTEND_URL?.trim();
+  const frontendUrl = process.env.FRONTEND_URL?.trim();
+  const raw = explicit || frontendUrl;
   if (!raw) {
-    throw new Error('SSO_CALLBACK_BASE_URL or FRONTEND_URL must be configured for SSO');
+    throw new SsoLoginError(
+      'SSO_CALLBACK_BASE_URL or FRONTEND_URL must be configured for SSO',
+      'server_misconfigured',
+    );
   }
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new Error('SSO public base URL is not a valid URL');
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error(`SSO public base URL must use http(s) (got ${parsed.protocol})`);
-  }
-  if (parsed.protocol === 'http:' && !isLocalLoopbackHostname(parsed.hostname)) {
-    throw new Error('SSO public base URL must use https:// for non-loopback hosts');
-  }
+  validateSsoPublicUrl(raw, 'SSO public base URL');
+  // The one-time login ticket is redirected to FRONTEND_URL. Validate it even when a
+  // separate HTTPS callback origin is configured, or the ticket could be sent over HTTP.
+  if (frontendUrl && frontendUrl !== raw) assertSafeSsoFrontendUrl();
   return raw;
 };
 
@@ -278,7 +310,10 @@ const buildCallbackUrl = (protocol: 'oidc' | 'saml', slug: string, baseUrl: stri
 const buildSamlMetadataUrl = (slug: string, baseUrl: string): string =>
   buildPublicSsoUrl(`/api/auth/sso/saml/${slug}/metadata`, baseUrl);
 
-const buildFrontendTicketUrl = (ticket: string): string => buildFrontendUrl('sso_ticket', ticket);
+const buildFrontendTicketUrl = (ticket: string): string => {
+  assertSafeSsoFrontendUrl();
+  return buildFrontendUrl('sso_ticket', ticket);
+};
 
 const prepareProviderValues = (
   input: SsoProviderInput,
@@ -1094,6 +1129,7 @@ export const endOidcSession = async (userId: string): Promise<string | null> => 
   // to hand back. A transient failure here throws — the caller catches and logs.
   const config = await createOidcConfig(row.provider);
   const { end_session_endpoint } = config.serverMetadata();
+  if (end_session_endpoint) assertSafeSsoFrontendUrl();
   const url = end_session_endpoint
     ? oidc.buildEndSessionUrl(config, {
         id_token_hint: idToken,
