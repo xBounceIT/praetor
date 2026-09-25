@@ -342,14 +342,12 @@ describe('resolvePublicBaseUrl', () => {
   });
 
   test.each([
-    'https://user:secret@sso.example.com',
-    'https://user:secret@app.example.com',
-  ])('rejects embedded credentials in an SSO URL', (configuredUrl) => {
+    ['SSO_CALLBACK_BASE_URL', 'https://user:secret@sso.example.com'],
+    ['FRONTEND_URL', 'https://user:secret@app.example.com'],
+  ] as const)('rejects embedded credentials in %s', (configKey, configuredUrl) => {
     process.env.SSO_CALLBACK_BASE_URL = 'https://sso.example.com';
     process.env.FRONTEND_URL = 'https://app.example.com';
-    if (configuredUrl.includes('sso.example.com'))
-      process.env.SSO_CALLBACK_BASE_URL = configuredUrl;
-    else process.env.FRONTEND_URL = configuredUrl;
+    process.env[configKey] = configuredUrl;
     expect(() => sso.resolvePublicBaseUrl()).toThrow(/embedded credentials/);
   });
 

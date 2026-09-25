@@ -83,6 +83,38 @@ beforeAll(async () => {
   routePlugin = (await import('../../routes/sso-auth.ts')).default as FastifyPluginAsync;
 });
 
+describe('SSO OpenAPI redirects', () => {
+  test('all SSO login routes advertise their 302 response', async () => {
+    const { default: swagger } = await import('@fastify/swagger');
+    const app = Fastify({ logger: false });
+    app.decorate('rateLimit', () => async () => {});
+    await app.register(swagger, { openapi: { info: { title: 'test', version: '1.0.0' } } });
+    await app.register(routePlugin, { prefix: '/api/auth/sso' });
+    await app.ready();
+
+    const spec = app.swagger() as {
+      paths?: Record<
+        string,
+        Record<
+          string,
+          { responses?: Record<string, { content?: unknown; headers?: Record<string, unknown> }> }
+        >
+      >;
+    };
+    await app.close();
+    for (const [method, path] of [
+      ['get', '/api/auth/sso/oidc/{slug}/start'],
+      ['get', '/api/auth/sso/oidc/{slug}/callback'],
+      ['get', '/api/auth/sso/saml/{slug}/start'],
+      ['post', '/api/auth/sso/saml/{slug}/callback'],
+    ]) {
+      const redirect = spec.paths?.[path]?.[method]?.responses?.['302'];
+      expect(redirect?.headers?.location).toBeDefined();
+      expect(redirect?.content).toBeUndefined();
+    }
+  });
+});
+
 afterAll(() => {
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../services/sso.ts', () => ssoServiceSnap);

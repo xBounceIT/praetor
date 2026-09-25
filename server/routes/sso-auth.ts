@@ -85,6 +85,12 @@ const handleSsoStartError = (
   return replyWithSsoError(request, reply, code);
 };
 
+const redirectResponseSchema = {
+  type: 'null',
+  description: 'Redirect to the identity provider or frontend',
+  headers: { location: { type: 'string', description: 'Redirect destination' } },
+} as const;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addContentTypeParser(
     'application/x-www-form-urlencoded',
@@ -110,6 +116,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: slugParamsSchema,
         security: [],
         response: {
+          302: redirectResponseSchema,
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -133,7 +140,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Complete OIDC login',
         params: slugParamsSchema,
         security: [],
-        response: { 503: errorResponseSchema },
+        response: { 302: redirectResponseSchema, 503: errorResponseSchema },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -162,7 +169,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'Redirect to the identity provider, or back to the frontend with a stable sso_error code if startup fails. An invalid frontend URL returns 503.',
         params: slugParamsSchema,
         security: [],
-        response: { ...standardRateLimitedErrorResponses },
+        response: { 302: redirectResponseSchema, ...standardRateLimitedErrorResponses },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -186,6 +193,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: slugParamsSchema,
         security: [],
         response: {
+          302: redirectResponseSchema,
           ...standardRateLimitedErrorResponses,
         },
       },
