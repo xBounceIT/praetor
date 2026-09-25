@@ -11,7 +11,7 @@
     "typecheck": "tsc -p server/tsconfig.json && tsc -p tsconfig.json",
     "test": "bun run test:server && bun run test:frontend",
     "test:server": "cd server && bun test ./test",
-    "test:frontend": "bun test ./test",
+    "test:frontend": "bun test --isolate ./test",
     "test:react-doctor": "bun x -y react-doctor@latest .",
     "test:coverage": "bun run test:server -- --coverage && bun run test:frontend -- --coverage",
     "lint": "bun run i18n:check && bun run typecheck && biome check .",
