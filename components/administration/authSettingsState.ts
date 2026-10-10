@@ -32,6 +32,7 @@ export type AuthSettingsState = {
   isSavingLdap: boolean;
   savingProvider: SsoProtocol | null;
   providerSaveErrors: Partial<Record<SsoProtocol, string>>;
+  providerToggleStates: Record<string, { saving: boolean; error?: string }>;
   acsUrlState: AcsUrlState;
 };
 
@@ -55,6 +56,10 @@ type AuthSettingsAction =
   | {
       type: 'setProviderSaveErrors';
       update: StateUpdate<AuthSettingsState['providerSaveErrors']>;
+    }
+  | {
+      type: 'setProviderToggleStates';
+      update: StateUpdate<AuthSettingsState['providerToggleStates']>;
     }
   | { type: 'setAcsUrlState'; update: StateUpdate<AuthSettingsState['acsUrlState']> };
 
@@ -108,6 +113,11 @@ export const authSettingsReducer = (
       return {
         ...state,
         providerSaveErrors: resolveStateUpdate(state.providerSaveErrors, action.update),
+      };
+    case 'setProviderToggleStates':
+      return {
+        ...state,
+        providerToggleStates: resolveStateUpdate(state.providerToggleStates, action.update),
       };
     case 'setAcsUrlState':
       return { ...state, acsUrlState: resolveStateUpdate(state.acsUrlState, action.update) };

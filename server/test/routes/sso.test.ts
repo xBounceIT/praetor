@@ -436,6 +436,36 @@ describe('PUT /api/sso/providers/:id — enabled OIDC configuration validation',
     expect(response.statusCode).toBe(400);
     expect(updateMock).not.toHaveBeenCalled();
   });
+
+  test('toggles activation using only id and enabled without changing stored configuration or secrets', async () => {
+    const existing = { ...baseProvider, enabled: false };
+    findByIdMock.mockResolvedValue(existing);
+    updateMock.mockImplementation(
+      async (_id: string, patch: realSsoProvidersRepo.SsoProviderPatch) => ({
+        ...existing,
+        ...patch,
+      }),
+    );
+
+    const response = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sso/providers/sso-1',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: { id: existing.id, enabled: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(existing.id, { enabled: true });
+    expect(JSON.parse(response.body)).toMatchObject({
+      id: existing.id,
+      protocol: 'oidc',
+      enabled: true,
+      issuerUrl: existing.issuerUrl,
+      clientId: existing.clientId,
+      clientSecret: MASKED_SECRET,
+      privateKey: MASKED_SECRET,
+    });
+  });
 });
 
 describe('POST /api/sso/providers — validateProviderBody', () => {
