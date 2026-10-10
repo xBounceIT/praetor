@@ -65,6 +65,7 @@ import {
   type SsoSecretFieldKey,
   type StateUpdate,
 } from './authSettingsState';
+import LdapUserImportCard from './LdapUserImportCard';
 
 const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
@@ -823,6 +824,7 @@ const useAuthSettingsController = ({
     isSyncingLdap,
     isTestingLdap,
     ldapForm,
+    onLdapUsersSynced,
     loadProviderDraft,
     onDeleteSsoProvider,
     onSetEnableTotp,
@@ -1230,6 +1232,12 @@ const LdapSettingsPanel: React.FC<{ controller: AuthSettingsController }> = ({ c
         </div>
       </fieldset>
     </form>
+    <LdapUserImportCard
+      key={JSON.stringify(controller.ldapForm)}
+      disabled={controller.isLdapDirty || controller.isSavingLdap || controller.isSyncingLdap}
+      configured={!!controller.ldapForm.serverUrl && !!controller.ldapForm.baseDn}
+      onImported={controller.onLdapUsersSynced}
+    />
     <LdapTesterCard controller={controller} />
   </div>
 );

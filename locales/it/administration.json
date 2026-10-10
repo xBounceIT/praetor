@@ -219,6 +219,7 @@
           "role_switched": "Ruolo cambiato"
         },
         "ldap": {
+          "imported": "Importati gli utenti LDAP selezionati",
           "synced": "Sincronizzati gli utenti LDAP"
         }
       },

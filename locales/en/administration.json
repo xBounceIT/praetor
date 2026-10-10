@@ -219,6 +219,7 @@
           "role_switched": "Switched role"
         },
         "ldap": {
+          "imported": "Imported selected LDAP users",
           "synced": "Synced LDAP users"
         }
       },

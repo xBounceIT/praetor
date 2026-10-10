@@ -4,8 +4,23 @@ import { type DbExecutor, withDbTransaction } from '../db/drizzle.ts';
 import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
+import {
+  LDAP_USER_IDENTITY_LIMITS,
+  type LdapUserImportResponse,
+  type LdapUserImportResult,
+  type LdapUserSearchResponse,
+  type LdapUserSelection,
+} from '../types/ldap.ts';
+import { mapWithConcurrency } from '../utils/concurrency.ts';
+import { getUniqueViolation } from '../utils/db-errors.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import {
+  getLdapDirectoryVersion,
+  LdapDirectoryChangedError,
+} from '../utils/ldap-directory-version.ts';
+import {
+  buildDirectoryUserIdentityFilter,
+  buildDirectoryUserSearchFilter,
   buildGroupLookupFilter,
   buildUserLookupFilter,
   buildUserSyncFilter,
@@ -36,11 +51,18 @@ interface LdapEntry {
 }
 
 interface LdapClient {
+  on?: (event: string, callback: (err: Error) => void) => void;
   bind: (dn: string, password: string, callback: (err: Error | null) => void) => void;
   unbind: (callback: (err?: Error) => void) => void;
   search: (
     base: string,
-    options: { scope: string; filter: unknown; attributes?: string[]; sizeLimit?: number },
+    options: {
+      scope: string;
+      filter: unknown;
+      attributes?: string[];
+      sizeLimit?: number;
+      timeLimit?: number;
+    },
     callback: (err: Error | null, res: LdapSearchResult) => void,
   ) => void;
 }
@@ -113,6 +135,7 @@ export type LdapUserEntry = {
 type LdapClientOptions = {
   allowDisabledConfig?: boolean;
   reloadConfig?: boolean;
+  timeoutMs?: number;
 };
 
 const warnRoleMappingNoMatch = (
@@ -338,9 +361,7 @@ const refreshExistingLdapUser = async (
 };
 
 const isUniqueViolationError = (err: unknown): boolean => {
-  if (!err || typeof err !== 'object') return false;
-  const code = (err as { code?: unknown }).code;
-  return code === '23505';
+  return getUniqueViolation(err) !== null;
 };
 
 const readRequiredEnvFile = (envName: string, filePath: string): Buffer => {
@@ -412,6 +433,9 @@ class LDAPService {
     return ldap.createClient({
       url: this.config.serverUrl,
       tlsOptions: tlsOptions,
+      ...(options.timeoutMs
+        ? { timeout: options.timeoutMs, connectTimeout: options.timeoutMs }
+        : {}),
     }) as LdapClient;
   }
 
@@ -803,7 +827,11 @@ class LDAPService {
             addGroupEntryAliases(groups, attributes, objectName);
           });
           res.on('error', (err: Error) => reject(err));
-          res.on('end', () => resolve());
+          res.on('end', (result: { status: number }) => {
+            if (result.status !== 0)
+              reject(new Error(`LDAP search failed status: ${result.status}`));
+            else resolve();
+          });
         });
       });
 
@@ -826,6 +854,209 @@ class LDAPService {
       }
     }
     return [...groups];
+  }
+
+  private async withDirectoryClient<T>(
+    operation: (client: LdapClient, config: ldapRepo.LdapConfig) => Promise<T>,
+    expectedDirectoryVersion?: string,
+  ): Promise<T> {
+    await this.loadConfig();
+    const config = this.config;
+    if (!config?.serverUrl || !config.baseDn) throw new Error('LDAP is not configured');
+    if (
+      expectedDirectoryVersion !== undefined &&
+      expectedDirectoryVersion !== getLdapDirectoryVersion(config)
+    ) {
+      throw new LdapDirectoryChangedError();
+    }
+    const client = await this.getClient({ allowDisabledConfig: true, timeoutMs: 15000 });
+    if (!client) throw new Error('LDAP is not configured');
+    client.on?.('error', (err) => {
+      logger.warn({ err: serializeError(err) }, 'LDAP directory client error');
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        client.bind(config.bindDn, config.bindPassword, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      return await operation(client, config);
+    } finally {
+      client.unbind(() => {});
+    }
+  }
+
+  private searchDirectoryEntries(
+    client: LdapClient,
+    config: ldapRepo.LdapConfig,
+    filter: unknown,
+    limit: number,
+  ): Promise<{ entries: LdapUserEntry[]; truncated: boolean }> {
+    return new Promise((resolve, reject) => {
+      const entries: LdapUserEntry[] = [];
+      let truncated = false;
+      const finish = () => resolve({ entries, truncated });
+      client.search(
+        config.baseDn,
+        {
+          scope: 'sub',
+          filter,
+          attributes: buildUserAttributeList(config),
+          sizeLimit: limit,
+          timeLimit: 10,
+        },
+        (err, res) => {
+          if (err) return reject(err);
+          res.on('searchEntry', (entry: LdapSearchEntry) => {
+            if (entries.length >= limit) {
+              truncated = true;
+              return;
+            }
+            const dn = entry.objectName?.toString();
+            if (dn) entries.push({ dn, attributes: flattenSearchEntryAttributes(entry) });
+          });
+          res.on('error', (error: Error) => {
+            if (isLdapSizeLimitExceededError(error)) {
+              truncated = true;
+              finish();
+            } else reject(error);
+          });
+          res.on('end', (result: { status: number }) => {
+            if (result.status === LDAP_SIZE_LIMIT_EXCEEDED_STATUS) truncated = true;
+            else if (result.status !== 0)
+              return reject(new Error(`LDAP search failed status: ${result.status}`));
+            finish();
+          });
+        },
+      );
+    });
+  }
+
+  async searchUsers(query: string): Promise<LdapUserSearchResponse> {
+    // Separate instances pin configuration throughout a request, including group lookups.
+    const service = new LDAPService();
+    return service.withDirectoryClient(async (client, config) => {
+      const filter = buildDirectoryUserSearchFilter(
+        config.userFilter,
+        query,
+        buildUserAttributeList(config),
+      );
+      const { entries, truncated } = await service.searchDirectoryEntries(
+        client,
+        config,
+        filter,
+        50,
+      );
+      const candidates = entries.flatMap((entry) => {
+        const candidate = deriveCanonicalUsername(entry.attributes);
+        if (
+          !candidate ||
+          Array.from(entry.dn).length > LDAP_USER_IDENTITY_LIMITS.dn ||
+          Array.from(candidate).length > LDAP_USER_IDENTITY_LIMITS.username ||
+          Array.from(normalizeExternalUsername(candidate)).length >
+            LDAP_USER_IDENTITY_LIMITS.username
+        )
+          return [];
+        return [{ entry, candidate }];
+      });
+      const users = await mapWithConcurrency(candidates, 5, async ({ entry, candidate }) => {
+        const username = normalizeExternalUsername(candidate);
+        const profile = resolveDirectoryProfile(entry.attributes, config);
+        const existing = await usersRepo.findLoginUserByNormalizedUsername(username);
+        return {
+          dn: entry.dn,
+          username: candidate,
+          name: profile.name ?? username,
+          email: profile.email ?? '',
+          existing: !!existing,
+        };
+      });
+      return { users, truncated, directoryVersion: getLdapDirectoryVersion(config) };
+    });
+  }
+
+  private async importDirectoryUser(
+    client: LdapClient,
+    config: ldapRepo.LdapConfig,
+    selection: LdapUserSelection,
+  ): Promise<LdapUserImportResult> {
+    const username = normalizeExternalUsername(selection.username);
+    const result = { dn: selection.dn, username };
+    try {
+      const filter = buildDirectoryUserIdentityFilter(config.userFilter, selection.username.trim());
+      const { entries, truncated } = await this.searchDirectoryEntries(client, config, filter, 2);
+      const entry = entries[0];
+      if (truncated || entries.length !== 1 || entry?.dn !== selection.dn) {
+        return { ...result, status: 'failed' };
+      }
+      const candidate = deriveCanonicalUsername(entry.attributes);
+      if (!candidate || normalizeExternalUsername(candidate) !== username)
+        return { ...result, status: 'failed' };
+      if (await usersRepo.findLoginUserByNormalizedUsername(username))
+        return { ...result, status: 'existing' };
+      const profile = resolveDirectoryProfile(entry.attributes, config);
+      const groups = await this.findUserGroups(client, entry.dn, [username, candidate], {
+        throwOnError: true,
+      });
+      const roleMappings = this.getRoleMappings();
+      const roleIds = await filterExistingRoleIds(mapExternalGroupsToRoleIds(groups, roleMappings));
+      await provisionNewLdapUser({
+        id: generatePrefixedId('u'),
+        username,
+        name: profile.name ?? username,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        email: profile.email,
+        primaryRole: roleIds[0],
+        groups,
+        roleMappings,
+      });
+      return { ...result, status: 'created' };
+    } catch (err) {
+      if (isUniqueViolationError(err)) {
+        try {
+          if (await usersRepo.findLoginUserByNormalizedUsername(username)) {
+            return { ...result, status: 'existing' };
+          }
+        } catch (lookupError) {
+          logger.warn(
+            { err: serializeError(lookupError), username },
+            'LDAP import conflict lookup failed',
+          );
+        }
+      }
+      logger.warn({ err: serializeError(err), username }, 'LDAP manual user import failed');
+      return { ...result, status: 'failed' };
+    }
+  }
+
+  async importUsers(
+    selections: LdapUserSelection[],
+    directoryVersion: string,
+  ): Promise<LdapUserImportResponse> {
+    const service = new LDAPService();
+    return service.withDirectoryClient(async (client, config) => {
+      const deadline = Date.now() + 4 * 60 * 1000;
+      // Serialize creation on this LDAP connection; independent existence reads use a small pool above.
+      const results = await mapWithConcurrency(
+        selections,
+        1,
+        async (selection): Promise<LdapUserImportResult> => {
+          const username = normalizeExternalUsername(selection.username);
+          if (Date.now() >= deadline) {
+            return { ...selection, username, status: 'failed' };
+          }
+          return service.importDirectoryUser(client, config, selection);
+        },
+      );
+      return {
+        created: results.filter((result) => result.status === 'created').length,
+        existing: results.filter((result) => result.status === 'existing').length,
+        failed: results.filter((result) => result.status === 'failed').length,
+        results,
+      };
+    }, directoryVersion);
   }
 
   // Sync users from LDAP to local DB

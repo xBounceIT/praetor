@@ -282,6 +282,343 @@ afterEach(() => {
   }
 });
 
+describe('manual user search and import', () => {
+  const importUsers = async (selections: import('../../types/ldap.ts').LdapUserSelection[]) => {
+    const { getLdapDirectoryVersion } = await import('../../utils/ldap-directory-version.ts');
+    return ldapService.importUsers(selections, getLdapDirectoryVersion(await ldapRepoGetMock()));
+  };
+  const aliceDn = 'uid=Alice,ou=people,dc=test,dc=com';
+  const aliceEntry = {
+    objectName: aliceDn,
+    attributes: [
+      { type: 'UID', values: ['Alice'] },
+      { type: 'givenName', values: ['Alice'] },
+      { type: 'sn', values: ['Directory'] },
+      { type: 'mail', values: ['alice@test.com'] },
+    ],
+  };
+  const selection = { dn: aliceDn, username: 'Alice' };
+
+  test('searches saved disabled configuration and maps attributes without provisioning', async () => {
+    ldapService.config = { ...ENABLED_LDAP_CONFIG, baseDn: 'dc=stale' };
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      enabled: false,
+      firstNameAttribute: 'customGiven',
+    });
+    nextFixture.searchResponses = [
+      {
+        entries: [
+          {
+            objectName: aliceDn,
+            object: {
+              uid: 'Alice',
+              customGiven: 'Alicia',
+              sn: 'Directory',
+              mail: 'alice@test.com',
+            },
+          },
+        ],
+      },
+    ];
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+
+    const result = await ldapService.searchUsers('Ali');
+
+    expect(result).toEqual({
+      users: [{ ...selection, name: 'Alicia Directory', email: 'alice@test.com', existing: false }],
+      truncated: false,
+      directoryVersion: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(lastClientStats?.searchCalls[0].base).toBe(ENABLED_LDAP_CONFIG.baseDn);
+    expect(lastClientStats?.searchCalls[0].options).toMatchObject({ sizeLimit: 50, timeLimit: 10 });
+    expect(lastClientStats?.options).toMatchObject({ timeout: 15000, connectTimeout: 15000 });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('marks local, disabled and LDAP accounts as already present', async () => {
+    nextFixture.searchResponses = [{ entries: [aliceEntry] }];
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      authMethod: 'local',
+      isDisabled: true,
+    });
+    expect((await ldapService.searchUsers('Ali')).users[0].existing).toBe(true);
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice');
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
+  });
+
+  test('returns bounded partial results when LDAP reports its size limit', async () => {
+    nextFixture.searchResponses = [
+      {
+        entries: Array.from({ length: 60 }, (_, i) => ({
+          objectName: `uid=u${i},dc=test`,
+          object: { uid: `u${i}` },
+        })),
+        status: 4,
+      },
+    ];
+    const result = await ldapService.searchUsers('user');
+    expect(result.users).toHaveLength(50);
+    expect(result.truncated).toBe(true);
+  });
+
+  test('propagates directory search errors and closes the connection', async () => {
+    nextFixture.searchResponses = [{ errorEvent: new Error('directory unavailable') }];
+    await expect(ldapService.searchUsers('Ali')).rejects.toThrow('directory unavailable');
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('omits identities that cannot fit import or account limits without rejecting valid users', async () => {
+    nextFixture.searchResponses = [
+      {
+        entries: [
+          aliceEntry,
+          { objectName: 'uid=long,dc=test', object: { uid: 'x'.repeat(101) } },
+          { objectName: 'x'.repeat(2049), object: { uid: 'long-dn' } },
+          { objectName: 'uid=expands,dc=test', object: { uid: 'İ'.repeat(100) } },
+        ],
+      },
+    ];
+    const result = await ldapService.searchUsers('Ali');
+    expect(result.users.map((user) => user.username)).toEqual(['Alice']);
+    expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('imports only chosen identities with both provisioning switches disabled, transactionally', async () => {
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      enabled: false,
+      autoProvisionAll: false,
+      provisionOnLogin: false,
+      userFilter: '(&(objectClass=person)(mail={0}))',
+      roleMappings: [{ ldapGroup: 'staff', role: 'manager' }],
+    });
+    nextFixture.searchResponses = [
+      { entries: [aliceEntry] },
+      { entries: [{ objectName: 'cn=staff,ou=groups,dc=test', object: { cn: 'staff' } }] },
+    ];
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    const result = await importUsers([selection]);
+    expect(result).toEqual({
+      created: 1,
+      existing: 0,
+      failed: 0,
+      results: [{ dn: aliceDn, username: 'alice', status: 'created' }],
+    });
+    expect(createUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        username: 'alice',
+        name: 'Alice Directory',
+        authMethod: 'ldap',
+        role: 'manager',
+        firstName: 'Alice',
+        lastName: 'Directory',
+        passwordHash: realUsersRepo.EXTERNAL_PLACEHOLDER_PASSWORD_HASH,
+      }),
+      TX_SENTINEL,
+    );
+    expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ email: 'alice@test.com' }),
+      TX_SENTINEL,
+    );
+    expect(applyExternalRolesForUserMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining(['staff']),
+      [{ externalGroup: 'staff', role: 'manager' }],
+      TX_SENTINEL,
+    );
+    expect(lastClientStats?.searchCalls[0].base).toBe(ENABLED_LDAP_CONFIG.baseDn);
+    expect(lastClientStats?.searchCalls[0].options.filter?.toString()).toContain('(uid=Alice)');
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test.each([
+    'local',
+    'ldap',
+    'oidc',
+    'saml',
+  ])('preserves existing %s accounts and their assigned roles', async (authMethod) => {
+    nextFixture.searchResponses = [{ entries: [aliceEntry] }];
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LDAP_LOGIN_USER,
+      authMethod,
+      isDisabled: true,
+    });
+    expect(await importUsers([selection])).toMatchObject({
+      created: 0,
+      existing: 1,
+      failed: 0,
+    });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { label: 'missing', entries: [] },
+    {
+      label: 'ambiguous',
+      entries: [aliceEntry, { ...aliceEntry, objectName: 'uid=Alice,ou=other,dc=test,dc=com' }],
+    },
+    {
+      label: 'different DN',
+      entries: [{ ...aliceEntry, objectName: 'uid=Alice,ou=other,dc=test,dc=com' }],
+    },
+    {
+      label: 'different canonical username',
+      entries: [{ objectName: aliceDn, object: { uid: 'bob' } }],
+    },
+  ])('rejects a $label directory identity before writing', async ({ entries }) => {
+    nextFixture.searchResponses = [{ entries: [...entries] }];
+    expect(await importUsers([selection])).toMatchObject({ created: 0, failed: 1 });
+    expect(createUserMock).not.toHaveBeenCalled();
+    expect(lastClientStats?.unbindCalls).toBe(1);
+  });
+
+  test('does not create an account after group lookup fails, but continues other selections', async () => {
+    const bob = { dn: 'uid=bob,dc=test,dc=com', username: 'bob' };
+    nextFixture.searchResponses = [
+      { entries: [aliceEntry] },
+      { status: 3 },
+      {},
+      {},
+      { entries: [{ objectName: bob.dn, object: { uid: 'bob' } }] },
+    ];
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    const result = await importUsers([selection, bob]);
+    expect(result).toMatchObject({ created: 1, failed: 1 });
+    expect(result.results[0].status).toBe('failed');
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    expect(createUserMock.mock.calls[0][0].username).toBe('bob');
+  });
+
+  test('handles a concurrent import without touching its account', async () => {
+    nextFixture.searchResponses = [{ entries: [aliceEntry] }];
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LDAP_LOGIN_USER);
+    createUserMock.mockRejectedValue(Object.assign(new Error('duplicate'), { code: '23505' }));
+    const result = await importUsers([selection]);
+    expect(result).toMatchObject({ created: 0, existing: 1, failed: 0 });
+    expect(result.results).toHaveLength(1);
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
+  });
+
+  test('recognizes a unique violation wrapped by Drizzle during a concurrent import', async () => {
+    nextFixture.searchResponses = [{ entries: [aliceEntry] }];
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LDAP_LOGIN_USER);
+    const { DrizzleQueryError } = await import('drizzle-orm/errors');
+    createUserMock.mockRejectedValue(
+      new DrizzleQueryError(
+        'insert into users',
+        [],
+        Object.assign(new Error('duplicate'), { code: '23505' }),
+      ),
+    );
+    expect(await importUsers([selection])).toMatchObject({ existing: 1, failed: 0 });
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('returns an outcome for every selection that shares a normalized username', async () => {
+    const other = { dn: 'uid=alice,ou=other,dc=test,dc=com', username: 'alice' };
+    nextFixture.searchResponses = [
+      { entries: [aliceEntry] },
+      {},
+      {},
+      {},
+      { entries: [{ objectName: other.dn, object: { uid: 'alice' } }] },
+    ];
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LDAP_LOGIN_USER);
+    expect(await importUsers([selection, other])).toMatchObject({
+      created: 1,
+      existing: 1,
+      failed: 0,
+      results: [
+        { dn: selection.dn, status: 'created' },
+        { dn: other.dn, status: 'existing' },
+      ],
+    });
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    { label: 'server', patch: { serverUrl: 'ldap://other.test:389' } },
+    { label: 'base', patch: { baseDn: 'dc=other' } },
+    { label: 'user scope', patch: { userFilter: '(&(uid={0})(department=other))' } },
+    { label: 'attribute mapping', patch: { firstNameAttribute: 'otherGiven' } },
+    { label: 'group scope', patch: { groupBaseDn: 'ou=other,dc=test,dc=com' } },
+    { label: 'role mapping', patch: { roleMappings: [{ ldapGroup: 'staff', role: 'admin' }] } },
+  ])('rejects selections after the $label changes, before creating any client', async ({
+    patch,
+  }) => {
+    nextFixture.searchResponses = [{ entries: [aliceEntry] }];
+    const search = await ldapService.searchUsers('Ali');
+    ldapRepoGetMock.mockResolvedValue({
+      ...ENABLED_LDAP_CONFIG,
+      ...patch,
+    });
+    createClientMock.mockClear();
+    nextFixture.searchResponses = [{ entries: [aliceEntry] }];
+    await expect(ldapService.importUsers([selection], search.directoryVersion)).rejects.toThrow(
+      'LDAP configuration changed',
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('keeps conflict recovery lookup failures local to one selection', async () => {
+    const bob = { dn: 'uid=bob,dc=test,dc=com', username: 'bob' };
+    nextFixture.searchResponses = [
+      { entries: [aliceEntry] },
+      {},
+      {},
+      {},
+      { entries: [{ objectName: bob.dn, object: { uid: 'bob' } }] },
+    ];
+    findLoginUserByNormalizedUsernameMock
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error('lookup temporarily unavailable'))
+      .mockResolvedValueOnce(null);
+    createUserMock
+      .mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }))
+      .mockResolvedValueOnce(undefined);
+    expect(await importUsers([selection, bob])).toMatchObject({ created: 1, failed: 1 });
+    expect(createUserMock.mock.calls[1][0].username).toBe('bob');
+  });
+
+  test('reports an individual transaction failure without leaving profile or role writes', async () => {
+    nextFixture.searchResponses = [{ entries: [aliceEntry] }];
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(null);
+    createUserMock.mockRejectedValue(new Error('database unavailable'));
+    expect(await importUsers([selection])).toMatchObject({ failed: 1, created: 0 });
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+    expect(applyExternalRolesForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('stops starting directory lookups when the import deadline is reached', async () => {
+    const now = spyOn(Date, 'now')
+      .mockReturnValueOnce(0)
+      .mockReturnValue(4 * 60 * 1000);
+    try {
+      const result = await importUsers([selection]);
+      expect(result).toMatchObject({ failed: 1, created: 0 });
+      expect(lastClientStats?.searchCalls).toHaveLength(0);
+      expect(createUserMock).not.toHaveBeenCalled();
+    } finally {
+      now.mockRestore();
+    }
+  });
+});
+
 describe('getClient', () => {
   test('returns null when config.enabled is false', async () => {
     ldapRepoGetMock.mockResolvedValue({ ...ENABLED_LDAP_CONFIG, enabled: false });

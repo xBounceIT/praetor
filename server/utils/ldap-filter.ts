@@ -129,6 +129,37 @@ export const buildUserLookupFilter = (userFilter: string, username: string): Par
 export const buildUserSyncFilter = (userFilter: string): ParsedLdapFilter =>
   parseUserFilterTemplate(userFilter, '*', 'userFilter cannot be used for LDAP sync');
 
+export const buildDirectoryUserSearchFilter = (
+  userFilter: string,
+  query: string,
+  attributes: string[],
+): ParsedLdapFilter =>
+  new ldap.AndFilter({
+    filters: [
+      buildUserSyncFilter(userFilter),
+      new ldap.OrFilter({
+        filters: [...new Set(attributes)].map(
+          (attribute) => new ldap.SubstringFilter({ attribute, initial: '', any: [query] }),
+        ),
+      }),
+    ],
+  });
+
+export const buildDirectoryUserIdentityFilter = (
+  userFilter: string,
+  username: string,
+): ParsedLdapFilter =>
+  new ldap.AndFilter({
+    filters: [
+      buildUserSyncFilter(userFilter),
+      new ldap.OrFilter({
+        filters: ['uid', 'sAMAccountName'].map(
+          (attribute) => new ldap.EqualityFilter({ attribute, value: username }),
+        ),
+      }),
+    ],
+  });
+
 export const buildGroupLookupFilter = (groupFilter: string, value: string): ParsedLdapFilter =>
   (() => {
     const normalizedFilter = groupFilter.trim();

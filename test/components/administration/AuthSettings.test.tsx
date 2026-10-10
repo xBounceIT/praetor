@@ -2,10 +2,14 @@ import { afterAll, beforeEach, describe, expect, mock } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { authSettingsReducer } from '../../../components/administration/authSettingsState';
+import { ApiError } from '../../../services/api/client';
 import type {
   LdapConfig,
   LdapSyncResponse,
   LdapTestResponse,
+  LdapUserImportResponse,
+  LdapUserSearchResponse,
+  LdapUserSelection,
   Role,
   SsoProtocol,
   SsoProvider,
@@ -19,6 +23,24 @@ import { render } from '../../helpers/render';
 installI18nMock();
 
 const ldapApiMock = {
+  searchUsers: mock(
+    async (_query: string): Promise<LdapUserSearchResponse> => ({
+      users: [],
+      directoryVersion: 'a'.repeat(64),
+      truncated: false,
+    }),
+  ),
+  importUsers: mock(
+    async (
+      _users: LdapUserSelection[],
+      _directoryVersion: string,
+    ): Promise<LdapUserImportResponse> => ({
+      created: 0,
+      existing: 0,
+      failed: 0,
+      results: [],
+    }),
+  ),
   syncUsers: mock(
     async (): Promise<LdapSyncResponse> => ({
       success: true,
@@ -50,14 +72,20 @@ const ssoApiMock = {
 
 const { ldapApi } = await import('../../../services/api/ldap');
 const originalLdapApi = {
+  searchUsers: ldapApi.searchUsers,
+  importUsers: ldapApi.importUsers,
   syncUsers: ldapApi.syncUsers,
   testAuthentication: ldapApi.testAuthentication,
 };
 
 ldapApi.syncUsers = ldapApiMock.syncUsers;
+ldapApi.searchUsers = ldapApiMock.searchUsers;
+ldapApi.importUsers = ldapApiMock.importUsers;
 ldapApi.testAuthentication = ldapApiMock.testAuthentication;
 
 afterAll(() => {
+  ldapApi.searchUsers = originalLdapApi.searchUsers;
+  ldapApi.importUsers = originalLdapApi.importUsers;
   ldapApi.syncUsers = originalLdapApi.syncUsers;
   ldapApi.testAuthentication = originalLdapApi.testAuthentication;
 });
@@ -224,8 +252,220 @@ describe('authSettingsReducer', () => {
 
 describe('<AuthSettings />', () => {
   beforeEach(() => {
+    ldapApiMock.searchUsers.mockReset();
+    ldapApiMock.importUsers.mockReset();
+    ldapApiMock.searchUsers.mockResolvedValue({
+      users: [],
+      directoryVersion: 'a'.repeat(64),
+      truncated: false,
+    });
+    ldapApiMock.importUsers.mockResolvedValue({ created: 0, existing: 0, failed: 0, results: [] });
     ldapApiMock.testAuthentication.mockClear();
     ldapApiMock.syncUsers.mockClear();
+  });
+
+  test('searches saved LDAP while disabled and imports only manually selected users', async () => {
+    const alice = {
+      dn: 'uid=alice,dc=test',
+      username: 'Alice',
+      name: 'Alice Directory',
+      email: 'alice@test.com',
+      existing: false,
+    };
+    const bob = {
+      dn: 'uid=bob,dc=test',
+      username: 'bob',
+      name: 'Bob Directory',
+      email: '',
+      existing: false,
+    };
+    const existing = {
+      dn: 'uid=local,dc=test',
+      username: 'local',
+      name: 'Local Account',
+      email: '',
+      existing: true,
+    };
+    ldapApiMock.searchUsers.mockResolvedValue({
+      users: [alice, bob, existing],
+      directoryVersion: 'a'.repeat(64),
+      truncated: true,
+    });
+    ldapApiMock.importUsers.mockResolvedValue({
+      created: 1,
+      existing: 0,
+      failed: 0,
+      results: [{ dn: alice.dn, username: 'alice', status: 'created' }],
+    });
+    const onImported = mock(() => {});
+    renderAuthSettings({
+      onLdapUsersSynced: onImported,
+      config: { ...ldapConfig, provisionOnLogin: false, autoProvisionAll: false },
+    });
+
+    fireEvent.change(screen.getByLabelText('admin.ldap.import.query'), {
+      target: { value: 'Directory' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.import.search' }));
+    await waitFor(() => expect(screen.getByText('Alice Directory')).toBeInTheDocument());
+    expect(ldapApiMock.searchUsers).toHaveBeenCalledWith('Directory');
+    expect(screen.getByText('admin.ldap.import.truncated')).toBeInTheDocument();
+    const aliceRow = screen.getByText('Alice Directory').closest('tr');
+    const localRow = screen.getByText('Local Account').closest('tr');
+    if (!aliceRow || !localRow) throw new Error('Missing directory rows');
+    expect(within(localRow).getByRole('checkbox')).toBeDisabled();
+    const importButton = screen.getByRole('button', { name: 'admin.ldap.import.selected' });
+    expect(importButton).toBeDisabled();
+    fireEvent.click(within(aliceRow).getByRole('checkbox'));
+    fireEvent.click(importButton);
+    await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
+    expect(ldapApiMock.importUsers).toHaveBeenCalledWith(
+      [{ dn: alice.dn, username: alice.username }],
+      'a'.repeat(64),
+    );
+    expect(within(aliceRow).getByRole('checkbox')).toBeDisabled();
+    expect(importButton).toBeDisabled();
+    expect(screen.getByText('admin.ldap.import.summary')).toBeInTheDocument();
+  });
+
+  test('blocks manual directory search until changes are saved and clears old selections', async () => {
+    ldapApiMock.searchUsers.mockResolvedValue({
+      users: [
+        {
+          dn: 'uid=alice,dc=test',
+          username: 'alice',
+          name: 'Alice Directory',
+          email: '',
+          existing: false,
+        },
+      ],
+      directoryVersion: 'a'.repeat(64),
+      truncated: false,
+    });
+    renderAuthSettings();
+    fireEvent.change(screen.getByLabelText('admin.ldap.import.query'), {
+      target: { value: 'alice' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.import.search' }));
+    await waitFor(() => expect(screen.getByText('Alice Directory')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('checkbox', { name: 'admin.ldap.import.selectUser' }));
+    fireEvent.change(inputForLabel('admin.ldap.baseDnLabel'), { target: { value: 'dc=changed' } });
+    expect(screen.getByRole('button', { name: 'admin.ldap.import.search' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'admin.ldap.import.selected' })).toBeDisabled();
+    expect(screen.queryByText('Alice Directory')).toBeNull();
+    expect(screen.getByText('admin.ldap.import.saveFirst')).toBeInTheDocument();
+  });
+
+  test('reports partial failures, preserves failed selections for retry and refreshes created users', async () => {
+    const alice = {
+      dn: 'uid=alice,dc=test',
+      username: 'alice',
+      name: 'Alice Directory',
+      email: '',
+      existing: false,
+    };
+    const bob = {
+      dn: 'uid=bob,dc=test',
+      username: 'bob',
+      name: 'Bob Directory',
+      email: '',
+      existing: false,
+    };
+    ldapApiMock.searchUsers.mockResolvedValue({
+      users: [alice, bob],
+      directoryVersion: 'a'.repeat(64),
+      truncated: false,
+    });
+    ldapApiMock.importUsers.mockResolvedValueOnce({
+      created: 1,
+      existing: 0,
+      failed: 1,
+      results: [
+        { ...alice, status: 'created' },
+        { ...bob, status: 'failed' },
+      ],
+    });
+    const onImported = mock(() => {});
+    renderAuthSettings({ onLdapUsersSynced: onImported });
+    fireEvent.change(screen.getByLabelText('admin.ldap.import.query'), {
+      target: { value: 'Directory' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.import.search' }));
+    await waitFor(() => expect(screen.getByText('Bob Directory')).toBeInTheDocument());
+    for (const checkbox of screen.getAllByRole('checkbox')) fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.import.selected' }));
+    await waitFor(() => expect(screen.getByText('admin.ldap.import.failed')).toBeInTheDocument());
+    expect(onImported).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.import.selected' }));
+    await waitFor(() => expect(ldapApiMock.importUsers).toHaveBeenCalledTimes(2));
+    expect(ldapApiMock.importUsers.mock.calls[1]).toEqual([
+      [{ dn: bob.dn, username: 'bob' }],
+      'a'.repeat(64),
+    ]);
+  });
+
+  test('shows directory errors and recovers for a subsequent search', async () => {
+    ldapApiMock.searchUsers.mockRejectedValueOnce(new Error('LDAP offline'));
+    renderAuthSettings();
+    const searchButton = screen.getByRole('button', { name: 'admin.ldap.import.search' });
+    expect(searchButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('admin.ldap.import.query'), {
+      target: { value: 'alice' },
+    });
+    fireEvent.click(searchButton);
+    await waitFor(() =>
+      expect(screen.getByText('admin.ldap.import.searchError')).toBeInTheDocument(),
+    );
+    fireEvent.click(searchButton);
+    await waitFor(() => expect(screen.getByText('admin.ldap.import.empty')).toBeInTheDocument());
+    expect(screen.queryByText('admin.ldap.import.searchError')).toBeNull();
+  });
+
+  test('counts Unicode code points consistently with the LDAP search API minimum', () => {
+    renderAuthSettings();
+    fireEvent.change(screen.getByLabelText('admin.ldap.import.query'), { target: { value: '😀' } });
+    const searchButton = screen.getByRole('button', {
+      name: 'admin.ldap.import.search',
+    }) as HTMLButtonElement;
+    expect(searchButton.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('admin.ldap.import.query'), {
+      target: { value: '😀😁' },
+    });
+    expect(searchButton.disabled).toBe(false);
+    expect(ldapApiMock.searchUsers).not.toHaveBeenCalled();
+  });
+
+  test('requires a new search after a directory configuration conflict', async () => {
+    ldapApiMock.searchUsers.mockResolvedValue({
+      users: [
+        {
+          dn: 'uid=alice,dc=test',
+          username: 'alice',
+          name: 'Alice Directory',
+          email: '',
+          existing: false,
+        },
+      ],
+      truncated: false,
+      directoryVersion: 'a'.repeat(64),
+    });
+    ldapApiMock.importUsers.mockRejectedValue(
+      new ApiError('changed', 409, false, 'ldap_configuration_changed'),
+    );
+    renderAuthSettings();
+    fireEvent.change(screen.getByLabelText('admin.ldap.import.query'), {
+      target: { value: 'alice' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.import.search' }));
+    await waitFor(() => expect(screen.getByText('Alice Directory')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('checkbox', { name: 'admin.ldap.import.selectUser' }));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.import.selected' }));
+    await waitFor(() =>
+      expect(screen.getByText('admin.ldap.import.configurationChanged')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Alice Directory')).toBeNull();
+    expect(screen.getByRole('button', { name: 'admin.ldap.import.selected' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'admin.ldap.import.search' })).toBeEnabled();
   });
 
   test('allows testing the saved LDAP configuration before LDAP is enabled', async () => {
