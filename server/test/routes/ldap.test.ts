@@ -10,6 +10,7 @@ import { DEFAULT_ROLE_ID } from '../../services/external-auth.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realAudit from '../../utils/audit.ts';
 import { MASKED_SECRET } from '../../utils/crypto.ts';
+import { LdapDirectoryChangedError } from '../../utils/ldap-directory-version.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -37,6 +38,8 @@ const logAuditMock = mock(async () => undefined);
 const invalidateConfigMock = mock();
 const syncUsersMock = mock();
 const authenticateWithProfileMock = mock();
+const searchUsersMock = mock();
+const importUsersMock = mock();
 
 let routePlugin: FastifyPluginAsync;
 
@@ -72,6 +75,8 @@ beforeAll(async () => {
       authenticateWithProfile: authenticateWithProfileMock,
       invalidateConfig: invalidateConfigMock,
       syncUsers: syncUsersMock,
+      searchUsers: searchUsersMock,
+      importUsers: importUsersMock,
     },
   }));
 
@@ -113,6 +118,8 @@ const allMocks = [
   invalidateConfigMock,
   syncUsersMock,
   authenticateWithProfileMock,
+  searchUsersMock,
+  importUsersMock,
 ];
 
 let testApp: FastifyInstance;
@@ -185,6 +192,148 @@ afterEach(async () => {
 });
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+
+describe('manual LDAP directory import routes', () => {
+  const selections = [{ dn: 'uid=alice,dc=test,dc=com', username: 'alice' }];
+  const requestDirectory = (path: string, payload: object, authenticated = true) =>
+    testApp.inject({
+      method: 'POST',
+      url: `/api/ldap/users/${path}`,
+      headers: authenticated ? authHeader() : {},
+      payload,
+    });
+
+  beforeEach(() => {
+    ldapGetMock.mockResolvedValue({
+      ...BASE_CONFIG,
+      serverUrl: 'ldap://directory.test',
+      baseDn: 'dc=test,dc=com',
+      enabled: false,
+    });
+    searchUsersMock.mockResolvedValue({
+      users: [
+        { ...selections[0], name: 'Alice', email: '', existing: false, password: 'must not leak' },
+      ],
+      directoryVersion: 'a'.repeat(64),
+      truncated: true,
+    });
+    importUsersMock.mockResolvedValue({
+      created: 1,
+      existing: 0,
+      failed: 0,
+      results: [{ ...selections[0], status: 'created' }],
+    });
+  });
+
+  test('searches disabled saved LDAP configuration and serializes only safe profile fields', async () => {
+    const response = await requestDirectory('search', { query: ' alice ' });
+    expect(response.statusCode).toBe(200);
+    expect(searchUsersMock).toHaveBeenCalledWith('alice');
+    expect(response.json().users[0]).toEqual({
+      ...selections[0],
+      name: 'Alice',
+      email: '',
+      existing: false,
+    });
+    expect(response.json().truncated).toBe(true);
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('imports selected users and audits created counts', async () => {
+    const response = await requestDirectory('import', {
+      users: selections,
+      directoryVersion: 'a'.repeat(64),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ created: 1, failed: 0 });
+    expect(importUsersMock).toHaveBeenCalledWith(selections, 'a'.repeat(64));
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ldap.imported', details: { counts: { created: 1 } } }),
+    );
+  });
+
+  test.each([
+    undefined,
+    '',
+    'invalid',
+  ])('requires a valid search version before importing', async (directoryVersion) => {
+    const response = await requestDirectory('import', { users: selections, directoryVersion });
+    expect(response.statusCode).toBe(400);
+    expect(importUsersMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('returns a configuration conflict without auditing a successful import', async () => {
+    importUsersMock.mockRejectedValue(new LdapDirectoryChangedError());
+    const response = await requestDirectory('import', {
+      users: selections,
+      directoryVersion: 'a'.repeat(64),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().errorCode).toBe('ldap_configuration_changed');
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    'search',
+    'import',
+  ])('requires authentication and update permission for %s', async (path) => {
+    const payload =
+      path === 'search'
+        ? { query: 'alice' }
+        : { users: selections, directoryVersion: 'a'.repeat(64) };
+    expect((await requestDirectory(path, payload, false)).statusCode).toBe(401);
+    getRolePermissionsMock.mockResolvedValue(['administration.authentication.view']);
+    expect((await requestDirectory(path, payload)).statusCode).toBe(403);
+    expect(searchUsersMock).not.toHaveBeenCalled();
+    expect(importUsersMock).not.toHaveBeenCalled();
+  });
+
+  test.each(['', 'a', '  ', 'a'.repeat(101)])('rejects invalid query %j', async (query) => {
+    expect((await requestDirectory('search', { query })).statusCode).toBe(400);
+    expect(searchUsersMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { users: [] },
+    { users: [{ dn: ' ', username: 'alice' }] },
+    { users: [{ dn: 'uid=alice', username: ' ' }] },
+    { users: Array.from({ length: 51 }, (_, i) => ({ dn: `uid=user${i}`, username: `user${i}` })) },
+  ])('rejects empty, invalid or oversized import selections', async ({ users }) => {
+    expect(
+      (await requestDirectory('import', { users, directoryVersion: 'a'.repeat(64) })).statusCode,
+    ).toBe(400);
+    expect(importUsersMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects missing directory configuration without calling LDAP', async () => {
+    ldapGetMock.mockResolvedValue(null);
+    expect((await requestDirectory('search', { query: 'alice' })).statusCode).toBe(400);
+    expect(
+      (await requestDirectory('import', { users: selections, directoryVersion: 'a'.repeat(64) }))
+        .statusCode,
+    ).toBe(400);
+    expect(searchUsersMock).not.toHaveBeenCalled();
+    expect(importUsersMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    'search',
+    'import',
+  ])('returns 503 for directory connection errors during %s', async (path) => {
+    searchUsersMock.mockRejectedValue(new Error('bind failed with secret'));
+    importUsersMock.mockRejectedValue(new Error('bind failed with secret'));
+    const response = await requestDirectory(
+      path,
+      path === 'search'
+        ? { query: 'alice' }
+        : { users: selections, directoryVersion: 'a'.repeat(64) },
+    );
+    expect(response.statusCode).toBe(503);
+    expect(response.body).not.toContain('secret');
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
 
 const putConfig = (payload: object): Promise<LightMyRequestResponse> =>
   testApp.inject({

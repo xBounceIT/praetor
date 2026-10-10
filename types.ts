@@ -678,6 +678,34 @@ export interface LdapSyncResponse {
   error?: string;
 }
 
+export interface LdapUserSelection {
+  dn: string;
+  username: string;
+}
+
+export interface LdapDirectoryUser extends LdapUserSelection {
+  name: string;
+  email: string;
+  existing: boolean;
+}
+
+export interface LdapUserSearchResponse {
+  users: LdapDirectoryUser[];
+  truncated: boolean;
+  directoryVersion: string;
+}
+
+export interface LdapUserImportResult extends LdapUserSelection {
+  status: 'created' | 'existing' | 'failed';
+}
+
+export interface LdapUserImportResponse {
+  created: number;
+  existing: number;
+  failed: number;
+  results: LdapUserImportResult[];
+}
+
 export type SsoProtocol = 'oidc' | 'saml';
 
 export interface SsoRoleMapping {

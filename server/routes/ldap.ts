@@ -6,8 +6,14 @@ import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { canonicalUsernameMatchesUser, DEFAULT_ROLE_ID } from '../services/external-auth.ts';
+import {
+  LDAP_USER_IDENTITY_LIMITS,
+  type LdapUserImportResponse,
+  type LdapUserSelection,
+} from '../types/ldap.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
+import { LdapDirectoryChangedError } from '../utils/ldap-directory-version.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
 import { LOGIN_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -206,7 +212,163 @@ const ldapSyncErrorResponseSchema = {
   required: ['success', 'error'],
 } as const;
 
+const directoryUserIdentityProperties = {
+  dn: { type: 'string', minLength: 1, maxLength: LDAP_USER_IDENTITY_LIMITS.dn },
+  username: { type: 'string', minLength: 1, maxLength: LDAP_USER_IDENTITY_LIMITS.username },
+} as const;
+
+const ldapSearchResponseSchema = {
+  type: 'object',
+  properties: {
+    users: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          ...directoryUserIdentityProperties,
+          name: { type: 'string' },
+          email: { type: 'string' },
+          existing: { type: 'boolean' },
+        },
+        required: ['dn', 'username', 'name', 'email', 'existing'],
+      },
+    },
+    truncated: { type: 'boolean' },
+    directoryVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+  },
+  required: ['users', 'truncated', 'directoryVersion'],
+} as const;
+
+const ldapImportResponseSchema = {
+  type: 'object',
+  properties: {
+    created: { type: 'integer' },
+    existing: { type: 'integer' },
+    failed: { type: 'integer' },
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          ...directoryUserIdentityProperties,
+          status: { type: 'string', enum: ['created', 'existing', 'failed'] },
+        },
+        required: ['dn', 'username', 'status'],
+      },
+    },
+  },
+  required: ['created', 'existing', 'failed', 'results'],
+} as const;
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
+  fastify.post<{ Body: { query: string } }>(
+    '/users/search',
+    {
+      onRequest: [
+        authenticateToken,
+        requirePermission('administration.authentication.update'),
+        fastify.rateLimit(LOGIN_RATE_LIMIT),
+      ],
+      schema: {
+        tags: ['ldap'],
+        summary: 'Search LDAP directory users for manual import',
+        description:
+          'Uses the saved directory base, user filter and attribute mappings, even when LDAP login is disabled. Returns at most 50 entries; refine the query when truncated. Does not provision users.',
+        body: {
+          type: 'object',
+          properties: { query: { type: 'string', minLength: 2, maxLength: 100 } },
+          required: ['query'],
+          additionalProperties: false,
+        },
+        response: { 200: ldapSearchResponseSchema, ...standardRateLimitedErrorResponses },
+      },
+    },
+    async (request, reply) => {
+      const query = request.body.query.trim();
+      if (query.length < 2) return badRequest(reply, 'query must contain at least two characters');
+      const config = await ldapRepo.get();
+      if (!config?.serverUrl || !config.baseDn) return badRequest(reply, 'LDAP is not configured');
+      try {
+        const ldapService = (await import('../services/ldap.ts')).default;
+        return await ldapService.searchUsers(query);
+      } catch (err) {
+        request.log.warn({ err }, 'LDAP directory search failed');
+        return reply
+          .code(503)
+          .send({ error: 'LDAP directory search failed', errorCode: 'ldap_search_failed' });
+      }
+    },
+  );
+
+  fastify.post<{ Body: { users: LdapUserSelection[]; directoryVersion: string } }>(
+    '/users/import',
+    {
+      onRequest: [
+        authenticateToken,
+        requirePermission('administration.authentication.update'),
+        fastify.rateLimit(LOGIN_RATE_LIMIT),
+      ],
+      schema: {
+        tags: ['ldap'],
+        summary: 'Import selected LDAP directory users',
+        description:
+          'Requires the directoryVersion returned by search. Returns 409 if the directory, search scope, profile or role mappings changed. Revalidates each selected DN and canonical username within the saved directory base and user filter. Creates LDAP accounts atomically with mapped roles and profiles, independently of automatic provisioning switches. Existing accounts remain unchanged. Partial failures are returned per user; retries are safe.',
+        body: {
+          type: 'object',
+          properties: {
+            directoryVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+            users: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 50,
+              uniqueItems: true,
+              items: {
+                type: 'object',
+                properties: directoryUserIdentityProperties,
+                required: ['dn', 'username'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['users', 'directoryVersion'],
+          additionalProperties: false,
+        },
+        response: { 200: ldapImportResponseSchema, ...standardRateLimitedErrorResponses },
+      },
+    },
+    async (request, reply) => {
+      if (request.body.users.some((user) => !user.dn.trim() || !user.username.trim())) {
+        return badRequest(reply, 'dn and username must not be blank');
+      }
+      const config = await ldapRepo.get();
+      if (!config?.serverUrl || !config.baseDn) return badRequest(reply, 'LDAP is not configured');
+      let stats: LdapUserImportResponse;
+      try {
+        const ldapService = (await import('../services/ldap.ts')).default;
+        stats = await ldapService.importUsers(request.body.users, request.body.directoryVersion);
+      } catch (err) {
+        if (err instanceof LdapDirectoryChangedError) {
+          return reply
+            .code(409)
+            .send({ error: err.message, errorCode: 'ldap_configuration_changed' });
+        }
+        request.log.warn({ err }, 'LDAP directory import failed');
+        return reply
+          .code(503)
+          .send({ error: 'LDAP directory import failed', errorCode: 'ldap_import_failed' });
+      }
+      await logAudit({
+        request,
+        action: 'ldap.imported',
+        entityType: 'ldap_config',
+        details: {
+          counts: getAuditCounts({ created: stats.created }),
+        },
+      });
+      return stats;
+    },
+  );
+
   // GET /config - Get LDAP configuration (admin only)
   fastify.get(
     '/config',
