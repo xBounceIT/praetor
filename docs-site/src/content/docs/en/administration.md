@@ -31,6 +31,10 @@ When changing a role, consider the impact on every assigned user. Praetor blocks
 
 Praetor supports local authentication and company integrations such as LDAP or SSO when configured. Keep endpoints, role mappings, and security settings updated.
 
+In the **OpenID Connect** tab, each provider has its own **Enabled** switch in the list. Changes are saved immediately and affect only that provider; only enabled providers appear on the login page. The form below configures provider details and has no general activation switch. Save a new provider first, which creates it disabled, then enable it from its row after configuring at least **Issuer URL**, **Client ID**, and **Username Claim**. If activation fails, the row shows the error and retains its previous state. Saving an existing provider's details does not change its activation. The IdP logout option remains separately configurable in the individual provider's form.
+
+During an OIDC save, the affected controls are temporarily disabled to prevent losing edits. Switching tabs does not cancel the save and preserves any provider errors.
+
 When saving LDAP configuration, Praetor confirms the save only after the settings are persisted successfully. If the server rejects the settings, the page shows the error message and keeps the values visible for correction.
 
 For LDAP mTLS configured through environment variables, `LDAP_TLS_CERT_FILE` and `LDAP_TLS_KEY_FILE` must be set together and point to readable files. If either value is missing or a path does not exist, Praetor reports the error before creating the LDAP client instead of continuing with a partial TLS configuration.
