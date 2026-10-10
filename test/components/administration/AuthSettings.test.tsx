@@ -896,6 +896,381 @@ describe('<AuthSettings />', () => {
     expect(within(form).getByRole('button', { name: 'admin.sso.saveProvider' })).toBeEnabled();
   });
 
+  describe('OIDC provider activation', () => {
+    const firstProvider = buildProvider('oidc', {
+      id: 'oidc-first',
+      name: 'First OIDC',
+      slug: 'first-oidc',
+      issuerUrl: 'https://idp.example.com',
+      clientId: 'praetor',
+      clientSecret: '********',
+    });
+    const secondProvider = buildProvider('oidc', {
+      id: 'oidc-second',
+      name: 'Second OIDC',
+      slug: 'second-oidc',
+      enabled: true,
+    });
+    const openOidcTab = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.oidc' }));
+    const providerRow = (name: string) => {
+      const row = screen.getByText(name).closest('div.p-4');
+      if (!row) throw new Error(`Provider row not found: ${name}`);
+      return within(row as HTMLElement);
+    };
+    const pendingSave = () => {
+      let resolveSave: (provider: SsoProvider) => void = () => {};
+      let rejectSave: (reason: Error) => void = () => {};
+      const promise = new Promise<SsoProvider>((resolve, reject) => {
+        resolveSave = resolve;
+        rejectSave = reject;
+      });
+      return { promise, resolve: resolveSave, reject: rejectSave };
+    };
+    const controlIsDisabled = (control: HTMLElement) =>
+      control.hasAttribute('disabled') || control.closest('fieldset[disabled]') !== null;
+
+    test('keeps pending activation locked across authentication tab changes', async () => {
+      const pending = pendingSave();
+      const onSaveSsoProvider = mock((_patch: Partial<SsoProvider>) => pending.promise);
+      const view = renderAuthSettings({ ssoProviders: [firstProvider], onSaveSsoProvider });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByRole('switch'));
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.ldap' }));
+      openOidcTab();
+
+      const toggle = providerRow(firstProvider.name).getByRole('switch');
+      try {
+        expect(controlIsDisabled(toggle)).toBe(true);
+        fireEvent.click(toggle);
+        expect(onSaveSsoProvider).toHaveBeenCalledTimes(1);
+      } finally {
+        await act(async () => {
+          pending.resolve({ ...firstProvider, enabled: true });
+          await settleComponentTasks();
+        });
+      }
+      view.rerender(
+        <AuthSettings {...view.props} ssoProviders={[{ ...firstProvider, enabled: true }]} />,
+      );
+      expect(toggle).toBeEnabled();
+      expect(toggle).toBeChecked();
+    });
+
+    test('retains activation failures received while the OIDC tab is unmounted', async () => {
+      const pending = pendingSave();
+      renderAuthSettings({
+        ssoProviders: [firstProvider],
+        onSaveSsoProvider: mock((_patch: Partial<SsoProvider>) => pending.promise),
+      });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByRole('switch'));
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.ldap' }));
+      await act(async () => {
+        pending.reject(new Error('Activation rejected'));
+        await settleComponentTasks();
+      });
+      openOidcTab();
+
+      const row = providerRow(firstProvider.name);
+      expect(row.getByRole('alert')).toHaveTextContent('Activation rejected');
+      expect(row.getByRole('switch')).toBeEnabled();
+      expect(row.getByRole('switch')).not.toBeChecked();
+    });
+
+    test('blocks form writes while the edited provider activation is being saved', async () => {
+      const pending = pendingSave();
+      const onSaveSsoProvider = mock((_patch: Partial<SsoProvider>) => pending.promise);
+      renderAuthSettings({ ssoProviders: [firstProvider], onSaveSsoProvider });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByTitle('admin.sso.editProvider'));
+      const form = screen.getByText('admin.sso.editProvider').closest('form');
+      if (!form) throw new Error('Provider form not found');
+      fireEvent.click(providerRow(firstProvider.name).getByRole('switch'));
+
+      try {
+        expect(
+          controlIsDisabled(within(form).getByRole('button', { name: 'admin.sso.saveProvider' })),
+        ).toBe(true);
+        fireEvent.submit(form);
+        expect(onSaveSsoProvider).toHaveBeenCalledTimes(1);
+      } finally {
+        await act(async () => {
+          pending.resolve({ ...firstProvider, enabled: true });
+          await settleComponentTasks();
+        });
+      }
+      expect(within(form).getByRole('button', { name: 'admin.sso.saveProvider' })).toBeEnabled();
+    });
+
+    test('locks activation, draft selection, and form edits during a provider form save', async () => {
+      const pending = pendingSave();
+      const onSaveSsoProvider = mock((_patch: Partial<SsoProvider>) => pending.promise);
+      renderAuthSettings({
+        ssoProviders: [firstProvider, secondProvider],
+        onSaveSsoProvider,
+      });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByTitle('admin.sso.editProvider'));
+      fireEvent.change(inputForLabel('admin.sso.name'), { target: { value: 'Saved name' } });
+      const form = screen.getByText('admin.sso.editProvider').closest('form');
+      if (!form) throw new Error('Provider form not found');
+      fireEvent.submit(form);
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.ldap' }));
+      openOidcTab();
+
+      try {
+        expect(controlIsDisabled(providerRow(firstProvider.name).getByRole('switch'))).toBe(true);
+        expect(
+          controlIsDisabled(providerRow(secondProvider.name).getByTitle('admin.sso.editProvider')),
+        ).toBe(true);
+        expect(controlIsDisabled(inputForLabel('admin.sso.name'))).toBe(true);
+        expect(controlIsDisabled(screen.getByRole('button', { name: 'admin.sso.clearForm' }))).toBe(
+          true,
+        );
+        fireEvent.click(providerRow(firstProvider.name).getByRole('switch'));
+        fireEvent.submit(screen.getByText('admin.sso.editProvider').closest('form') as HTMLElement);
+        expect(onSaveSsoProvider).toHaveBeenCalledTimes(1);
+      } finally {
+        await act(async () => {
+          pending.resolve({ ...firstProvider, name: 'Saved name' });
+          await settleComponentTasks();
+        });
+      }
+      expect(inputForLabel('admin.sso.name').value).toBe('Saved name');
+      expect(inputForLabel('admin.sso.name')).toBeEnabled();
+      expect(providerRow(firstProvider.name).getByRole('switch')).toBeEnabled();
+    });
+
+    test('activates only the selected provider and reflects the persisted state', async () => {
+      const onSaveSsoProvider = mock(async (patch: Partial<SsoProvider>) => ({
+        ...firstProvider,
+        ...patch,
+      }));
+      const view = renderAuthSettings({
+        ssoProviders: [firstProvider, secondProvider],
+        onSaveSsoProvider,
+      });
+      openOidcTab();
+
+      const firstSwitch = providerRow(firstProvider.name).getByRole('switch', {
+        name: `admin.sso.enabled: ${firstProvider.name}`,
+      });
+      expect(firstSwitch).not.toBeChecked();
+      expect(providerRow(secondProvider.name).getByRole('switch')).toBeChecked();
+
+      await act(async () => {
+        fireEvent.click(firstSwitch);
+        await settleComponentTasks();
+      });
+      expect(onSaveSsoProvider).toHaveBeenCalledTimes(1);
+      expect(onSaveSsoProvider).toHaveBeenCalledWith({ id: firstProvider.id, enabled: true });
+
+      view.rerender(
+        <AuthSettings
+          {...view.props}
+          ssoProviders={[{ ...firstProvider, enabled: true }, secondProvider]}
+        />,
+      );
+      expect(firstSwitch).toBeChecked();
+      expect(providerRow(secondProvider.name).getByRole('switch')).toBeChecked();
+      expect(screen.queryByText('admin.sso.errors.saveFailedTitle')).not.toBeInTheDocument();
+    });
+
+    test('keeps pending states and errors independent when two providers save concurrently', async () => {
+      const firstPending = pendingSave();
+      const secondPending = pendingSave();
+      const onSaveSsoProvider = mock((patch: Partial<SsoProvider>) =>
+        patch.id === firstProvider.id ? firstPending.promise : secondPending.promise,
+      );
+      const view = renderAuthSettings({
+        ssoProviders: [firstProvider, secondProvider],
+        onSaveSsoProvider,
+      });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByRole('switch'));
+      fireEvent.click(providerRow(secondProvider.name).getByRole('switch'));
+      expect(onSaveSsoProvider.mock.calls.map(([patch]) => patch)).toEqual([
+        { id: firstProvider.id, enabled: true },
+        { id: secondProvider.id, enabled: false },
+      ]);
+      await act(async () => {
+        secondPending.reject(new Error('Second provider rejected'));
+        await settleComponentTasks();
+      });
+      expect(controlIsDisabled(providerRow(firstProvider.name).getByRole('switch'))).toBe(true);
+      expect(providerRow(secondProvider.name).getByRole('alert')).toHaveTextContent(
+        'Second provider rejected',
+      );
+
+      await act(async () => {
+        firstPending.resolve({ ...firstProvider, enabled: true });
+        await settleComponentTasks();
+      });
+      view.rerender(
+        <AuthSettings
+          {...view.props}
+          ssoProviders={[{ ...firstProvider, enabled: true }, secondProvider]}
+        />,
+      );
+      expect(providerRow(firstProvider.name).getByRole('switch')).toBeChecked();
+      expect(providerRow(firstProvider.name).getByRole('switch')).toBeEnabled();
+      expect(providerRow(secondProvider.name).getByRole('switch')).toBeChecked();
+      expect(providerRow(secondProvider.name).getByRole('alert')).toHaveTextContent(
+        'Second provider rejected',
+      );
+    });
+
+    test('does not replace another provider draft when activation completes', async () => {
+      const pending = pendingSave();
+      renderAuthSettings({
+        ssoProviders: [firstProvider, secondProvider],
+        onSaveSsoProvider: mock((_patch: Partial<SsoProvider>) => pending.promise),
+      });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByTitle('admin.sso.editProvider'));
+      fireEvent.click(providerRow(firstProvider.name).getByRole('switch'));
+      fireEvent.click(providerRow(secondProvider.name).getByTitle('admin.sso.editProvider'));
+      fireEvent.change(inputForLabel('admin.sso.name'), { target: { value: 'Second draft' } });
+      await act(async () => {
+        pending.resolve({ ...firstProvider, enabled: true });
+        await settleComponentTasks();
+      });
+      expect(inputForLabel('admin.sso.name').value).toBe('Second draft');
+      expect(inputForLabel('admin.sso.slug').value).toBe(secondProvider.slug);
+    });
+
+    test('keeps activation unchanged on failure, blocks duplicate requests, and allows retry', async () => {
+      let rejectSave: (reason: Error) => void = () => {};
+      const onSaveSsoProvider = mock(
+        (_patch: Partial<SsoProvider>): Promise<SsoProvider> =>
+          new Promise((_resolve, reject) => {
+            rejectSave = reject;
+          }),
+      );
+      renderAuthSettings({
+        ssoProviders: [firstProvider, secondProvider],
+        onSaveSsoProvider,
+      });
+      openOidcTab();
+      const row = providerRow(firstProvider.name);
+      const toggle = row.getByRole('switch');
+      fireEvent.click(toggle);
+      fireEvent.click(toggle);
+
+      expect(toggle).toBeDisabled();
+      expect(toggle).not.toBeChecked();
+      expect(onSaveSsoProvider).toHaveBeenCalledTimes(1);
+      expect(row.getByTitle('admin.sso.editProvider')).toBeDisabled();
+      expect(row.getByTitle('admin.sso.deleteProvider')).toBeDisabled();
+      expect(providerRow(secondProvider.name).getByRole('switch')).toBeEnabled();
+
+      await act(async () => {
+        rejectSave(new Error('Issuer URL is required'));
+        await settleComponentTasks();
+      });
+      expect(row.getByRole('alert')).toHaveTextContent('Issuer URL is required');
+      expect(toggle).toBeEnabled();
+      expect(toggle).not.toBeChecked();
+      expect(screen.queryByText('admin.ldap.changesSaved')).not.toBeInTheDocument();
+
+      onSaveSsoProvider.mockImplementation(async (patch) => ({ ...firstProvider, ...patch }));
+      await act(async () => {
+        fireEvent.click(toggle);
+        await settleComponentTasks();
+      });
+      expect(onSaveSsoProvider).toHaveBeenCalledTimes(2);
+      expect(row.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    test('deactivates the selected provider without saving another provider draft', async () => {
+      const onSaveSsoProvider = mock(async (patch: Partial<SsoProvider>) => ({
+        ...secondProvider,
+        ...patch,
+      }));
+      renderAuthSettings({
+        ssoProviders: [firstProvider, secondProvider],
+        onSaveSsoProvider,
+      });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByTitle('admin.sso.editProvider'));
+      fireEvent.change(inputForLabel('admin.sso.name'), { target: { value: 'Unsaved name' } });
+
+      await act(async () => {
+        fireEvent.click(providerRow(secondProvider.name).getByRole('switch'));
+        await settleComponentTasks();
+      });
+      expect(onSaveSsoProvider).toHaveBeenCalledWith({ id: secondProvider.id, enabled: false });
+      expect(inputForLabel('admin.sso.name').value).toBe('Unsaved name');
+      expect(inputForLabel('admin.sso.slug').value).toBe(firstProvider.slug);
+    });
+
+    test('preserves unsaved edits when toggling the edited provider and omits activation on form save', async () => {
+      const onSaveSsoProvider = mock(async (patch: Partial<SsoProvider>) => ({
+        ...firstProvider,
+        ...patch,
+        enabled: true,
+      }));
+      const view = renderAuthSettings({ ssoProviders: [firstProvider], onSaveSsoProvider });
+      openOidcTab();
+      fireEvent.click(providerRow(firstProvider.name).getByTitle('admin.sso.editProvider'));
+      fireEvent.change(inputForLabel('admin.sso.name'), { target: { value: 'Unsaved name' } });
+
+      await act(async () => {
+        fireEvent.click(providerRow(firstProvider.name).getByRole('switch'));
+        await settleComponentTasks();
+      });
+      view.rerender(
+        <AuthSettings {...view.props} ssoProviders={[{ ...firstProvider, enabled: true }]} />,
+      );
+      expect(inputForLabel('admin.sso.name').value).toBe('Unsaved name');
+      const form = screen.getByText('admin.sso.editProvider').closest('form');
+      if (!form) throw new Error('Provider form not found');
+      expect(within(form).queryByRole('switch', { name: 'admin.sso.enabled' })).toBeNull();
+
+      await act(async () => {
+        fireEvent.submit(form);
+        await settleComponentTasks();
+      });
+      expect(onSaveSsoProvider).toHaveBeenCalledTimes(2);
+      const savedDraft = onSaveSsoProvider.mock.calls[1]?.[0];
+      expect(savedDraft).toMatchObject({
+        id: firstProvider.id,
+        name: 'Unsaved name',
+        clientSecret: '********',
+      });
+      expect(savedDraft).not.toHaveProperty('enabled');
+    });
+
+    test('creates OIDC providers disabled without an activation toggle on the configuration form', async () => {
+      const { props } = renderAuthSettings();
+      const form = fillMinimalOidcProvider();
+      expect(within(form).queryByRole('switch', { name: 'admin.sso.enabled' })).toBeNull();
+      expect(
+        within(form).getByRole('switch', { name: 'admin.sso.endSessionEnabled' }),
+      ).toBeEnabled();
+
+      await act(async () => {
+        fireEvent.submit(form);
+        await settleComponentTasks();
+      });
+      expect(props.onSaveSsoProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ protocol: 'oidc', enabled: false }),
+      );
+    });
+
+    test('retains the existing SAML form activation control', async () => {
+      renderAuthSettings({ ssoProviders: [buildProvider('saml')] });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+        await settleComponentTasks();
+      });
+      const form = screen.getByText('admin.sso.newProvider').closest('form');
+      if (!form) throw new Error('SAML form not found');
+      expect(within(form).getByRole('switch', { name: 'admin.sso.enabled' })).toBeEnabled();
+    });
+  });
+
   describe('masked secret guard (issue #601)', () => {
     const MASKED = '********';
 

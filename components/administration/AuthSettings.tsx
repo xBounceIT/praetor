@@ -53,7 +53,7 @@ import {
   CardHeader,
   CardTitle,
 } from '../ui/card';
-import { FieldDescription, FieldError, FieldLabel, Field as UIField } from '../ui/field';
+import { FieldDescription, FieldError, FieldLabel, FieldSet, Field as UIField } from '../ui/field';
 import { Input } from '../ui/input';
 import { Switch } from '../ui/switch';
 import { Textarea } from '../ui/textarea';
@@ -229,6 +229,7 @@ const createAuthSettingsState = (): AuthSettingsState => ({
   isSavingLdap: false,
   savingProvider: null,
   providerSaveErrors: {},
+  providerToggleStates: {},
   acsUrlState: { status: 'loading' },
 });
 
@@ -280,6 +281,7 @@ const useAuthSettingsController = ({
     isSyncingLdap,
     savingProvider,
     providerSaveErrors,
+    providerToggleStates,
     acsUrlState,
   } = authState;
   const setActiveTab = useCallback(
@@ -367,6 +369,11 @@ const useAuthSettingsController = ({
       dispatchAuthState({ type: 'setProviderSaveErrors', update }),
     [],
   );
+  const setProviderToggleStates = useCallback(
+    (update: StateUpdate<AuthSettingsState['providerToggleStates']>) =>
+      dispatchAuthState({ type: 'setProviderToggleStates', update }),
+    [],
+  );
   const setAcsUrlState = useCallback(
     (update: StateUpdate<AuthSettingsState['acsUrlState']>) =>
       dispatchAuthState({ type: 'setAcsUrlState', update }),
@@ -382,6 +389,8 @@ const useAuthSettingsController = ({
   );
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
   const savedResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingProviderToggleIds = useRef(new Set<string>());
+  const savingProviderRef = useRef<SsoProtocol | null>(null);
 
   useEffect(
     () => () => {
@@ -776,17 +785,25 @@ const useAuthSettingsController = ({
 
   const handleSaveProvider = async (protocol: SsoProtocol, event: React.FormEvent) => {
     event.preventDefault();
-    clearProviderSaveError(protocol);
     const draft = providerDrafts[protocol];
+    if (savingProviderRef.current || (draft.id && pendingProviderToggleIds.current.has(draft.id))) {
+      return;
+    }
+    clearProviderSaveError(protocol);
     if (!validateProvider(draft)) return;
+    savingProviderRef.current = protocol;
     setSavingProvider(protocol);
     try {
-      const saved = await onSaveSsoProvider({
+      const input: Partial<SsoProvider> = {
         ...draft,
         protocol,
         slug: draft.slug?.trim().toLowerCase(),
         name: draft.name?.trim(),
-      });
+      };
+      // Existing OIDC providers are activated from their list row. A stale form draft
+      // must not overwrite a status change made while the connection details are edited.
+      if (protocol === 'oidc' && draft.id) delete input.enabled;
+      const saved = await onSaveSsoProvider(input);
       loadProviderDraft(protocol, saved);
       showSaved();
     } catch (err) {
@@ -795,7 +812,39 @@ const useAuthSettingsController = ({
         [protocol]: getProviderSaveErrorMessage(err),
       }));
     } finally {
+      savingProviderRef.current = null;
       setSavingProvider(null);
+    }
+  };
+
+  const handleToggleProvider = async (provider: SsoProvider, enabled: boolean) => {
+    if (
+      savingProviderRef.current === provider.protocol ||
+      pendingProviderToggleIds.current.has(provider.id)
+    ) {
+      return;
+    }
+    pendingProviderToggleIds.current.add(provider.id);
+    setProviderToggleStates((current) => ({ ...current, [provider.id]: { saving: true } }));
+    try {
+      const saved = await onSaveSsoProvider({ id: provider.id, enabled });
+      setProviderDrafts((current) => {
+        const draft = current[provider.protocol];
+        if (draft.id !== provider.id) return current;
+        return { ...current, [provider.protocol]: { ...draft, enabled: saved.enabled } };
+      });
+      showSaved();
+    } catch (err) {
+      setProviderToggleStates((current) => ({
+        ...current,
+        [provider.id]: { saving: true, error: getProviderSaveErrorMessage(err) },
+      }));
+    } finally {
+      pendingProviderToggleIds.current.delete(provider.id);
+      setProviderToggleStates((current) => ({
+        ...current,
+        [provider.id]: { ...current[provider.id], saving: false },
+      }));
     }
   };
 
@@ -817,6 +866,7 @@ const useAuthSettingsController = ({
     handleSyncLdapUsers,
     handleTestLdap,
     handleTlsCaFileImport,
+    handleToggleProvider,
     isLdapDirty,
     isSaved,
     isSavingLdap,
@@ -833,6 +883,7 @@ const useAuthSettingsController = ({
     onSetSessionIdleTimeoutMinutes,
     providerDrafts,
     providerSaveErrors,
+    providerToggleStates,
     providersByProtocol,
     replacingSecrets,
     roleOptions,
@@ -1811,6 +1862,9 @@ const SsoSettingsPanel: React.FC<{
       providers={controller.providersByProtocol[protocol]}
       onEdit={(provider) => controller.loadProviderDraft(protocol, provider)}
       onDelete={controller.onDeleteSsoProvider}
+      onToggle={controller.handleToggleProvider}
+      toggleStates={controller.providerToggleStates}
+      formSaving={controller.savingProvider === protocol}
     />
     <SsoProviderForm
       protocol={protocol}
@@ -1820,6 +1874,10 @@ const SsoSettingsPanel: React.FC<{
       replacingSecrets={controller.replacingSecrets[protocol]}
       saveError={controller.providerSaveErrors[protocol]}
       saving={controller.savingProvider === protocol}
+      busy={
+        controller.savingProvider !== null ||
+        !!controller.providerToggleStates[controller.providerDrafts[protocol].id || '']?.saving
+      }
       acsUrlState={controller.acsUrlState}
       onSubmit={(event) => controller.handleSaveProvider(protocol, event)}
       onDraftChange={(updates) => controller.updateProviderDraft(protocol, updates)}
@@ -1838,6 +1896,9 @@ interface SsoProviderListProps {
   providers: SsoProvider[];
   onEdit: (provider: SsoProvider) => void;
   onDelete: (id: string) => void | Promise<void>;
+  onToggle: (provider: SsoProvider, enabled: boolean) => Promise<void>;
+  toggleStates: AuthSettingsState['providerToggleStates'];
+  formSaving: boolean;
 }
 
 const SsoProviderList: React.FC<SsoProviderListProps> = ({
@@ -1845,6 +1906,9 @@ const SsoProviderList: React.FC<SsoProviderListProps> = ({
   providers,
   onEdit,
   onDelete,
+  onToggle,
+  toggleStates,
+  formSaving,
 }) => {
   const { t } = useTranslation('auth');
 
@@ -1861,7 +1925,7 @@ const SsoProviderList: React.FC<SsoProviderListProps> = ({
           {protocol === 'oidc'
             ? t(
                 'admin.sso.oidcProvidersDescription',
-                'Manage OpenID Connect identity providers for single sign-on.',
+                'Enable or disable each provider from its row. New providers are saved disabled; activation changes are saved immediately.',
               )
             : t(
                 'admin.sso.samlProvidersDescription',
@@ -1877,53 +1941,108 @@ const SsoProviderList: React.FC<SsoProviderListProps> = ({
             </p>
           ) : (
             providers.map((provider) => (
-              <div key={provider.id} className="p-4 flex items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-foreground">{provider.name}</span>
-                    <span
-                      className={cn(
-                        'text-[10px] font-bold px-2 py-0.5 rounded-full',
-                        provider.enabled
-                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
-                          : 'bg-muted text-muted-foreground',
-                      )}
-                    >
-                      {provider.enabled
-                        ? t('admin.sso.enabled', 'Enabled')
-                        : t('admin.sso.disabled', 'Disabled')}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground font-mono">{provider.slug}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => onEdit(provider)}
-                    className="text-muted-foreground hover:text-primary"
-                    title={t('admin.sso.editProvider', 'Edit provider')}
-                  >
-                    <Pencil aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => onDelete(provider.id)}
-                    className="text-muted-foreground hover:text-destructive"
-                    title={t('admin.sso.deleteProvider', 'Delete provider')}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
+              <SsoProviderRow
+                key={provider.id}
+                provider={provider}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onToggle={onToggle}
+                toggleState={toggleStates[provider.id]}
+                formSaving={formSaving}
+              />
             ))
           )}
         </div>
       </CardContent>
     </Card>
+  );
+};
+
+const SsoProviderRow: React.FC<{
+  provider: SsoProvider;
+  onEdit: SsoProviderListProps['onEdit'];
+  onDelete: SsoProviderListProps['onDelete'];
+  onToggle: SsoProviderListProps['onToggle'];
+  toggleState?: AuthSettingsState['providerToggleStates'][string];
+  formSaving: boolean;
+}> = ({ provider, onEdit, onDelete, onToggle, toggleState, formSaving }) => {
+  const { t } = useTranslation('auth');
+  const saving = !!toggleState?.saving;
+  const saveError = toggleState?.error;
+  const disabled = saving || formSaving;
+  const switchId = useId();
+  const errorId = useId();
+
+  return (
+    <div className="p-4 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-foreground">{provider.name}</span>
+            <span
+              className={cn(
+                'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                provider.enabled
+                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400'
+                  : 'bg-muted text-muted-foreground',
+              )}
+            >
+              {provider.enabled
+                ? t('admin.sso.enabled', 'Enabled')
+                : t('admin.sso.disabled', 'Disabled')}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground font-mono">{provider.slug}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {provider.protocol === 'oidc' && (
+            <UIField className="mr-2 flex-row items-center gap-2">
+              <Switch
+                id={switchId}
+                checked={provider.enabled}
+                onCheckedChange={(enabled) => onToggle(provider, enabled)}
+                disabled={disabled}
+                aria-label={`${t('admin.sso.enabled', 'Enabled')}: ${provider.name}`}
+                aria-describedby={saveError ? errorId : undefined}
+                aria-invalid={!!saveError}
+                aria-busy={saving}
+              />
+              <FieldLabel htmlFor={switchId}>{t('admin.sso.enabled', 'Enabled')}</FieldLabel>
+              {saving && <Loader2 aria-hidden="true" className="size-4 animate-spin" />}
+            </UIField>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onEdit(provider)}
+            disabled={disabled}
+            className="text-muted-foreground hover:text-primary"
+            title={t('admin.sso.editProvider', 'Edit provider')}
+            aria-label={t('admin.sso.editProvider', 'Edit provider')}
+          >
+            <Pencil aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => onDelete(provider.id)}
+            disabled={disabled}
+            className="text-muted-foreground hover:text-destructive"
+            title={t('admin.sso.deleteProvider', 'Delete provider')}
+            aria-label={t('admin.sso.deleteProvider', 'Delete provider')}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+      {saveError && (
+        <FieldError id={errorId} role="alert">
+          {saveError}
+        </FieldError>
+      )}
+    </div>
   );
 };
 
@@ -1935,6 +2054,7 @@ interface SsoProviderFormProps {
   replacingSecrets: Partial<Record<SsoSecretFieldKey, boolean>>;
   saveError?: string;
   saving: boolean;
+  busy: boolean;
   acsUrlState: AcsUrlState;
   onSubmit: (event: React.FormEvent) => void;
   onDraftChange: (updates: Partial<SsoProvider>) => void;
@@ -1948,6 +2068,47 @@ interface SsoProviderFormProps {
   onClear: () => void;
 }
 
+const SsoProviderFormHeader: React.FC<
+  Pick<SsoProviderFormProps, 'protocol' | 'draft' | 'onDraftChange'>
+> = ({ protocol, draft, onDraftChange }) => {
+  const { t } = useTranslation('auth');
+
+  return (
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        {draft.id ? (
+          <Pencil aria-hidden="true" className="size-4 text-praetor" />
+        ) : (
+          <Plus aria-hidden="true" className="size-4 text-praetor" />
+        )}
+        {draft.id
+          ? t('admin.sso.editProvider', 'Edit provider')
+          : t('admin.sso.newProvider', 'New provider')}
+      </CardTitle>
+      <CardDescription>
+        {t(
+          'admin.sso.providerFormDescription',
+          'Configure the connection details and attribute mappings for this identity provider.',
+        )}
+      </CardDescription>
+      {protocol === 'saml' && (
+        <CardAction>
+          <UIField className="flex-row items-center gap-2">
+            <Switch
+              id={`provider-enabled-${protocol}`}
+              checked={!!draft.enabled}
+              onCheckedChange={(enabled) => onDraftChange({ enabled })}
+            />
+            <FieldLabel htmlFor={`provider-enabled-${protocol}`}>
+              {t('admin.sso.enabled', 'Enabled')}
+            </FieldLabel>
+          </UIField>
+        </CardAction>
+      )}
+    </CardHeader>
+  );
+};
+
 const SsoProviderForm: React.FC<SsoProviderFormProps> = ({
   protocol,
   draft,
@@ -1956,6 +2117,7 @@ const SsoProviderForm: React.FC<SsoProviderFormProps> = ({
   replacingSecrets,
   saveError,
   saving,
+  busy,
   acsUrlState,
   onSubmit,
   onDraftChange,
@@ -1969,168 +2131,142 @@ const SsoProviderForm: React.FC<SsoProviderFormProps> = ({
 
   return (
     <form onSubmit={onSubmit}>
-      <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-          <CardTitle className="flex items-center gap-3 text-base">
-            {draft.id ? (
-              <Pencil aria-hidden="true" className="size-4 text-praetor" />
-            ) : (
-              <Plus aria-hidden="true" className="size-4 text-praetor" />
+      <FieldSet disabled={busy} className="min-w-0">
+        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+          <SsoProviderFormHeader protocol={protocol} draft={draft} onDraftChange={onDraftChange} />
+
+          <CardContent className="p-6 space-y-6">
+            {saveError && (
+              <Alert variant="destructive" className="border-destructive/30">
+                <CircleAlert />
+                <AlertTitle>
+                  {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
+                </AlertTitle>
+                <AlertDescription>{saveError}</AlertDescription>
+              </Alert>
             )}
-            {draft.id
-              ? t('admin.sso.editProvider', 'Edit provider')
-              : t('admin.sso.newProvider', 'New provider')}
-          </CardTitle>
-          <CardDescription>
-            {t(
-              'admin.sso.providerFormDescription',
-              'Configure the connection details and attribute mappings for this identity provider.',
-            )}
-          </CardDescription>
-          <CardAction>
-            <UIField className="flex-row items-center gap-2">
-              <Switch
-                id={`provider-enabled-${protocol}`}
-                checked={!!draft.enabled}
-                onCheckedChange={(enabled) => onDraftChange({ enabled })}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Field
+                label={t('admin.sso.name', 'Name')}
+                value={draft.name || ''}
+                error={errors[`${prefix}name`]}
+                required
+                onChange={(name) => onDraftChange({ name })}
               />
-              <FieldLabel htmlFor={`provider-enabled-${protocol}`}>
-                {t('admin.sso.enabled', 'Enabled')}
-              </FieldLabel>
-            </UIField>
-          </CardAction>
-        </CardHeader>
+              <Field
+                label={t('admin.sso.slug', 'Slug')}
+                value={draft.slug || ''}
+                error={errors[`${prefix}slug`]}
+                monospace
+                required
+                onChange={(slug) => onDraftChange({ slug: slug.toLowerCase() })}
+              />
+            </div>
 
-        <CardContent className="p-6 space-y-6">
-          {saveError && (
-            <Alert variant="destructive" className="border-destructive/30">
-              <CircleAlert />
-              <AlertTitle>
-                {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
-              </AlertTitle>
-              <AlertDescription>{saveError}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Field
-              label={t('admin.sso.name', 'Name')}
-              value={draft.name || ''}
-              error={errors[`${prefix}name`]}
-              required
-              onChange={(name) => onDraftChange({ name })}
-            />
-            <Field
-              label={t('admin.sso.slug', 'Slug')}
-              value={draft.slug || ''}
-              error={errors[`${prefix}slug`]}
-              monospace
-              required
-              onChange={(slug) => onDraftChange({ slug: slug.toLowerCase() })}
-            />
-          </div>
-
-          {protocol === 'oidc' ? (
-            <OidcProviderFields
-              draft={draft}
-              errors={errors}
-              errorPrefix={prefix}
-              replacingSecrets={replacingSecrets}
-              onDraftChange={onDraftChange}
-              onStartReplace={onStartReplace}
-              onCancelReplace={onCancelReplace}
-            />
-          ) : (
-            <SamlProviderFields
-              draft={draft}
-              errors={errors}
-              errorPrefix={prefix}
-              replacingSecrets={replacingSecrets}
-              acsUrlState={acsUrlState}
-              onDraftChange={onDraftChange}
-              onStartReplace={onStartReplace}
-              onCancelReplace={onCancelReplace}
-            />
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Field
-              label={
-                protocol === 'oidc'
-                  ? t('admin.sso.usernameClaim', 'Username Claim')
-                  : t('admin.sso.usernameAttribute', 'Username Attribute')
-              }
-              value={draft.usernameAttribute || ''}
-              error={errors[`${prefix}usernameAttribute`]}
-              monospace
-              required={protocol === 'oidc' && !!draft.enabled}
-              onChange={(usernameAttribute) => onDraftChange({ usernameAttribute })}
-            />
-            <Field
-              label={t('admin.sso.nameAttribute', 'Name Attribute')}
-              value={draft.nameAttribute || ''}
-              monospace
-              onChange={(nameAttribute) => onDraftChange({ nameAttribute })}
-            />
-            <Field
-              label={t('admin.sso.emailAttribute', 'Email Attribute')}
-              value={draft.emailAttribute || ''}
-              monospace
-              onChange={(emailAttribute) => onDraftChange({ emailAttribute })}
-            />
-            <Field
-              label={t('admin.sso.groupsAttribute', 'Groups Attribute')}
-              value={draft.groupsAttribute || ''}
-              monospace
-              onChange={(groupsAttribute) => onDraftChange({ groupsAttribute })}
-            />
-          </div>
-
-          <RoleMappings
-            mappings={draft.roleMappings || []}
-            roleOptions={roleOptions}
-            errors={errors}
-            errorPrefix={`${prefix}mapping_`}
-            heading={t('admin.sso.roleMappings', 'Role Mappings')}
-            addLabel={t('admin.sso.addMapping', 'Add Mapping')}
-            noMappingsLabel={t('admin.sso.noMappingsConfigured', 'No mappings configured.')}
-            externalPlaceholder={t('admin.sso.externalGroupPlaceholder', 'External group')}
-            onAdd={() =>
-              onDraftChange({
-                roleMappings: [
-                  ...(draft.roleMappings || []),
-                  { externalGroup: '', role: roleOptions[0]?.id || 'user' },
-                ],
-              })
-            }
-            onRemove={(index) =>
-              onDraftChange({
-                roleMappings: (draft.roleMappings || []).filter((_, idx) => idx !== index),
-              })
-            }
-            onChange={onMappingChange}
-          />
-        </CardContent>
-
-        <CardFooter className="justify-between border-t border-border px-6 py-4 [.border-t]:pt-4">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClear}
-            className="font-bold text-muted-foreground hover:text-foreground"
-          >
-            {t('admin.sso.clearForm', 'Clear')}
-          </Button>
-          <Button type="submit" size="lg" disabled={saving}>
-            {saving ? (
-              <Loader2 aria-hidden="true" className="animate-spin" />
+            {protocol === 'oidc' ? (
+              <OidcProviderFields
+                draft={draft}
+                errors={errors}
+                errorPrefix={prefix}
+                replacingSecrets={replacingSecrets}
+                onDraftChange={onDraftChange}
+                onStartReplace={onStartReplace}
+                onCancelReplace={onCancelReplace}
+              />
             ) : (
-              t('admin.sso.saveProvider', 'Save Provider')
+              <SamlProviderFields
+                draft={draft}
+                errors={errors}
+                errorPrefix={prefix}
+                replacingSecrets={replacingSecrets}
+                acsUrlState={acsUrlState}
+                onDraftChange={onDraftChange}
+                onStartReplace={onStartReplace}
+                onCancelReplace={onCancelReplace}
+              />
             )}
-          </Button>
-        </CardFooter>
-      </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Field
+                label={
+                  protocol === 'oidc'
+                    ? t('admin.sso.usernameClaim', 'Username Claim')
+                    : t('admin.sso.usernameAttribute', 'Username Attribute')
+                }
+                value={draft.usernameAttribute || ''}
+                error={errors[`${prefix}usernameAttribute`]}
+                monospace
+                required={protocol === 'oidc' && !!draft.enabled}
+                onChange={(usernameAttribute) => onDraftChange({ usernameAttribute })}
+              />
+              <Field
+                label={t('admin.sso.nameAttribute', 'Name Attribute')}
+                value={draft.nameAttribute || ''}
+                monospace
+                onChange={(nameAttribute) => onDraftChange({ nameAttribute })}
+              />
+              <Field
+                label={t('admin.sso.emailAttribute', 'Email Attribute')}
+                value={draft.emailAttribute || ''}
+                monospace
+                onChange={(emailAttribute) => onDraftChange({ emailAttribute })}
+              />
+              <Field
+                label={t('admin.sso.groupsAttribute', 'Groups Attribute')}
+                value={draft.groupsAttribute || ''}
+                monospace
+                onChange={(groupsAttribute) => onDraftChange({ groupsAttribute })}
+              />
+            </div>
+
+            <RoleMappings
+              mappings={draft.roleMappings || []}
+              roleOptions={roleOptions}
+              errors={errors}
+              errorPrefix={`${prefix}mapping_`}
+              heading={t('admin.sso.roleMappings', 'Role Mappings')}
+              addLabel={t('admin.sso.addMapping', 'Add Mapping')}
+              noMappingsLabel={t('admin.sso.noMappingsConfigured', 'No mappings configured.')}
+              externalPlaceholder={t('admin.sso.externalGroupPlaceholder', 'External group')}
+              onAdd={() =>
+                onDraftChange({
+                  roleMappings: [
+                    ...(draft.roleMappings || []),
+                    { externalGroup: '', role: roleOptions[0]?.id || 'user' },
+                  ],
+                })
+              }
+              onRemove={(index) =>
+                onDraftChange({
+                  roleMappings: (draft.roleMappings || []).filter((_, idx) => idx !== index),
+                })
+              }
+              onChange={onMappingChange}
+            />
+          </CardContent>
+
+          <CardFooter className="justify-between border-t border-border px-6 py-4 [.border-t]:pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClear}
+              disabled={busy}
+              className="font-bold text-muted-foreground hover:text-foreground"
+            >
+              {t('admin.sso.clearForm', 'Clear')}
+            </Button>
+            <Button type="submit" size="lg" disabled={busy}>
+              {saving ? (
+                <Loader2 aria-hidden="true" className="animate-spin" />
+              ) : (
+                t('admin.sso.saveProvider', 'Save Provider')
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+      </FieldSet>
     </form>
   );
 };

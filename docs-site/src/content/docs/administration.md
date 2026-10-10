@@ -31,6 +31,10 @@ Quando modifichi un ruolo, considera l'impatto su tutti gli utenti assegnati. Pr
 
 Praetor supporta autenticazione locale e integrazioni aziendali come LDAP o SSO quando configurate. Mantieni aggiornati endpoint, mapping dei ruoli e impostazioni di sicurezza.
 
+Nella scheda **OpenID Connect**, ogni provider ha il proprio interruttore **Abilitato** nella lista. La modifica viene salvata subito e riguarda soltanto quel provider; solo i provider abilitati compaiono nella pagina di accesso. Il modulo sottostante configura i dettagli del provider e non contiene un interruttore di attivazione generale. Salva prima un nuovo provider, che viene creato disattivato, poi abilitalo dalla sua riga dopo aver configurato almeno **Issuer URL**, **Client ID** e **Username Claim**. Se l'attivazione non riesce, la riga mostra l'errore e conserva lo stato precedente. Salvare i dettagli di un provider esistente non cambia la sua attivazione. L'opzione di logout dell'IdP resta configurabile separatamente nel modulo del singolo provider.
+
+Durante un salvataggio OIDC, i controlli interessati sono temporaneamente disabilitati per evitare di perdere le modifiche. Cambiare scheda non annulla il salvataggio e conserva gli eventuali errori del provider.
+
 Quando salvi la configurazione LDAP, Praetor conferma il salvataggio solo dopo la persistenza riuscita. Se il server rifiuta le impostazioni, la schermata mostra il messaggio di errore e mantiene visibili i valori da correggere.
 
 Per mTLS LDAP configurato tramite variabili ambiente, `LDAP_TLS_CERT_FILE` e `LDAP_TLS_KEY_FILE` devono essere impostate insieme e puntare a file leggibili. Se manca uno dei due valori o un percorso non esiste, Praetor segnala l'errore prima di creare il client LDAP invece di proseguire con una configurazione TLS parziale.
